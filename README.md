@@ -6,7 +6,7 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full build specification — non-negotiab
 
 ## Status
 
-Scaffolded, not yet wired to any live services.
+Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, and staff auth are all wired up and verified working end-to-end.
 
 - [x] Next.js (App Router, TypeScript, Tailwind) scaffold
 - [x] Database schema drafted — [`supabase/migrations/0001_initial_schema.sql`](./supabase/migrations/0001_initial_schema.sql)
@@ -17,8 +17,8 @@ Scaffolded, not yet wired to any live services.
 - [x] Vercel project connected, deployed, env vars set
 - [x] Seed script written and run against the live DB — `supabase/seed/seed_san_miguel_fee_rules.sql` (+ migration `0003_fee_rule_bracket_rate_basis.sql`). 112 fee_rules (88 active, 24 inactive pending BPLO confirmation), 139 fee_rule_brackets. See CLAUDE.md section 7a for discrepancies resolved while writing it.
 - [x] Bulk-import legacy business roster into `businesses` — 1,177 imported (`bt_source='actual'`), 168 held out for manual review (`needs_review`, matches `BPLO_LBT_NeedsReview.csv`), 5 held out for missing license numbers (`no_match`). See `supabase/seed/legacy_business_import.sql`.
-- [ ] Staff auth + dashboards ← **next**
-- [ ] Applicant OTP flow
+- [x] Staff auth + dashboards — Google OAuth via Supabase, verified end-to-end in production (real sign-in → `staff_users` lookup → role-routed → RLS-scoped queries). BPLO dashboard confirmed working live. Department and mayor dashboards share the same code path but haven't been tested with real accounts yet — provision a `staff_users` row for those roles when ready to check them too.
+- [ ] Applicant OTP flow ← **next**
 - [ ] Review workflow wiring
 - [ ] Fee computation engine
 - [ ] Payments, permits, notifications
