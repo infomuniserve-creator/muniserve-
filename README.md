@@ -16,8 +16,8 @@ Scaffolded, not yet wired to any live services.
 - [x] GitHub repo created and pushed — [infomuniserve-creator/muniserve-](https://github.com/infomuniserve-creator/muniserve-)
 - [x] Vercel project connected, deployed, env vars set
 - [x] Seed script written and run against the live DB — `supabase/seed/seed_san_miguel_fee_rules.sql` (+ migration `0003_fee_rule_bracket_rate_basis.sql`). 112 fee_rules (88 active, 24 inactive pending BPLO confirmation), 139 fee_rule_brackets. See CLAUDE.md section 7a for discrepancies resolved while writing it.
-- [ ] Bulk-import legacy business roster into `businesses`
-- [ ] Staff auth + dashboards
+- [x] Bulk-import legacy business roster into `businesses` — 1,177 imported (`bt_source='actual'`), 168 held out for manual review (`needs_review`, matches `BPLO_LBT_NeedsReview.csv`), 5 held out for missing license numbers (`no_match`). See `supabase/seed/legacy_business_import.sql`.
+- [ ] Staff auth + dashboards ← **next**
 - [ ] Applicant OTP flow
 - [ ] Review workflow wiring
 - [ ] Fee computation engine
