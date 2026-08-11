@@ -12,9 +12,9 @@ Scaffolded, not yet wired to any live services.
 - [x] Database schema drafted — [`supabase/migrations/0001_initial_schema.sql`](./supabase/migrations/0001_initial_schema.sql)
 - [x] RLS policies drafted — [`supabase/migrations/0002_rls_policies.sql`](./supabase/migrations/0002_rls_policies.sql)
 - [x] `reference/` populated — fee computation source, HTML prototypes, legacy business data, and the unreconciled fee guide (see `reference/README.md` for what's in there and why)
-- [ ] Supabase project created and migrations run
-- [ ] GitHub repo created and pushed
-- [ ] Vercel project connected
+- [x] Supabase project created and migrations run (schema + RLS both verified live)
+- [x] GitHub repo created and pushed — [infomuniserve-creator/muniserve-](https://github.com/infomuniserve-creator/muniserve-)
+- [x] Vercel project connected, deployed, env vars set
 - [ ] Seed script for San Miguel's `fee_rules`
 - [ ] Bulk-import legacy business roster into `businesses`
 - [ ] Staff auth + dashboards
