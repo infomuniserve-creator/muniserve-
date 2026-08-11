@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MuniServe — Applicant flow prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{
+    --text-primary:#1a1a2e; --text-secondary:#6b7280; --border:#e5e7eb; --border-strong:#c7cbd1;
+    --surface-1:#f4f6fb; --surface-2:#ffffff; --radius:8px;
+    --bg-success:#EAF3DE; --text-success:#27500A;
+    --bg-accent:#E6F1FB; --text-accent:#0C447C;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:var(--surface-1);color:var(--text-primary);margin:0;padding:32px 16px;}
+  #wrap{max-width:640px;margin:0 auto;background:var(--surface-2);border-radius:16px;padding:24px;border:0.5px solid var(--border);}
+  button{font-family:inherit;background:var(--surface-2);border:0.5px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:12px;cursor:pointer;color:var(--text-primary);}
+  button:hover{background:var(--surface-1);}
+  input,select{width:100%;height:36px;border:0.5px solid var(--border);border-radius:var(--radius);padding:0 10px;font-family:inherit;font-size:13px;background:var(--surface-2);color:var(--text-primary);}
+  p{margin:0;}
+  .card{border:0.5px solid var(--border);border-radius:var(--radius);}
+  .optcard{border:0.5px solid var(--border);border-radius:12px;padding:1rem;cursor:pointer;flex:1;}
+  .optcard:hover{border-color:var(--border-strong);}
+  .actbtn{font-size:12px;padding:6px 10px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;}
+  .step{display:flex;flex-direction:column;align-items:center;flex:1;text-align:center;}
+  .dot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;margin-bottom:4px;}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="app"></div></div>
+<script>
+(function(){
+  var LEGACY = {
+    '7094956':{business:"Cezmil's Auto and Electrical Supply",owner:'Milagros King Buenaventura',barangay:'Camias',nature:'Retailer / auto and electrical supply',grossSales:3462287},
+    '7095975':{business:'Green Season Foods Products',owner:'Maria Lourdes V. Sison',barangay:'San Jose',nature:'Food processing',grossSales:260696}
+  };
+  var EXISTING_OWNER_PHONE = '09171234567';
+  var EXISTING_OWNER_NAME = 'Juan Dela Cruz';
+  var DEMO_OTP = '482913';
+  var NATURE_OPTIONS = ['Retailer','Wholesaler','Billiard hall','Lodging house / inn','Warehouse / storage facility','Food and beverage establishment'];
+  var CONDITIONAL = {
+    'Billiard hall':[['billiardTables','Number of billiard tables']],
+    'Lodging house / inn':[['lodgers','Number of lodgers / rooms']],
+    'Warehouse / storage facility':[['floorArea','Floor area (square meters)']]
+  };
+
+  var state = {screen:'landing',path:null,licenseInput:'',matchedLegacy:null,phone:'',otpInput:'',matchedOwner:null,form:{nature:'',amount:''},demoStage:'submitted'};
+
+  function peso(n){ return '₱' + Math.round(n).toLocaleString(); }
+  function topHead(title,sub){
+    return '<div style="margin-bottom:1.25rem;"><p style="font-weight:500;font-size:16px;">'+title+'</p>'+(sub?'<p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">'+sub+'</p>':'')+'</div>';
+  }
+  function backBtn(){ return '<button class="actbtn" onclick="MS.startOver()" style="margin-bottom:1rem;">Start over</button>'; }
+
+  function renderLanding(){
+    var html = topHead('MuniServe', 'San Miguel, Bulacan · Business permit application');
+    html += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+    html += '<div class="optcard" onclick="MS.choosePath(\'new\')" style="min-width:200px;"><p style="font-weight:500;font-size:14px;margin-bottom:6px;">New business</p><p style="font-size:12px;color:var(--text-secondary);">First time applying for a permit with this business.</p></div>';
+    html += '<div class="optcard" onclick="MS.choosePath(\'renewal\')" style="min-width:200px;"><p style="font-weight:500;font-size:14px;margin-bottom:6px;">Renew existing permit</p><p style="font-size:12px;color:var(--text-secondary);">Already have a business registered with the municipality.</p></div>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderRenewalLicense(){
+    var html = backBtn() + topHead('Find your business','Enter the License Number printed on your current permit or last official receipt.');
+    html += '<div class="field"><label>License number</label><input id="licenseInput" value="'+state.licenseInput+'" placeholder="e.g. 7094956" oninput="MS.setLicense(this.value)"></div>';
+    html += '<button class="actbtn" onclick="MS.lookupLicense()">Continue</button>';
+    html += '<p style="font-size:11px;color:var(--text-secondary);margin-top:10px;">Demo: try 7094956 or 7095975.</p>';
+    return html;
+  }
+
+  function renderRenewalConfirm(){
+    var r = state.matchedLegacy;
+    var html = backBtn();
+    if(!r){
+      html += topHead('No match found','We could not find a business with that License Number. Please check the number or visit the BPLO counter for assistance.');
+      html += '<button class="actbtn" onclick="MS.setScreen(\'renewal_license\')">Try again</button>';
+      return html;
+    }
+    html += topHead('Is this your business?','We found a record under this License Number. Confirm before continuing.');
+    html += '<div class="card" style="padding:12px;margin-bottom:1rem;"><p style="font-size:13px;font-weight:500;margin-bottom:4px;">'+r.business+'</p><p style="font-size:12px;color:var(--text-secondary);">Owner on file: '+maskName(r.owner)+' · '+r.barangay+' · '+r.nature+'</p></div>';
+    html += '<div style="display:flex;gap:6px;"><button class="actbtn" onclick="MS.confirmLegacy(true)">Yes, this is my business</button><button class="actbtn" onclick="MS.confirmLegacy(false)">Not me</button></div>';
+    return html;
+  }
+  function maskName(n){ var parts=n.split(' '); return parts.map(function(p){return p[0]+'*'.repeat(Math.max(1,p.length-1));}).join(' '); }
+
+  function renderPhoneEntry(){
+    var html = backBtn() + topHead('Verify your mobile number','We will send a one-time code by SMS. No password to remember, you will use this number every time you check your application.');
+    html += '<div class="field"><label>Mobile number</label><input id="phoneInput" value="'+state.phone+'" placeholder="09XX XXX XXXX" oninput="MS.setPhone(this.value)"></div>';
+    html += '<button class="actbtn" onclick="MS.submitPhone()">Send code</button>';
+    html += '<p style="font-size:11px;color:var(--text-secondary);margin-top:10px;">Demo: use 09171234567 to see the "we found an account" flow, or any other number to sign up fresh.</p>';
+    return html;
+  }
+
+  function renderOtp(){
+    var html = backBtn() + topHead('Enter the code','We sent a 6-digit code to '+state.phone+'.');
+    html += '<div class="field"><label>Verification code</label><input id="otpInput" value="'+state.otpInput+'" placeholder="6-digit code" oninput="MS.setOtp(this.value)"></div>';
+    html += '<button class="actbtn" onclick="MS.verifyOtp()">Verify</button>';
+    html += '<p style="font-size:11px;color:var(--text-secondary);margin-top:10px;">Demo: your code is '+DEMO_OTP+'.</p>';
+    return html;
+  }
+
+  function renderOwnerMatch(){
+    var html = backBtn() + topHead('We found an account','A profile already exists for this mobile number.');
+    html += '<div class="card" style="padding:12px;margin-bottom:1rem;"><p style="font-size:13px;font-weight:500;">'+maskName(EXISTING_OWNER_NAME)+'</p><p style="font-size:12px;color:var(--text-secondary);margin-top:4px;">1 business currently on file</p></div>';
+    html += '<p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Is this you? If yes, this new business will be added to your existing profile, no separate account needed.</p>';
+    html += '<div style="display:flex;gap:6px;"><button class="actbtn" onclick="MS.confirmOwnerMatch(true)">Yes, that is me</button><button class="actbtn" onclick="MS.confirmOwnerMatch(false)">No, different person</button></div>';
+    return html;
+  }
+
+  function renderForm(){
+    var html = backBtn() + topHead('Business permit application', (state.path==='renewal'?'Renewal':'New application') + ' · San Miguel, Bulacan');
+    if(state.path==='renewal' && state.matchedLegacy){
+      html += '<div class="card" style="padding:10px 12px;margin-bottom:1rem;background:var(--surface-1);border:none;"><p style="font-size:12px;color:var(--text-secondary);">Pre-filled from your existing record, update anything that has changed.</p></div>';
+    }
+    html += '<div class="field"><label>Business name</label><input value="'+(state.matchedLegacy?state.matchedLegacy.business:'')+'" placeholder="Business name"></div>';
+    html += '<div class="field"><label>Nature of business</label><select onchange="MS.setNature(this.value)">';
+    html += '<option value="">Select one</option>';
+    NATURE_OPTIONS.forEach(function(n){ html += '<option value="'+n+'"'+(state.form.nature===n?' selected':'')+'>'+n+'</option>'; });
+    html += '</select></div>';
+    var conds = CONDITIONAL[state.form.nature];
+    if(conds){ conds.forEach(function(c){ html += '<div class="field"><label>'+c[1]+'</label><input placeholder="Enter a number"></div>'; }); }
+    html += '<div class="field"><label>'+(state.path==='new'?'Capital investment (₱)':'Gross sales, preceding year (₱)')+'</label><input value="'+(state.matchedLegacy?state.matchedLegacy.grossSales:'')+'" placeholder="0"></div>';
+    html += '<p style="font-size:11px;font-weight:500;color:var(--text-secondary);margin:12px 0 6px;">Documents to upload</p>';
+    ['Barangay business clearance','CEDULA','Valid government ID','Proof of business address','DTI / SEC / CDA registration'].forEach(function(d){
+      html += '<div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;"><span style="font-size:12px;">'+d+'</span><button class="actbtn">Choose file</button></div>';
+    });
+    html += '<button class="actbtn" style="margin-top:8px;" onclick="MS.submitApplication()">Submit application</button>';
+    return html;
+  }
+
+  function renderSubmitted(){
+    var html = topHead('Application submitted','Reference number MS-2026-00482');
+    html += '<div class="card" style="padding:12px;margin-bottom:1rem;"><p style="font-size:13px;">BPLO will review your submitted documents first. You will get an SMS the moment there is an update, no need to keep checking.</p></div>';
+    html += '<button class="actbtn" onclick="MS.setScreen(\'status\')">View application status</button>';
+    return html;
+  }
+
+  function renderStatus(){
+    var stages = [['submitted','Submitted'],['bplo_initial','Initial review'],['dept_review','Department review'],['assessment','Assessment and payment'],['mayor',"Mayor's signature"],['released','Released']];
+    var order = stages.map(function(s){return s[0];});
+    var curIdx = state.demoStage==='needs_info' ? order.indexOf('dept_review') : order.indexOf(state.demoStage);
+    var html = topHead("Cezmil's Auto and Electrical Supply",'Reference MS-2026-00482');
+    html += '<div style="display:flex;margin-bottom:1.5rem;">';
+    stages.forEach(function(s,i){
+      var done = i < curIdx, current = i===curIdx;
+      var bg = done? 'var(--bg-success)': current? 'var(--bg-accent)':'var(--surface-1)';
+      var fg = done? 'var(--text-success)': current? 'var(--text-accent)':'var(--text-secondary)';
+      html += '<div class="step"><div class="dot" style="background:'+bg+';color:'+fg+';">'+(done?'✓':(i+1))+'</div><span style="font-size:10px;color:var(--text-secondary);">'+s[1]+'</span></div>';
+    });
+    html += '</div>';
+
+    if(state.demoStage==='needs_info'){
+      html += '<div class="card" style="padding:12px;margin-bottom:1rem;border-color:var(--border-strong);"><p style="font-size:13px;font-weight:500;margin-bottom:4px;">Fire office needs more information</p><p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Your fire safety certificate has expired. Please upload a renewed copy.</p><button class="actbtn">Choose file</button><button class="actbtn" style="margin-left:6px;" onclick="MS.resolveRequest()">Submit response</button></div>';
+    } else if(state.demoStage==='assessment'){
+      html += '<div class="card" style="padding:12px;margin-bottom:1rem;"><p style="font-size:13px;font-weight:500;margin-bottom:8px;">Assessed fees, total '+peso(23561)+'</p><p style="font-size:12px;color:var(--text-secondary);">Pay at the Treasurer\'s Office or via GCash, then upload your receipt to move to the mayor\'s signature.</p></div>';
+    } else if(state.demoStage==='released'){
+      html += '<div class="card" style="padding:12px;margin-bottom:1rem;"><p style="font-size:13px;font-weight:500;margin-bottom:4px;">Permit released</p><p style="font-size:12px;color:var(--text-secondary);">Download your permit or pick it up at the BPLO counter.</p></div>';
+    }
+
+    html += '<div style="border:1px dashed var(--border-strong);border-radius:var(--radius);padding:10px 12px;margin-top:1rem;background:var(--surface-1);">';
+    html += '<p style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">Demo controls, jump to a different point in the process.</p><div style="display:flex;gap:4px;flex-wrap:wrap;">';
+    [['submitted','Just submitted'],['dept_review','In department review'],['needs_info','Dept. needs info'],['assessment','Ready for payment'],['mayor','Awaiting signature'],['released','Released']].forEach(function(d){
+      html += '<button class="actbtn" onclick="MS.setDemoStage(\''+d[0]+'\')">'+d[1]+'</button>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  function render(){
+    var html = '';
+    if(state.screen==='landing') html = renderLanding();
+    else if(state.screen==='renewal_license') html = renderRenewalLicense();
+    else if(state.screen==='renewal_confirm') html = renderRenewalConfirm();
+    else if(state.screen==='phone') html = renderPhoneEntry();
+    else if(state.screen==='otp') html = renderOtp();
+    else if(state.screen==='owner_match') html = renderOwnerMatch();
+    else if(state.screen==='form') html = renderForm();
+    else if(state.screen==='submitted') html = renderSubmitted();
+    else if(state.screen==='status') html = renderStatus();
+    document.getElementById('app').innerHTML = html;
+  }
+
+  window.MS = {
+    choosePath:function(p){ state.path=p; state.screen = p==='renewal' ? 'renewal_license' : 'phone'; render(); },
+    setLicense:function(v){ state.licenseInput=v; },
+    lookupLicense:function(){ state.matchedLegacy = LEGACY[state.licenseInput.trim()] || null; state.screen='renewal_confirm'; render(); },
+    confirmLegacy:function(yes){ if(yes){ state.screen='phone'; } else { state.matchedLegacy=null; state.screen='renewal_license'; } render(); },
+    setPhone:function(v){ state.phone=v; },
+    submitPhone:function(){ state.screen='otp'; render(); },
+    setOtp:function(v){ state.otpInput=v; },
+    verifyOtp:function(){
+      if(state.otpInput.trim()!==DEMO_OTP){ return; }
+      if(state.path==='new' && state.phone.replace(/\s/g,'')===EXISTING_OWNER_PHONE){ state.screen='owner_match'; }
+      else { state.screen='form'; }
+      render();
+    },
+    confirmOwnerMatch:function(yes){ state.screen='form'; render(); },
+    setNature:function(v){ state.form.nature=v; render(); },
+    submitApplication:function(){ state.screen='submitted'; render(); },
+    setScreen:function(s){ state.screen=s; render(); },
+    setDemoStage:function(s){ state.demoStage=s; render(); },
+    resolveRequest:function(){ state.demoStage='dept_review'; render(); },
+    startOver:function(){ state={screen:'landing',path:null,licenseInput:'',matchedLegacy:null,phone:'',otpInput:'',matchedOwner:null,form:{nature:'',amount:''},demoStage:'submitted'}; render(); }
+  };
+  render();
+})();
+</script>
+</body>
+</html>

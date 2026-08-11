@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MuniServe — How CEDULA is Calculated</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4ff;
+      color: #1a2340;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px 60px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #1a3d9e 0%, #2bc99a 100%);
+      border-radius: 14px;
+      padding: 36px 40px;
+      color: white;
+      margin-bottom: 32px;
+    }
+    .header .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      padding: 4px 14px;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .header p {
+      font-size: 14px;
+      opacity: 0.88;
+      max-width: 580px;
+    }
+    .header .meta {
+      margin-top: 18px;
+      font-size: 12px;
+      opacity: 0.7;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      padding-top: 14px;
+      display: flex;
+      gap: 24px;
+    }
+
+    /* ── Section ── */
+    .section {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .section-header {
+      background: #1a3d9e;
+      color: white;
+      padding: 14px 24px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-header .num {
+      background: rgba(255,255,255,0.2);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .section-body {
+      padding: 24px;
+    }
+
+    /* ── What is CEDULA ── */
+    .what-is {
+      background: #f8faff;
+      border: 1px solid #dde6f5;
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .what-is p { margin-bottom: 10px; }
+    .what-is p:last-child { margin-bottom: 0; }
+
+    /* ── Type Cards ── */
+    .type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .type-card {
+      border-radius: 10px;
+      border: 1.5px solid #e2e8f0;
+      overflow: hidden;
+    }
+    .type-card .type-head {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: white;
+    }
+    .type-card.individual .type-head { background: #1a3d9e; }
+    .type-card.juridical .type-head { background: #0e7490; }
+    .type-card.coop .type-head { background: #2bc99a; color: #065f46; }
+    .type-card .type-body {
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .type-card .type-body .applies-to {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7a99;
+      margin-bottom: 8px;
+    }
+    .type-card .type-body ul {
+      padding-left: 16px;
+    }
+    .type-card .type-body ul li {
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    /* ── Formula Box ── */
+    .formula-block {
+      background: #f0f4ff;
+      border: 1.5px solid #c7d4f5;
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin: 16px 0;
+    }
+    .formula-block .formula-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #1a3d9e;
+      margin-bottom: 10px;
+    }
+    .formula-block .formula {
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: #1a2340;
+      line-height: 1.8;
+    }
+    .formula-block .formula .highlight {
+      background: #1a3d9e;
+      color: white;
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-weight: 700;
+    }
+    .formula-block .note {
+      margin-top: 12px;
+      font-size: 12.5px;
+      color: #6b7a99;
+      border-top: 1px solid #c7d4f5;
+      padding-top: 10px;
+    }
+
+    /* ── Example Box ── */
+    .example-block {
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid #e2e8f0;
+    }
+    .example-block .example-head {
+      background: #f8faff;
+      padding: 10px 18px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7a99;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .example-block .example-body {
+      padding: 16px 18px;
+      font-size: 13.5px;
+    }
+    .example-block .example-body table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .example-block .example-body td {
+      padding: 6px 0;
+      border-bottom: 1px solid #f0f4f8;
+      font-size: 13.5px;
+    }
+    .example-block .example-body td:last-child {
+      text-align: right;
+      font-weight: 600;
+    }
+    .example-block .example-body .total-row td {
+      padding-top: 10px;
+      border-bottom: none;
+      font-size: 14.5px;
+      color: #1a3d9e;
+      font-weight: 700;
+      border-top: 2px solid #1a3d9e;
+    }
+    .example-block .example-body .scenario {
+      font-size: 13px;
+      color: #6b7a99;
+      margin-bottom: 12px;
+      font-style: italic;
+    }
+
+    /* ── Basis Table ── */
+    .basis-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin-top: 8px;
+    }
+    .basis-table th {
+      background: #f0f4ff;
+      color: #1a3d9e;
+      font-weight: 700;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .basis-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f4f8;
+    }
+    .basis-table tr:last-child td { border-bottom: none; }
+    .basis-table tr:hover td { background: #fafbff; }
+
+    /* ── Cap / Max ── */
+    .cap-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .cap-card {
+      background: #f8faff;
+      border: 1.5px solid #dde6f5;
+      border-radius: 10px;
+      padding: 18px 20px;
+      text-align: center;
+    }
+    .cap-card .cap-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7a99;
+      margin-bottom: 6px;
+    }
+    .cap-card .cap-amount {
+      font-size: 26px;
+      font-weight: 700;
+      color: #1a3d9e;
+    }
+    .cap-card .cap-sub {
+      font-size: 12px;
+      color: #6b7a99;
+      margin-top: 4px;
+    }
+
+    /* ── Exempt Box ── */
+    .exempt-box {
+      background: #ecfdf5;
+      border: 1.5px solid #6ee7b7;
+      border-radius: 10px;
+      padding: 18px 22px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .exempt-box .exempt-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .exempt-box .exempt-text h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #065f46;
+      margin-bottom: 6px;
+    }
+    .exempt-box .exempt-text p {
+      font-size: 13px;
+      color: #047857;
+      line-height: 1.6;
+    }
+
+    /* ── Info Note ── */
+    .info-note {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #78350f;
+      margin: 14px 0;
+      line-height: 1.6;
+    }
+
+    /* ── Summary Table ── */
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    .summary-table th {
+      background: linear-gradient(135deg, #1a3d9e, #2bc99a);
+      color: white;
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .summary-table td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #f0f4f8;
+      vertical-align: top;
+    }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-table tr:hover td { background: #fafbff; }
+    .summary-table .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .tag.new { background: #dbeafe; color: #1e40af; }
+    .tag.renewal { background: #d1fae5; color: #065f46; }
+    .tag.exempt { background: #d1fae5; color: #065f46; }
+
+    /* ── Legal ── */
+    .legal-box {
+      background: #f8faff;
+      border: 1px solid #dde6f5;
+      border-radius: 10px;
+      padding: 18px 22px;
+      font-size: 13px;
+      color: #4a5568;
+      line-height: 1.7;
+    }
+    .legal-box strong { color: #1a2340; }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #a0aec0;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge">MuniServe Documentation</div>
+    <h1>How CEDULA is Calculated</h1>
+    <p>A simple guide for LGU staff on how the Community Tax Certificate (CEDULA) amount is automatically computed by the MuniServe system.</p>
+    <div class="meta">
+      <span>📋 Reference: Republic Act 7160 (Local Government Code)</span>
+      <span>📅 Applies to: All Business Permit Applications</span>
+    </div>
+  </div>
+
+  <!-- Section 1: What is CEDULA -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">1</div>
+      What is a CEDULA?
+    </div>
+    <div class="section-body">
+      <div class="what-is">
+        <p>A <strong>Community Tax Certificate (CEDULA)</strong> is an official document that proves a person or business has paid their community tax to the local government.</p>
+        <p>In the business permit process, the CEDULA is a <strong>required document</strong> before your application can proceed. It must be secured from the <strong>Treasurer's Office</strong>.</p>
+        <p>The amount you pay for your CEDULA depends on your <strong>organization type</strong> and your <strong>declared income or gross sales</strong>.</p>
+      </div>
+      <div class="info-note">
+        ⚡ <strong>Automated:</strong> MuniServe automatically calculates the CEDULA amount based on the information the applicant submitted. The Treasurer reviews and confirms the amount before the applicant is asked to pay.
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Who Pays What -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">2</div>
+      Who Pays What — Three Categories
+    </div>
+    <div class="section-body">
+      <div class="type-grid">
+        <div class="type-card individual">
+          <div class="type-head">Individual</div>
+          <div class="type-body">
+            <div class="applies-to">Applies to</div>
+            <ul>
+              <li>Sole Proprietorship</li>
+            </ul>
+            <br/>
+            <div class="applies-to">Based on</div>
+            <ul>
+              <li>Capital Investment (New)</li>
+              <li>Gross Sales (Renewal)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="type-card juridical">
+          <div class="type-head">Juridical</div>
+          <div class="type-body">
+            <div class="applies-to">Applies to</div>
+            <ul>
+              <li>Corporation</li>
+              <li>Partnership</li>
+            </ul>
+            <br/>
+            <div class="applies-to">Based on</div>
+            <ul>
+              <li>Capital Investment (New)</li>
+              <li>Gross Receipts (Renewal)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="type-card coop">
+          <div class="type-head">Cooperative</div>
+          <div class="type-body">
+            <div class="applies-to">Applies to</div>
+            <ul>
+              <li>CDA-registered Cooperatives</li>
+            </ul>
+            <br/>
+            <div class="applies-to">Treated as</div>
+            <ul>
+              <li>Juridical entity for CEDULA</li>
+              <li>Same formula as Corp/Partnership</li>
+              <li>✅ Exempt from LBT only</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Formula Individual -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">3</div>
+      Formula — Individual (Sole Proprietorship)
+    </div>
+    <div class="section-body">
+
+      <div class="formula-block">
+        <div class="formula-label">Formula</div>
+        <div class="formula">
+          CEDULA = <span class="highlight">₱5.00</span> basic fee<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="highlight">₱1.00</span> for every ₱1,000 of income (or fraction)<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Maximum: <span class="highlight">₱5,005.00</span>
+        </div>
+        <div class="note">
+          💡 "Fraction" means that even if the remaining amount is less than ₱1,000, it is still counted as one full ₱1,000. For example, ₱1,500 = 2 counts of ₱1,000.
+        </div>
+      </div>
+
+      <div class="example-block">
+        <div class="example-head">Example A — New Application</div>
+        <div class="example-body">
+          <div class="scenario">Sole Proprietor, New Application, Capital Investment = ₱50,000</div>
+          <table>
+            <tr><td>Basic Fee</td><td>₱5.00</td></tr>
+            <tr><td>Additional (₱50,000 ÷ ₱1,000 = 50 counts × ₱1.00)</td><td>₱50.00</td></tr>
+            <tr class="total-row"><td>Total CEDULA Amount</td><td>₱55.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="example-block">
+        <div class="example-head">Example B — Renewal Application</div>
+        <div class="example-body">
+          <div class="scenario">Sole Proprietor, Renewal, Total Gross Sales = ₱500,000</div>
+          <table>
+            <tr><td>Basic Fee</td><td>₱5.00</td></tr>
+            <tr><td>Additional (₱500,000 ÷ ₱1,000 = 500 counts × ₱1.00)</td><td>₱500.00</td></tr>
+            <tr class="total-row"><td>Total CEDULA Amount</td><td>₱505.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="example-block">
+        <div class="example-head">Example C — High Income (Cap Applied)</div>
+        <div class="example-body">
+          <div class="scenario">Sole Proprietor, Renewal, Total Gross Sales = ₱10,000,000</div>
+          <table>
+            <tr><td>Basic Fee</td><td>₱5.00</td></tr>
+            <tr><td>Additional (₱10,000,000 ÷ ₱1,000 = 10,000 counts × ₱1.00)</td><td>₱10,000.00</td></tr>
+            <tr><td>⚠️ Maximum cap applied</td><td>—</td></tr>
+            <tr class="total-row"><td>Total CEDULA Amount (capped)</td><td>₱5,005.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Section 4: Formula Juridical -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">4</div>
+      Formula — Juridical (Corporation / Partnership)
+    </div>
+    <div class="section-body">
+
+      <div class="formula-block">
+        <div class="formula-label">Formula</div>
+        <div class="formula">
+          CEDULA = <span class="highlight">₱500.00</span> basic fee<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="highlight">₱2.00</span> for every ₱5,000 of gross receipts (or fraction)<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Maximum: <span class="highlight">₱10,500.00</span>
+        </div>
+        <div class="note">
+          💡 Same "fraction" rule applies. ₱6,000 = 2 counts of ₱5,000.
+        </div>
+      </div>
+
+      <div class="example-block">
+        <div class="example-head">Example D — New Corporation</div>
+        <div class="example-body">
+          <div class="scenario">Corporation, New Application, Capital Investment = ₱200,000</div>
+          <table>
+            <tr><td>Basic Fee</td><td>₱500.00</td></tr>
+            <tr><td>Additional (₱200,000 ÷ ₱5,000 = 40 counts × ₱2.00)</td><td>₱80.00</td></tr>
+            <tr class="total-row"><td>Total CEDULA Amount</td><td>₱580.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="example-block">
+        <div class="example-head">Example E — Renewal Corporation</div>
+        <div class="example-body">
+          <div class="scenario">Corporation, Renewal, Total Gross Receipts = ₱2,000,000</div>
+          <table>
+            <tr><td>Basic Fee</td><td>₱500.00</td></tr>
+            <tr><td>Additional (₱2,000,000 ÷ ₱5,000 = 400 counts × ₱2.00)</td><td>₱800.00</td></tr>
+            <tr class="total-row"><td>Total CEDULA Amount</td><td>₱1,300.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Section 5: Maximum Amounts -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">5</div>
+      Maximum Amounts (Cap)
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:14px;">No matter how high the income or gross receipts, the CEDULA amount will never exceed these amounts:</p>
+      <div class="cap-grid">
+        <div class="cap-card">
+          <div class="cap-label">Individual / Sole Proprietor</div>
+          <div class="cap-amount">₱5,005.00</div>
+          <div class="cap-sub">₱5.00 basic + ₱5,000 max additional</div>
+        </div>
+        <div class="cap-card">
+          <div class="cap-label">Juridical (Corp / Partnership)</div>
+          <div class="cap-amount">₱10,500.00</div>
+          <div class="cap-sub">₱500.00 basic + ₱10,000 max additional</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 6: Income Basis -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">6</div>
+      What Income Figure is Used?
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:14px;">The income figure used in the calculation depends on whether the application is <strong>New</strong> or a <strong>Renewal</strong>:</p>
+      <table class="basis-table">
+        <thead>
+          <tr>
+            <th>Application Type</th>
+            <th>Organization Type</th>
+            <th>Income Basis Used</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag new">New</span></td>
+            <td>Sole Proprietor</td>
+            <td>Capital Investment</td>
+          </tr>
+          <tr>
+            <td><span class="tag new">New</span></td>
+            <td>Corporation / Partnership</td>
+            <td>Capital Investment</td>
+          </tr>
+          <tr>
+            <td><span class="tag renewal">Renewal</span></td>
+            <td>Sole Proprietor</td>
+            <td>Total Gross Sales (previous year)</td>
+          </tr>
+          <tr>
+            <td><span class="tag renewal">Renewal</span></td>
+            <td>Corporation / Partnership</td>
+            <td>Total Gross Receipts (previous year)</td>
+          </tr>
+          <tr>
+            <td><span class="tag new">New</span></td>
+            <td>Cooperative (CDA-registered)</td>
+            <td>Capital Investment (treated as Juridical)</td>
+          </tr>
+          <tr>
+            <td><span class="tag renewal">Renewal</span></td>
+            <td>Cooperative (CDA-registered)</td>
+            <td>Total Gross Receipts (treated as Juridical)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 7: Cooperatives and CEDULA -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">7</div>
+      Cooperatives — What Are They Exempt From?
+    </div>
+    <div class="section-body">
+      <div class="info-note">
+        ⚠️ <strong>Common Misconception:</strong> Cooperatives are often mistakenly believed to be exempt from CEDULA. This is incorrect. Their exemption only covers Local Business Tax (LBT) and other local taxes — not the Community Tax.
+      </div>
+      <br/>
+      <div class="exempt-box" style="background:#fef9c3; border-color:#fde047;">
+        <div class="exempt-icon">📋</div>
+        <div class="exempt-text">
+          <h4 style="color:#713f12;">Cooperatives still pay CEDULA — as a Juridical entity</h4>
+          <p style="color:#854d0e;">Under <strong>Sections 156–162 of RA 7160</strong> (Local Government Code), cooperatives are juridical persons engaged in business and are therefore required to pay the Community Tax. The exemption under <strong>RA 9520 Article 61</strong> and <strong>LGC Section 133(n)</strong> covers <em>local business taxes only</em> — it does not extend to the Community Tax, which is governed by a separate chapter of the LGC entirely.</p>
+        </div>
+      </div>
+      <br/>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Fee / Tax</th>
+            <th>Cooperative Exempt?</th>
+            <th>Legal Basis</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Local Business Tax (LBT)</td>
+            <td style="color:#065f46; font-weight:700;">✅ YES — Exempt</td>
+            <td>RA 9520 Art. 61(3); LGC Sec. 133(n); BLGF MC 01-2020</td>
+          </tr>
+          <tr>
+            <td>Mayor's Permit</td>
+            <td style="color:#1a3d9e; font-weight:700;">Required (zero LBT cost)</td>
+            <td>BLGF MC 01-2020</td>
+          </tr>
+          <tr>
+            <td>CEDULA / Community Tax</td>
+            <td style="color:#dc2626; font-weight:700;">❌ NOT Exempt — Must pay</td>
+            <td>LGC Sec. 156–162 (no cooperative exemption exists)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 8: Quick Reference Summary -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">8</div>
+      Quick Reference Summary
+    </div>
+    <div class="section-body">
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Organization Type</th>
+            <th>Basic Fee</th>
+            <th>Additional Rate</th>
+            <th>Per Every</th>
+            <th>Maximum</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Sole Proprietor</td>
+            <td>₱5.00</td>
+            <td>₱1.00</td>
+            <td>₱1,000 of income</td>
+            <td>₱5,005.00</td>
+          </tr>
+          <tr>
+            <td>Corporation / Partnership</td>
+            <td>₱500.00</td>
+            <td>₱2.00</td>
+            <td>₱5,000 of gross receipts</td>
+            <td>₱10,500.00</td>
+          </tr>
+          <tr>
+            <td>Cooperative</td>
+            <td>₱500.00</td>
+            <td>₱2.00</td>
+            <td>₱5,000 of gross receipts (same as Juridical)</td>
+            <td>₱10,500.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 9: Legal Basis -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">9</div>
+      Legal Basis
+    </div>
+    <div class="section-body">
+      <div class="legal-box">
+        <p><strong>Republic Act 7160 — Local Government Code of 1991</strong><br/>
+        Sections 156 to 164 govern the Community Tax (CEDULA). These sections define who is required to pay, how the tax is computed, and the maximum amounts allowed.</p>
+        <br/>
+        <p><strong>Republic Act 9520 — Philippine Cooperative Code of 2008</strong><br/>
+        Grants cooperatives full exemption from the community tax, among other tax privileges.</p>
+        <br/>
+        <p style="font-size:12.5px; color:#a0aec0;">The amounts and formulas in this document are based on national law and apply uniformly to all LGUs. LGUs do not have the authority to change these rates.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>MuniServe Internal Documentation &nbsp;·&nbsp; CEDULA Calculation Guide &nbsp;·&nbsp; Based on RA 7160 &amp; RA 9520</p>
+    <p style="margin-top:4px;">For questions, contact your MuniServe account manager.</p>
+  </div>
+
+</div>
+</body>
+</html>

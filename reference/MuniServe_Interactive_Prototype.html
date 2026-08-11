@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MuniServe — Interactive Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{
+    --text-primary:#1a1a2e; --text-secondary:#6b7280; --border:#e5e7eb; --border-strong:#c7cbd1;
+    --surface-1:#f4f6fb; --surface-2:#ffffff; --radius:8px;
+    --bg-warning:#FAEEDA; --text-warning:#854F0B;
+    --bg-success:#EAF3DE; --text-success:#27500A;
+    --bg-danger:#FCEBEB; --text-danger:#791F1F;
+    --bg-accent:#E6F1FB; --text-accent:#0C447C;
+    --bg-pro:#EEEDFE; --text-pro:#3C3489;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:var(--surface-1);color:var(--text-primary);margin:0;padding:32px 16px;}
+  #wrap{max-width:720px;margin:0 auto;background:var(--surface-2);border-radius:16px;padding:24px;border:0.5px solid var(--border);}
+  button{font-family:inherit;background:var(--surface-2);border:0.5px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:12px;cursor:pointer;color:var(--text-primary);}
+  button:hover{background:var(--surface-1);}
+  table{border-collapse:collapse;}
+  p{margin:0;}
+  .row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:0.5px solid var(--border);cursor:pointer;}
+  .row:last-child{border-bottom:none;}
+  .row:hover{background:var(--surface-1);}
+  .badge{font-size:11px;padding:2px 8px;border-radius:var(--radius);white-space:nowrap;}
+  .pill{font-size:10px;padding:2px 7px;border-radius:20px;white-space:nowrap;}
+  .card{border:0.5px solid var(--border);border-radius:var(--radius);}
+  .roletab{font-size:12px;padding:6px 10px;border-radius:var(--radius);cursor:pointer;color:var(--text-secondary);}
+  .roletab.active{background:var(--text-primary);color:var(--surface-2);}
+  .actbtn{font-size:12px;padding:6px 10px;}
+  .doc{border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:6px;}
+  .dochead{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="app"></div></div>
+<script>
+(function(){
+  var DEPTS = ['Zoning','Fire','MENRO','Engineering'];
+  var DOCS = [
+    {type:'Barangay business clearance', name:'barangay_clearance.pdf'},
+    {type:'CEDULA (community tax certificate)', name:'cedula.pdf'},
+    {type:"Owner's valid government ID", name:'valid_id.jpg'},
+    {type:'Proof of business address (lease / land title)', name:'lease_contract.pdf'},
+    {type:'DTI / SEC / CDA registration', name:'dti_registration.pdf'}
+  ];
+  var apps = [
+    {id:1,business:"Cezmil's Auto and Electrical Supply",owner:"Milagros King Buenaventura",type:"Renewal",barangay:"Camias",address:"123 Camias Road, Camias",nature:"Retailer / auto and electrical supply",grossSales:3462287,stage:"bplo_initial",deptStatus:{},fee:23561,documents:DOCS},
+    {id:2,business:"Green Season Foods Products",owner:"Maria Lourdes V. Sison",type:"New",barangay:"San Jose",address:"45 San Jose St., San Jose",nature:"Food processing",capital:260000,stage:"dept_review",deptStatus:{Zoning:{status:'approved',actedBy:'Zoning staff'},Fire:{status:'pending',actedBy:null},MENRO:{status:'approved',actedBy:'MENRO staff'},Engineering:{status:'pending',actedBy:null}},fee:9800,note:'',documents:DOCS},
+    {id:3,business:"PRRM3 Trucking Services",owner:"Cherrylyn R. Calma",type:"Renewal",barangay:"Poblacion",address:"Purok 3, Poblacion",nature:"Trucking and hauling services",grossSales:1200,stage:"dept_review",deptStatus:{Zoning:{status:'approved',actedBy:'BPLO'},Fire:{status:'rejected',actedBy:'Fire staff'},MENRO:{status:'approved',actedBy:'MENRO staff'},Engineering:{status:'approved',actedBy:'Engineering staff'}},fee:1250,note:'Fire: fire safety certificate expired, needs renewal before we can approve.',documents:DOCS},
+    {id:4,business:"Allen LPG Store",owner:"Alice P. Pablo",type:"Renewal",barangay:"Balaong",address:"Balaong Highway, Balaong",nature:"LPG retailer",grossSales:40530,stage:"bplo_assessment",deptStatus:{Zoning:{status:'approved',actedBy:'Zoning staff'},Fire:{status:'approved',actedBy:'Fire staff'},MENRO:{status:'approved',actedBy:'MENRO staff'},Engineering:{status:'approved',actedBy:'Engineering staff'}},fee:4720,note:'',documents:DOCS},
+    {id:5,business:"Dela Cruz Sari-Sari Store",owner:"Juan Dela Cruz",type:"Renewal",barangay:"Poblacion",address:"12 Rizal St., Poblacion",nature:"Retailer",grossSales:45000,stage:"mayor_signoff",deptStatus:{Zoning:{status:'approved',actedBy:'Zoning staff'},Fire:{status:'approved',actedBy:'Fire staff'},MENRO:{status:'approved',actedBy:'MENRO staff'},Engineering:{status:'approved',actedBy:'Engineering staff'}},fee:610,note:'',documents:DOCS}
+  ];
+  var seed = JSON.parse(JSON.stringify(apps));
+  var state = {loginRole:'bplo', bploTab:'bplo', selectedId:null};
+  var expandedDocs = {};
+  var expandedMayor = {};
+
+  function peso(n){ return '₱' + Math.round(n).toLocaleString(); }
+  function statusColor(s){
+    if(s==='approved') return ['var(--bg-success)','var(--text-success)'];
+    if(s==='approved_with_condition') return ['var(--bg-pro)','var(--text-pro)'];
+    if(s==='rejected') return ['var(--bg-danger)','var(--text-danger)'];
+    if(s==='request_more_info') return ['var(--bg-accent)','var(--text-accent)'];
+    return ['var(--bg-warning)','var(--text-warning)'];
+  }
+  function badge(label,s){ var c=statusColor(s); return '<span class="badge" style="background:'+c[0]+';color:'+c[1]+';">'+label+'</span>'; }
+  function pill(label,s){ var c=statusColor(s); return '<span class="pill" style="background:'+c[0]+';color:'+c[1]+';">'+label+'</span>'; }
+  function statCard(label,val){ return '<div style="background:var(--surface-1);border-radius:var(--radius);padding:1rem;"><p style="font-size:13px;color:var(--text-secondary);margin:0 0 4px;">'+label+'</p><p style="font-size:24px;font-weight:500;margin:0;">'+val+'</p></div>'; }
+  function topBar(title,sub,initials,bg,fg){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">'+
+      '<div style="display:flex;align-items:center;gap:10px;"><div style="width:32px;height:32px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-weight:500;font-size:13px;color:'+fg+';">'+initials+'</div>'+
+      '<div><p style="font-weight:500;font-size:14px;">'+title+'</p><p style="font-size:12px;color:var(--text-secondary);">'+sub+'</p></div></div>'+
+      '<button class="actbtn" onclick="MS.reset()">Reset demo</button></div>';
+  }
+  function demoControls(){
+    var options = [['bplo','BPLO staff'],['Zoning','Zoning staff'],['Fire','Fire staff'],['MENRO','MENRO staff'],['Engineering','Engineering staff'],['mayor',"Mayor's office"]];
+    var html = '<div style="border:1px dashed var(--border-strong);border-radius:var(--radius);padding:10px 12px;margin-bottom:1.25rem;background:var(--surface-1);">';
+    html += '<p style="font-size:11px;color:var(--text-secondary);margin:0 0 6px;">Demo controls — preview as a different login. Real accounts are locked to one role.</p><div style="display:flex;gap:4px;flex-wrap:wrap;">';
+    options.forEach(function(o){ html += '<div class="roletab'+(state.loginRole===o[0]?' active':'')+'" onclick="MS.setLogin(\''+o[0]+'\')">'+o[1]+'</div>'; });
+    return html+'</div></div>';
+  }
+  function bploInternalTabs(){
+    var tabs = [['bplo','BPLO queue']].concat(DEPTS.map(function(d){return [d,d+' queue'];}));
+    var html = '<div style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:0.5px solid var(--border);padding-bottom:12px;margin-bottom:1.25rem;">';
+    tabs.forEach(function(t){ html += '<div class="roletab'+(state.bploTab===t[0]?' active':'')+'" onclick="MS.setBploTab(\''+t[0]+'\')">'+t[1]+'</div>'; });
+    return html+'</div>';
+  }
+  function businessProfileBlock(a){
+    return '<div style="margin-bottom:10px;"><p style="font-size:12px;color:var(--text-secondary);margin:0 0 6px;">'+a.address+'</p>'+
+      '<table style="width:100%;font-size:12px;"><tr><td style="color:var(--text-secondary);padding:2px 0;">Nature of business</td><td style="text-align:right;">'+a.nature+'</td></tr>'+
+      '<tr><td style="color:var(--text-secondary);padding:2px 0;">'+(a.type==='New'?'Capital investment':'Gross sales (preceding year)')+'</td><td style="text-align:right;">'+peso(a.type==='New'?a.capital:a.grossSales)+'</td></tr></table></div>';
+  }
+  function documentsBlock(a){
+    var html = '<div style="margin-bottom:10px;"><p style="font-size:11px;font-weight:500;color:var(--text-secondary);margin:0 0 6px;">Documents submitted</p>';
+    a.documents.forEach(function(d,idx){
+      var key = a.id+'-'+idx, open = !!expandedDocs[key];
+      html += '<div class="doc"><div class="dochead" onclick="MS.toggleDoc(\''+key+'\')"><span style="font-size:12px;">'+d.type+'</span><span style="font-size:11px;color:var(--text-accent);">'+(open?'Hide':'View')+'</span></div>';
+      if(open) html += '<div style="padding:10px;border-top:0.5px solid var(--border);font-size:11px;color:var(--text-secondary);background:var(--surface-1);">Preview of '+d.name+' — the live system shows the scanned file here.</div>';
+      html += '</div>';
+    });
+    return html+'</div>';
+  }
+  function deptLogBlock(a){
+    var html = '<div style="margin-bottom:10px;"><p style="font-size:11px;font-weight:500;color:var(--text-secondary);margin:0 0 6px;">Department review log</p>';
+    DEPTS.forEach(function(d){
+      var s = a.deptStatus[d]; if(!s) return;
+      html += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border);"><span>'+d+'</span><span style="color:var(--text-secondary);">'+s.status.replace(/_/g,' ')+(s.actedBy?' · '+s.actedBy:'')+'</span></div>';
+    });
+    return html+'</div>';
+  }
+  function deptAllClear(a){ return DEPTS.every(function(d){ var s=a.deptStatus[d].status; return s==='approved'||s==='approved_with_condition'; }); }
+
+  function bploInitialPanel(a){
+    return '<div class="card" style="padding:12px;margin-top:10px;"><p style="font-size:13px;font-weight:500;margin:0 0 8px;">'+a.business+' <span style="color:var(--text-secondary);font-weight:400;">· '+a.owner+'</span></p>'+
+      businessProfileBlock(a)+documentsBlock(a)+
+      '<p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">Confirm the documents establish legitimacy before deciding.</p>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+      '<button class="actbtn" onclick="MS.bploInitial('+a.id+',\'approve\')">Approve</button>'+
+      '<button class="actbtn" onclick="MS.bploInitial('+a.id+',\'condition\')">Approve with condition</button>'+
+      '<button class="actbtn" onclick="MS.bploInitial('+a.id+',\'info\')">Request more info</button>'+
+      '<button class="actbtn" style="color:var(--text-danger);" onclick="MS.bploInitial('+a.id+',\'reject\')">Reject</button></div></div>';
+  }
+  function bploAssessmentPanel(a){
+    var mp=500, appFee=10, lbt=Math.max(0,a.fee-mp-appFee);
+    return '<div class="card" style="padding:12px;margin-top:10px;"><p style="font-size:13px;font-weight:500;margin:0 0 8px;">'+a.business+'</p>'+
+      businessProfileBlock(a)+deptLogBlock(a)+
+      '<table style="width:100%;font-size:13px;margin-bottom:12px;">'+
+      '<tr><td style="padding:4px 0;color:var(--text-secondary);">Mayor’s permit fee</td><td style="text-align:right;">'+peso(mp)+'</td></tr>'+
+      '<tr><td style="padding:4px 0;color:var(--text-secondary);">Local business tax</td><td style="text-align:right;">'+peso(lbt)+'</td></tr>'+
+      '<tr><td style="padding:4px 0;color:var(--text-secondary);">Application fee</td><td style="text-align:right;">'+peso(appFee)+'</td></tr>'+
+      '<tr><td style="padding:8px 0 0;font-weight:500;border-top:0.5px solid var(--border);">Total assessed</td><td style="text-align:right;font-weight:500;padding:8px 0 0;border-top:0.5px solid var(--border);">'+peso(a.fee)+'</td></tr></table>'+
+      '<button class="actbtn" onclick="MS.finalize('+a.id+')">Finalize assessment</button></div>';
+  }
+
+  function renderBPLO(){
+    var initial=apps.filter(function(a){return a.stage==='bplo_initial';});
+    var assessment=apps.filter(function(a){return a.stage==='bplo_assessment';});
+    var inReview=apps.filter(function(a){return a.stage==='dept_review';});
+    var returned=apps.filter(function(a){return a.stage==='returned';});
+    var released=apps.filter(function(a){return a.stage==='released'||a.stage==='mayor_signoff';});
+    var html = topBar('San Miguel, Bulacan','BPLO office','SM','var(--bg-accent)','var(--text-accent)');
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:1.5rem;">'+statCard('Initial review',initial.length)+statCard('Assessment review',assessment.length)+statCard('In dept. review',inReview.length)+statCard('Released',released.length)+'</div>';
+    html += '<p style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:0 0 8px;">Needs your review</p><div class="card">';
+    if(initial.length===0 && assessment.length===0){ html += '<div style="padding:16px;font-size:13px;color:var(--text-secondary);">Nothing waiting on BPLO right now.</div>'; }
+    else { initial.forEach(function(a){html+='<div class="row" onclick="MS.select('+a.id+')"><div style="flex:1;min-width:0;"><p style="font-size:13px;font-weight:500;">'+a.business+'</p><p style="font-size:12px;color:var(--text-secondary);">'+a.owner+' · '+a.type+'</p></div>'+badge('Initial review','pending')+'</div>';});
+      assessment.forEach(function(a){html+='<div class="row" onclick="MS.select('+a.id+')"><div style="flex:1;min-width:0;"><p style="font-size:13px;font-weight:500;">'+a.business+'</p><p style="font-size:12px;color:var(--text-secondary);">'+a.owner+' · '+a.type+'</p></div>'+badge('Assessment review','approved_with_condition')+'</div>';}); }
+    html += '</div>';
+    if(state.selectedId){ var sel=apps.filter(function(a){return a.id===state.selectedId;})[0];
+      if(sel && sel.stage==='bplo_initial') html+=bploInitialPanel(sel);
+      if(sel && sel.stage==='bplo_assessment') html+=bploAssessmentPanel(sel); }
+    html += '<p style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:1.5rem 0 8px;">In review across departments</p>';
+    if(inReview.length===0){ html += '<div class="card" style="padding:16px;font-size:13px;color:var(--text-secondary);">No applications currently with the departments.</div>'; }
+    inReview.forEach(function(a){
+      html += '<div class="card" style="padding:12px;margin-bottom:10px;"><p style="font-size:13px;font-weight:500;margin:0 0 8px;">'+a.business+' <span style="color:var(--text-secondary);font-weight:400;">· '+a.owner+'</span></p><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+      DEPTS.forEach(function(d){ var s=a.deptStatus[d]; html += pill(d+' · '+s.status.replace(/_/g,' ')+(s.actedBy==='BPLO'?' (BPLO)':''), s.status); });
+      html += '</div>';
+      var flagged = DEPTS.filter(function(d){ return a.deptStatus[d].status==='rejected'||a.deptStatus[d].status==='request_more_info'; });
+      if(flagged.length){ html += '<p style="font-size:12px;color:var(--text-secondary);margin:8px 0;">'+a.note+'</p><button class="actbtn" onclick="MS.resubmit('+a.id+')">Applicant resubmitted — notify '+flagged.join(', ')+'</button>'; }
+      html += '</div>';
+    });
+    if(returned.length){ html += '<p style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:1.5rem 0 8px;">Returned to applicant</p><div class="card">';
+      returned.forEach(function(a){html+='<div class="row"><div style="flex:1;"><p style="font-size:13px;font-weight:500;">'+a.business+'</p><p style="font-size:12px;color:var(--text-secondary);">'+a.owner+'</p></div>'+badge('Returned','rejected')+'</div>';});
+      html += '</div>'; }
+    return html;
+  }
+
+  function renderDept(dept, isProxy){
+    var pending = apps.filter(function(a){return a.stage==='dept_review' && a.deptStatus[dept].status==='pending';});
+    var html = topBar(dept+' office','San Miguel, Bulacan', dept.slice(0,2).toUpperCase(), 'var(--bg-pro)','var(--text-pro)');
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:1.5rem;">'+statCard('Awaiting your review',pending.length)+'</div>';
+    html += '<p style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:0 0 8px;">Awaiting your review</p>';
+    if(pending.length===0){ html += '<div class="card" style="padding:16px;font-size:13px;color:var(--text-secondary);">Nothing waiting on '+dept+' right now.</div>'; }
+    pending.forEach(function(a){
+      html += '<div class="card" style="padding:12px;margin-bottom:10px;"><p style="font-size:13px;font-weight:500;margin:0 0 8px;">'+a.business+' <span style="color:var(--text-secondary);font-weight:400;">· '+a.owner+'</span></p>'+
+        businessProfileBlock(a)+documentsBlock(a)+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+        '<button class="actbtn" onclick="MS.deptDecide('+a.id+',\''+dept+'\',\'approved\')">Approve</button>'+
+        '<button class="actbtn" onclick="MS.deptDecide('+a.id+',\''+dept+'\',\'approved_with_condition\')">Approve with condition</button>'+
+        '<button class="actbtn" onclick="MS.deptDecide('+a.id+',\''+dept+'\',\'request_more_info\')">Request more info</button>'+
+        '<button class="actbtn" style="color:var(--text-danger);" onclick="MS.deptDecide('+a.id+',\''+dept+'\',\'rejected\')">Reject</button></div></div>';
+    });
+    return html;
+  }
+
+  function renderMayor(){
+    var queue=apps.filter(function(a){return a.stage==='mayor_signoff';});
+    var released=apps.filter(function(a){return a.stage==='released';});
+    var html = topBar("Mayor's office",'San Miguel, Bulacan','MO','var(--bg-accent)','var(--text-accent)');
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:1.5rem;">'+statCard('Awaiting signature',queue.length)+statCard('Released',released.length)+statCard('Revenue released',peso(released.reduce(function(s,a){return s+a.fee;},0)))+'</div>';
+    html += '<p style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:0 0 8px;">Ready for your signature</p><div class="card">';
+    if(queue.length===0){ html += '<div style="padding:16px;font-size:13px;color:var(--text-secondary);">Nothing waiting on your signature right now.</div>'; }
+    queue.forEach(function(a){
+      var open = !!expandedMayor[a.id];
+      html += '<div style="border-bottom:0.5px solid var(--border);padding:10px 12px;">';
+      html += '<div class="row" style="border:none;padding:0;cursor:default;"><div style="flex:1;min-width:0;"><p style="font-size:13px;font-weight:500;">'+a.business+'</p><p style="font-size:12px;color:var(--text-secondary);">'+a.owner+' · Total assessed '+peso(a.fee)+'</p></div>'+badge('Paid','approved')+
+        '<button class="actbtn" onclick="MS.toggleMayor('+a.id+')">'+(open?'Hide details':'Details')+'</button>'+
+        '<button class="actbtn" onclick="MS.release('+a.id+')">Sign and release</button></div>';
+      if(open){ html += '<div style="margin-top:10px;">'+businessProfileBlock(a)+deptLogBlock(a)+documentsBlock(a)+'</div>'; }
+      html += '</div>';
+    });
+    html += '</div>';
+    if(released.length){ html += '<p style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:1.5rem 0 8px;">Recently released</p><div class="card">';
+      released.forEach(function(a){html+='<div class="row" style="cursor:default;"><div style="flex:1;"><p style="font-size:13px;font-weight:500;">'+a.business+'</p><p style="font-size:12px;color:var(--text-secondary);">'+a.owner+'</p></div>'+badge('Released','approved')+'</div>';});
+      html += '</div>'; }
+    return html;
+  }
+
+  function render(){
+    var html = demoControls();
+    if(state.loginRole==='bplo'){ html += bploInternalTabs(); html += (state.bploTab==='bplo') ? renderBPLO() : renderDept(state.bploTab, true); }
+    else if(state.loginRole==='mayor'){ html += renderMayor(); }
+    else { html += renderDept(state.loginRole, false); }
+    document.getElementById('app').innerHTML = html;
+  }
+
+  window.MS = {
+    setLogin:function(r){ state.loginRole=r; state.bploTab='bplo'; state.selectedId=null; render(); },
+    setBploTab:function(t){ state.bploTab=t; state.selectedId=null; render(); },
+    select:function(id){ state.selectedId=(state.selectedId===id?null:id); render(); },
+    toggleDoc:function(key){ expandedDocs[key]=!expandedDocs[key]; render(); },
+    toggleMayor:function(id){ expandedMayor[id]=!expandedMayor[id]; render(); },
+    bploInitial:function(id,action){
+      var a=apps.filter(function(x){return x.id===id;})[0];
+      if(action==='approve'||action==='condition'){ a.stage='dept_review'; DEPTS.forEach(function(d){ a.deptStatus[d]={status:'pending',actedBy:null}; }); }
+      else { a.stage='returned'; a.note = action==='reject' ? 'BPLO rejected at initial review.' : 'BPLO requested more information at initial review.'; }
+      state.selectedId=null; render();
+    },
+    deptDecide:function(id,dept,decision){
+      var a=apps.filter(function(x){return x.id===id;})[0];
+      var actedBy = (state.loginRole==='bplo') ? 'BPLO' : dept+' staff';
+      a.deptStatus[dept]={status:decision,actedBy:actedBy};
+      if(decision==='rejected') a.note=dept+': application rejected, needs correction.';
+      else if(decision==='request_more_info') a.note=dept+': please submit additional documents.';
+      if(deptAllClear(a)){ a.stage='bplo_assessment'; a.note=''; }
+      render();
+    },
+    resubmit:function(id){
+      var a=apps.filter(function(x){return x.id===id;})[0];
+      DEPTS.forEach(function(d){ if(a.deptStatus[d].status==='rejected'||a.deptStatus[d].status==='request_more_info') a.deptStatus[d]={status:'pending',actedBy:null}; });
+      a.note=''; render();
+    },
+    finalize:function(id){ var a=apps.filter(function(x){return x.id===id;})[0]; a.stage='mayor_signoff'; state.selectedId=null; render(); },
+    release:function(id){ var a=apps.filter(function(x){return x.id===id;})[0]; a.stage='released'; render(); },
+    reset:function(){ apps=JSON.parse(JSON.stringify(seed)); state={loginRole:'bplo',bploTab:'bplo',selectedId:null}; expandedDocs={}; expandedMayor={}; render(); }
+  };
+  render();
+})();
+</script>
+</body>
+</html>

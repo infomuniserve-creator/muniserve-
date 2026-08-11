@@ -1,0 +1,669 @@
+MuniServe
+
+Assessment Calculation
+
+Setup & Configuration Guide
+
+For LGU Administrators
+
+Version 1.1
+
+This document explains how to configure the Assessment Calculation
+system in MuniServe for your LGU. It covers every custom value you need
+to set up, the exact format each value requires, and worked examples
+showing how each piece affects the final permit fee.
+
+1. Introduction
+
+What This Guide Covers
+
+This guide is for the LGU administrator responsible for setting up
+MuniServe in their sub-account. It explains every value you need to
+configure for the Assessment Calculation system to work correctly.
+
+After reading this guide, you will be able to:
+
+-   Understand how the assessment calculation works step-by-step
+
+-   Configure every custom value with the correct format
+
+-   Update rates and dates as your LGU's policies change
+
+-   Troubleshoot common configuration mistakes
+
+Who Should Read This
+
+-   Primary audience: LGU IT administrators, BPLO Heads, or anyone
+    responsible for configuring MuniServe for their LGU
+
+-   Skill level required: No coding required. Basic familiarity with
+    web-based admin interfaces is enough
+
+-   Time to configure: Approximately 30-45 minutes for first-time setup
+    of all custom values
+
+How the System Works (High-Level)
+
+When an applicant submits a business permit application and all
+departments approve it, the system automatically calculates the total
+fee owed. The calculation has 4 main stages:
+
+1.  Pre-Calculations: Mayor's Permit Fee and Business Tax are determined
+    based on the applicant's business category and capital investment.
+    Sanitary, Garbage, Zoning, and Building Inspection fees are pulled
+    from your LGU's fixed rates.
+
+2.  Fee Calculations: The system calculates Health Card Fee (per
+    employee), Signboard Fee (per square meter), and Weights and
+    Measures Fee (per device). It then sums all fees into a Subtotal.
+
+3.  Discount Application: The system applies any discounts the applicant
+    qualifies for (Senior Citizen, PWD, BMBE, or Early Renewal).
+    Discount stacking rules and maximum caps are enforced.
+
+4.  Final Calculation: If the application is a late renewal, a surcharge
+    is added. The Final Total Due is computed as: Subtotal - Total
+    Discount + Late Renewal Surcharge.
+
+All amounts are in Philippine Pesos (PHP), rounded to the nearest whole
+peso.
+
+2. Custom Values Reference
+
+Custom values are LGU-wide settings that control fee rates, discount
+percentages, and policy thresholds. You must configure all of these in
+your sub-account before the calculation will work correctly.
+
+Navigate to: Settings -> Custom Values to add or edit these values.
+
+2.1 Fee Rates
+
+These rates determine how much each per-unit or per-employee fee costs
+in your LGU.
+
+  ------------------------------ --------------------------------- --------- ------------------------------------------------------
+  Custom Value Name              Format                            Example   Purpose
+  Health Card Fee per Employee   Number (whole pesos)              100       Charged per employee of the business (male + female)
+  Signboard Fee per Sqm          Number (whole pesos or decimal)   50        Charged per square meter of signboard area
+  Weights and Measures Fee       Number (whole pesos)              100       Charged per weighing device the business uses
+  Sanitary/Health Fee (Permit)   Number (whole pesos)              200       Flat fee charged to all applicants
+  Garbage/Environmental Fee      Number (whole pesos)              150       Flat fee charged to all applicants
+  Zoning Fee                     Number (whole pesos)              100       Flat fee charged to all applicants
+  Building Inspection Fee        Number (whole pesos)              300       Flat fee charged to all applicants
+  ------------------------------ --------------------------------- --------- ------------------------------------------------------
+
+Format Notes:
+
+-   Enter numbers ONLY -- no peso sign, no commas, no spaces
+
+-   Correct: 1500
+
+-   Wrong: P1,500.00 or '1500 pesos' or 1,500
+
+-   Decimals are allowed for per-unit rates (e.g., 75.50)
+
+2.2 Discount Rates
+
+Discount rates are expressed as DECIMALS, not percentages. A 20%
+discount is entered as 0.20, not 20.
+
+  ------------------------------ ------------------------ --------- -----------------------------------------------------------------------------------
+  Custom Value Name              Format                   Example   What This Means
+  Senior Citizen Discount Rate   Decimal (0.00 to 1.00)   0.20      20% discount on Mayor's Permit Fee + Business Tax
+  PWD Discount Rate              Decimal (0.00 to 1.00)   0.20      20% discount on Mayor's Permit Fee + Business Tax
+  BMBE Exemption Rate            Decimal (0.00 to 1.00)   1.00      100% exemption on Business Tax only (per RA 9178)
+  Early Renewal Discount Rate    Decimal (0.00 to 1.00)   0.10      10% discount on Subtotal for renewals submitted before the early cutoff
+  Maximum Discount Cap           Decimal (0.00 to 1.00)   0.30      Maximum total discount allowed (e.g., 0.30 = 30% of subtotal). Enter 0 if no cap.
+  ------------------------------ ------------------------ --------- -----------------------------------------------------------------------------------
+
+Format Reference -- How to Convert Percentages to Decimals:
+
+  ------------ --------------- ---------------
+  Percentage   Decimal Value   What to Enter
+  5%           5 / 100         0.05
+  10%          10 / 100        0.10
+  15%          15 / 100        0.15
+  20%          20 / 100        0.20
+  25%          25 / 100        0.25
+  30%          30 / 100        0.30
+  50%          50 / 100        0.50
+  100%         100 / 100       1.00
+  ------------ --------------- ---------------
+
+Common Mistakes to Avoid:
+
+-   Wrong: Entering 20 when you mean 20% -- this would charge 2000%
+    discount and break the calculation
+
+-   Wrong: Entering 0.20% -- this is 0.002 not 0.20
+
+-   Wrong: Entering '20%' or 'twenty percent' -- text is not allowed
+
+-   Correct: For 20%, always enter exactly: 0.20
+
+2.3 Discount Stacking Rule
+
+  -------------------------------------- ----------------- --------- -------------------------------------------------------------------------------------------------------------------------------------------
+  Custom Value Name                      Format            Example   What This Means
+  Allow Stacking Senior + PWD Discount   Text: Yes or No   No        Controls whether an applicant who is BOTH Senior Citizen AND PWD can get both discounts. If No, only the Senior Citizen discount applies.
+  -------------------------------------- ----------------- --------- -------------------------------------------------------------------------------------------------------------------------------------------
+
+How This Works:
+
+-   If set to Yes: An applicant who is both Senior Citizen AND PWD gets
+    BOTH discounts (20% + 20% = 40% of MP fee + BT)
+
+-   If set to No: An applicant who is both Senior Citizen AND PWD only
+    gets the Senior Citizen discount (20%)
+
+Format:
+
+-   Enter exactly Yes or No -- case insensitive, but no extra spaces
+
+-   Correct: Yes
+
+-   Wrong: Y, true, 1, yes please
+
+Recommendation:
+
+Most LGUs choose 'No' (do not stack) because the typical interpretation
+of RA 9994 and RA 10754 is that a person should not receive both
+discounts on the same transaction. Confirm with your LGU's legal advisor
+before setting this.
+
+2.4 Renewal Dates and Surcharges
+
+These values control the renewal timeline -- when applicants can get
+early renewal discounts and when late renewal surcharges apply.
+
+How the Renewal Timeline Works
+
+The renewal year has 3 states:
+
+  --------- ------------------------------------------------------------------------ ---------------------------------------------------------------------
+  State     Timing                                                                   Effect on Fee
+  Early     Submitted on or BEFORE the Early Renewal Cutoff date                     Applicant receives Early Renewal Discount
+  On-Time   Submitted AFTER the Early Cutoff but on or BEFORE the Renewal Deadline   Standard fee -- no discount, no surcharge
+  Late      Submitted AFTER the Renewal Deadline                                     Surcharge applied = base surcharge + monthly interest x months late
+  --------- ------------------------------------------------------------------------ ---------------------------------------------------------------------
+
+Example timeline (showing typical LGU renewal year):
+
+-   December 15 -- Early Renewal Cutoff date
+
+-   January 31 -- Renewal Deadline date
+
+-   Submitted Dec 10 -> Early renewal (gets discount)
+
+-   Submitted Jan 15 -> On-time (no discount, no surcharge)
+
+-   Submitted Feb 20 -> Late (gets surcharge for ~1 month late)
+
+Renewal Custom Values
+
+  ----------------------------- ------------------------ ------------ --------------------------------
+  Custom Value Name             Format                   Example      Notes
+  Early Renewal Cutoff          Date (YYYY-MM-DD)        2027-01-15   Must include the year
+  Renewal Deadline              Date (YYYY-MM-DD)        2027-01-31   Must include the year
+  Early Renewal Discount Rate   Decimal (0.00 to 1.00)   0.10         10% off subtotal
+  Late Surcharge Rate           Decimal (0.00 to 1.00)   0.25         25% base surcharge on subtotal
+  Monthly Interest Rate         Decimal (0.00 to 1.00)   0.02         2% per month late
+  ----------------------------- ------------------------ ------------ --------------------------------
+
+Date Format Rules:
+
+-   Always use YYYY-MM-DD format (4-digit year, dash, 2-digit month,
+    dash, 2-digit day)
+
+-   Correct: 2027-01-31
+
+-   Wrong: 01/31/2027 or January 31 or Jan 31 2027 or 2027/01/31
+
+IMPORTANT -- Update These Dates Every Year:
+
+At the start of each calendar year, you must update both the Early
+Renewal Cutoff and the Renewal Deadline dates to the new year. If you
+forget, all renewals will be considered 'late' relative to the previous
+year's deadline and will incorrectly receive surcharges.
+
+Suggested calendar reminder: Set an annual recurring reminder on
+December 1 of each year to update these two custom values before the new
+renewal period begins.
+
+3. Worked Examples
+
+These examples walk through the full calculation step-by-step for common
+scenarios. Use these to verify your custom values are configured
+correctly.
+
+Sample LGU configuration used in all examples below:
+
+-   Health Card per Employee: P100
+
+-   Signboard per Sqm: P50
+
+-   Weights and Measures: P100
+
+-   Sanitary Fee: P200, Garbage Fee: P150, Zoning Fee: P100, Building
+    Inspection: P300
+
+-   Senior Discount Rate: 0.20 (20%)
+
+-   PWD Discount Rate: 0.20 (20%)
+
+-   BMBE Exemption Rate: 1.00 (100%)
+
+-   Early Renewal Discount: 0.10 (10%)
+
+-   Maximum Discount Cap: 0.30 (30%)
+
+-   Allow Stacking Senior + PWD: No
+
+-   Early Renewal Cutoff: 2027-01-15, Renewal Deadline: 2027-01-31
+
+-   Late Surcharge Rate: 0.25, Monthly Interest: 0.02
+
+Example 1: New Application, No Special Discounts
+
+Juan dela Cruz applies for a NEW permit for his sari-sari store. He has
+2 employees, no signboard, no weighing devices, no special discount
+eligibility.
+
+Inputs:
+
+-   Application Type: New
+
+-   Male Employees: 1, Female Employees: 1 (total: 2)
+
+-   Signboard Area: 0, Weighing Devices: 0
+
+-   Senior: No, PWD: No, BMBE: No
+
+-   Mayor's Permit Fee (set upstream): P500
+
+-   Business Tax (set upstream): P600
+
+Calculation:
+
+  Health Card Fee = 2 x 100 = P200
+
+  Signboard Fee = 0 x 50 = P0
+
+  Weights and Measures Fee = 0 x 100 = P0
+
+  Subtotal = 500 + 600 + 200 + 200 + 150 + 100 + 300 + 0 + 0 + 0 =
+  P2,050
+
+  Total Discount = P0 (no discounts qualify)
+
+  Late Surcharge = P0 (new application)
+
+  FINAL TOTAL DUE = 2,050 - 0 + 0 = P2,050
+
+Example 2: New Application, Senior Citizen Discount
+
+Maria, age 68, applies for a NEW permit for her small bakery. She has 3
+employees and is a Senior Citizen.
+
+Inputs:
+
+-   Application Type: New
+
+-   Male Employees: 1, Female Employees: 2 (total: 3)
+
+-   Senior: Yes, PWD: No, BMBE: No
+
+-   Mayor's Permit Fee: P500
+
+-   Business Tax: P600
+
+Calculation:
+
+  Health Card Fee = 3 x 100 = P300
+
+  Subtotal = 500 + 600 + 300 + 200 + 150 + 100 + 300 = P2,150
+
+  Senior Discount Base = MP Fee + Business Tax = 500 + 600 = P1,100
+
+  Senior Discount = 1,100 x 0.20 = P220
+
+  Total Discount = P220
+
+  Max Cap Check: 30% of 2,150 = P645. Discount of 220 is below cap. OK.
+
+  FINAL TOTAL DUE = 2,150 - 220 + 0 = P1,930
+
+Example 3: New Application, BMBE + Senior Citizen
+
+Pedro, age 70, applies for a NEW permit. He is registered as a BMBE
+(Barangay Micro Business Enterprise) and is also a Senior Citizen.
+
+Inputs:
+
+-   Senior: Yes, PWD: No, BMBE: Yes
+
+-   Mayor's Permit Fee: P500
+
+-   Business Tax: P600
+
+-   Other fees: same as Example 1, Health Card Fee: P200
+
+Calculation:
+
+  Subtotal = 500 + 600 + 200 + 200 + 150 + 100 + 300 = P2,050
+
+  BMBE Discount = Business Tax x 1.00 = 600 x 1.00 = P600
+
+  Because BMBE applies, Senior Discount base EXCLUDES Business Tax:
+
+  Senior Discount Base = MP Fee only = P500
+
+  Senior Discount = 500 x 0.20 = P100
+
+  Total Discount = 600 + 100 = P700
+
+  Max Cap Check: 30% of 2,050 = P615. Discount of 700 EXCEEDS cap!
+
+  Total Discount (capped) = P615
+
+  FINAL TOTAL DUE = 2,050 - 615 + 0 = P1,435
+
+This example shows two important rules in action:
+
+-   BMBE applicants do NOT get Senior/PWD discount on Business Tax
+    (because BMBE already exempts it 100%)
+
+-   If discounts exceed the Maximum Discount Cap (30%), they are reduced
+    to the cap amount
+
+Example 4: Renewal -- Early (Discount Applied)
+
+Linda renews her permit on December 20, 2026. Early Renewal Cutoff is
+set to January 15, 2027 -- so she qualifies for the Early Renewal
+Discount.
+
+Inputs:
+
+-   Application Type: Renewal
+
+-   Date Submitted: 2026-12-20
+
+-   Same fees as Example 1 -> Subtotal = P2,050
+
+-   No applicant-level discounts
+
+Calculation:
+
+  Renewal State: Early (2026-12-20 is on or before 2027-01-15)
+
+  Early Renewal Discount = Subtotal x 0.10 = 2,050 x 0.10 = P205
+
+  Total Discount = P205
+
+  Late Surcharge = P0
+
+  FINAL TOTAL DUE = 2,050 - 205 + 0 = P1,845
+
+Example 5: Renewal -- On-Time (No Discount, No Surcharge)
+
+Roberto renews his permit on January 25, 2027. This is AFTER the Early
+Cutoff (Jan 15) but BEFORE the Deadline (Jan 31).
+
+Inputs:
+
+-   Application Type: Renewal
+
+-   Date Submitted: 2027-01-25
+
+-   Same fees as Example 1 -> Subtotal = P2,050
+
+Calculation:
+
+  Renewal State: On-time (after early cutoff, before deadline)
+
+  Early Renewal Discount = P0 (missed the early cutoff)
+
+  Late Surcharge = P0 (before deadline)
+
+  FINAL TOTAL DUE = 2,050 - 0 + 0 = P2,050
+
+Example 6: Renewal -- Late (Surcharge Applied)
+
+Carlos renews his permit on March 5, 2027. This is 33 days AFTER the
+deadline (January 31, 2027).
+
+Inputs:
+
+-   Application Type: Renewal
+
+-   Date Submitted: 2027-03-05
+
+-   Same fees as Example 1 -> Subtotal = P2,050
+
+Calculation:
+
+  Renewal State: Late
+
+  Days Late = (Mar 5) - (Jan 31) = 33 days
+
+  Months Late = ceiling(33 / 30) = 2 months
+
+  Base Surcharge = Subtotal x 0.25 = 2,050 x 0.25 = P512.50 (rounded:
+  P513)
+
+  Interest = Subtotal x 0.02 x 2 months = 2,050 x 0.04 = P82
+
+  Total Surcharge = 513 + 82 = P595
+
+  FINAL TOTAL DUE = 2,050 - 0 + 595 = P2,645
+
+Notice that Late renewals do NOT qualify for any other discount -- they
+are penalized, not rewarded.
+
+4. Annual Maintenance
+
+Some custom values require regular updates as your LGU's policies change
+or as time passes.
+
+Yearly Updates Required (Every January)
+
+  ---------------------- ------------------------------------- -------------------------------------------------------------
+  Custom Value           Why Update                            When to Update
+  Early Renewal Cutoff   New renewal year requires new dates   Before December 31 each year -- set to next year's cutoff
+  Renewal Deadline       New renewal year requires new dates   Before December 31 each year -- set to next year's deadline
+  ---------------------- ------------------------------------- -------------------------------------------------------------
+
+As-Needed Updates
+
+Update these only when your LGU's ordinances or fee schedule changes:
+
+-   All fee rates (Health Card per Employee, Signboard per Sqm, etc.)
+
+-   All flat fees (Sanitary, Garbage, Zoning, Building Inspection)
+
+-   Discount rates (Senior, PWD, BMBE, Early Renewal)
+
+-   Late Surcharge Rate and Monthly Interest Rate
+
+-   Maximum Discount Cap
+
+-   Stacking rule (Yes/No)
+
+Important: When you update a rate, only NEW applications going forward
+use the new rate.
+
+Applications already calculated before the rate change keep their
+original values. This preserves the audit trail and prevents disputes
+('my fee was P1,500 last week and now you're saying it's P2,000?').
+
+5. Troubleshooting
+
+Problem: All calculated fees show P0
+
+Likely causes:
+
+5.  Custom values are empty or not yet created. Check Settings -> Custom
+    Values.
+
+6.  Custom value rates are entered as 0. Confirm each has the correct
+    value.
+
+7.  The opportunity fields the calculation depends on are empty (Mayor's
+    Permit Fee, Business Tax, employee counts, signboard area).
+
+How to diagnose:
+
+Open the opportunity and verify the input fields are populated. Open
+Settings -> Custom Values and verify each value is set with the correct
+format.
+
+Problem: Discounts are NOT applying even though applicant qualifies
+
+Likely causes:
+
+8.  The applicant's flag (Is Senior Citizen, Is PWD, Is BMBE) is not set
+    to exactly 'Yes' on the opportunity.
+
+9.  The discount rate custom value is set to 0.
+
+10. If applicant is both Senior + PWD: the stacking rule is 'No' so only
+    one applies (this is expected behavior).
+
+How to diagnose:
+
+On the opportunity, check the Is Senior Citizen / Is PWD / Is BMBE
+fields. They must be exactly 'Yes' (case-insensitive, no extra spaces).
+Then check the corresponding discount rate in Custom Values.
+
+Problem: Renewal applicant is being treated as Late even though they
+submitted on time
+
+Likely causes:
+
+11. Renewal Deadline custom value is set to last year's date (most
+    common cause). Update to current year.
+
+12. Date Submitted on the opportunity is incorrect.
+
+13. Date format is wrong -- must be YYYY-MM-DD.
+
+How to diagnose:
+
+Check the value of Renewal Deadline in Custom Values. If it shows
+2026-01-31 but you are in 2027, that is the problem -- update it to
+2027-01-31.
+
+Problem: Discount amount seems wrong (too low)
+
+Likely causes:
+
+14. Maximum Discount Cap is being applied. Check the calculation audit
+    note -- it will say if the cap was applied.
+
+15. Applicant is also BMBE, so Senior/PWD base excludes Business Tax
+    (this is correct behavior).
+
+16. Discount rate is entered as percentage (e.g., 20) instead of decimal
+    (0.20).
+
+How to diagnose:
+
+Open the contact's notes and find the most recent 'ASSESSMENT
+CALCULATION RECORDED' note. The 'Discount Notes' field will explain if a
+cap was applied or if BMBE excluded Business Tax.
+
+Problem: Surcharge is too high or too low
+
+Likely causes:
+
+17. Late Surcharge Rate or Monthly Interest Rate is in wrong format
+    (percentage vs decimal).
+
+18. Renewal Deadline date is set incorrectly, making 'months late'
+    wrong.
+
+How to diagnose:
+
+Verify both rates use decimal format. 25% should be 0.25, not 25. Also
+verify the Renewal Deadline date is correct for the current year.
+
+6. Quick Reference
+
+Format Cheat Sheet
+
+  -------------------- ---------------------------------------------- ---------------------------------------
+  Type                 Format                                         Examples
+  Money / Fee Amount   Whole number, no peso sign, no commas          500, 1500, 200
+  Per-unit Rate        Number with decimals if needed, no peso sign   100, 50, 75.50
+  Percentage / Rate    Decimal between 0.00 and 1.00                  0.20 (=20%), 0.05 (=5%), 1.00 (=100%)
+  Date                 YYYY-MM-DD only                                2027-01-31, 2026-12-15
+  Yes/No Flag          Exactly 'Yes' or 'No'                          Yes, No
+  -------------------- ---------------------------------------------- ---------------------------------------
+
+All Custom Values At a Glance
+
+  ------------------------------ -------------- ---------------
+  Custom Value                   Format         Typical Value
+  Health Card Fee per Employee   Whole number   100
+  Signboard Fee per Sqm          Number         50
+  Weights and Measures Fee       Whole number   100
+  Sanitary/Health Fee            Whole number   200
+  Garbage/Environmental Fee      Whole number   150
+  Zoning Fee                     Whole number   100
+  Building Inspection Fee        Whole number   300
+  Senior Citizen Discount Rate   Decimal        0.20
+  PWD Discount Rate              Decimal        0.20
+  BMBE Exemption Rate            Decimal        1.00
+  Early Renewal Discount Rate    Decimal        0.10
+  Maximum Discount Cap           Decimal        0.30
+  Allow Stacking Senior + PWD    Yes/No         No
+  Early Renewal Cutoff           Date           2027-01-15
+  Renewal Deadline               Date           2027-01-31
+  Late Surcharge Rate            Decimal        0.25
+  Monthly Interest Rate          Decimal        0.02
+  ------------------------------ -------------- ---------------
+
+The Final Calculation Formula
+
+In plain language, the calculation does this:
+
+  SUBTOTAL = sum of all 10 fees
+
+  DISCOUNTS:
+
+  Senior Discount = (MP Fee + Business Tax) x Senior Rate [if applicant
+  is Senior]
+
+  PWD Discount = (MP Fee + Business Tax) x PWD Rate [if applicant is
+  PWD]
+
+  BMBE Discount = Business Tax x BMBE Rate [if applicant is BMBE]
+
+  Early Discount = Subtotal x Early Rate [if renewal + on or before
+  cutoff]
+
+  Note: If BMBE applies, Senior/PWD base = MP Fee only (BT excluded)
+
+  Note: If stacking = No and applicant is both Senior + PWD, drop PWD
+
+  TOTAL DISCOUNT = sum of all qualifying discounts
+
+  (capped at Subtotal x Max Discount Cap)
+
+  LATE SURCHARGE = Subtotal x Late Rate + Subtotal x Monthly Int x
+  Months Late
+
+  (only if renewal submitted after deadline)
+
+  FINAL TOTAL DUE = SUBTOTAL - TOTAL DISCOUNT + LATE SURCHARGE
+
+Need Help?
+
+If you encounter issues not covered in this guide, contact your
+MuniServe administrator or refer to the audit notes on each contact
+(look for 'ASSESSMENT CALCULATION RECORDED' notes) -- they include
+detailed information about what was calculated and why.
+
+Always test your configuration with a sample application before going
+live. Submit a test permit with known values and confirm the calculated
+fees match your expected amounts.

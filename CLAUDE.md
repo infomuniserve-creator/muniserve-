@@ -66,7 +66,7 @@ San Miguel's imported historical business records have **no phone number or emai
 
 For a genuinely new application, skip the License Number step entirely — go straight to phone entry. If the phone number matches an existing `owners` row, confirm identity and attach the new business to that owner (this is how one person ends up with three businesses under one contact instead of three duplicate contacts).
 
-Both flows are fully mocked in `MuniServe_Applicant_Flow_Prototype.html` (see `reference/` once provided) — build against that reference for exact screen sequencing and copy.
+Both flows are fully mocked in `reference/MuniServe_Applicant_Flow_Prototype.html` — build against that reference for exact screen sequencing and copy.
 
 ---
 
@@ -101,18 +101,22 @@ The actual LBT schedules (A through J), Mayor's Permit special business types, e
 - `MuniServe_FeeComputation_ChatGPT_Prompt.md` — the same data in prose/table form, useful for cross-checking the seed script got every rate right
 - `MUNISERVE_DOC_CEDULA_Calculation.html` — the CEDULA formula and caps (₱5,005 individual / ₱10,500 juridical), maps to `computation_type = 'formula_increment'`
 
-**Not yet provided to this repo — do not fabricate values.** These files live outside the repo and need to be dropped into `reference/` before the seed script (step 2 of the build order) can be written for real.
+All three are now in `reference/` — see `reference/README.md` for provenance notes (v1.2 was originally a GoHighLevel Code Action; the peso amounts/brackets are still the valid legacy revenue code, the GHL wrapper is not).
 
-Flag for follow-up rather than guessing: the Health Card / Signboard / Weights-and-Measures fees and the Senior/PWD/BMBE discount logic described in the newer "Assessment Calculation Setup Guide" were never reconciled with the legacy fee computation code — confirm with the LGU which of these San Miguel actually charges before seeding them as active `fee_rules`. Also unconfirmed: the legal basis for applying Senior Citizen/PWD discounts to Mayor's Permit Fee and Business Tax specifically (these laws typically govern consumer purchases, not permit fees paid by a business owner) — do not enable that `fee_rules` type for any LGU until counsel confirms.
+Flag for follow-up rather than guessing: the Health Card / Signboard / Weights-and-Measures fees and the Senior/PWD/BMBE discount logic described in the newer "Assessment Calculation Setup Guide" (now `reference/unreconciled/muniserve_new.docx`) were never reconciled with the legacy fee computation code — confirm with the LGU which of these San Miguel actually charges before seeding them as active `fee_rules`. Also unconfirmed: the legal basis for applying Senior Citizen/PWD discounts to Mayor's Permit Fee and Business Tax specifically (these laws typically govern consumer purchases, not permit fees paid by a business owner) — do not enable that `fee_rules` type for any LGU until counsel confirms.
+
+### Legacy business record import (not in the original spec — added because the data exists)
+
+`reference/legacy-data/BPLO_LBT_Backfill_v2.csv` (1,350 rows) is San Miguel's real legacy business roster — the actual data the `businesses.legacy_license_no` bridge in section 5 needs to work against. `BPLO_LBT_NeedsReview.csv` (168 rows) is a flagged subset that needs manual review before import — don't bulk-import those without checking each one. This wasn't in the original build order; it belongs as its own step (bulk-load `businesses` with `is_legacy_unclaimed = true`, `owner_id = null`) before the applicant-facing renewal flow (step 4) can be tested against real data instead of fixtures.
 
 ---
 
 ## 8. UI reference
 
-Two working HTML prototypes exist and should be treated as the source of truth for screen flow, not just visual style (place them in `reference/` once provided):
+Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
 
-- `MuniServe_Interactive_Prototype.html` — staff side: BPLO dashboard (initial review, assessment review, cross-department visibility), a generic department dashboard (locked to one department's queue), and the Mayor's signature queue. Demonstrates the access-control model directly — the "demo controls" bar in that file simulates switching logins; there is no equivalent control in the real product.
-- `MuniServe_Applicant_Flow_Prototype.html` — applicant side: new vs. renewal entry point, License Number lookup, phone/OTP verification, the application form with conditional fields, and the six-stage status tracker.
+- `reference/MuniServe_Interactive_Prototype.html` — staff side: BPLO dashboard (initial review, assessment review, cross-department visibility), a generic department dashboard (locked to one department's queue), and the Mayor's signature queue. Demonstrates the access-control model directly — the "demo controls" bar in that file simulates switching logins; there is no equivalent control in the real product.
+- `reference/MuniServe_Applicant_Flow_Prototype.html` — applicant side: new vs. renewal entry point, License Number lookup, phone/OTP verification, the application form with conditional fields, and the six-stage status tracker.
 
 ---
 
@@ -122,11 +126,12 @@ Don't build all of this in one pass. Sequence:
 
 1. Supabase project + run the schema above + RLS policies
 2. Seed script for San Miguel's `fee_rules` and `fee_rule_brackets`
-3. Staff auth (Google OAuth via Supabase) + the three dashboard views, read-only first (no decision buttons yet)
-4. Applicant phone/OTP flow + the application form
-5. Wire up the review workflow state machine end-to-end (this is where `review_rounds` and `department_reviews` logic lives)
-6. Fee computation engine — a function that reads active `fee_rules` for an LGU and computes `application_fee_lines` from an application's `form_inputs`
-7. Payments, permit PDF generation, notifications (SMS via Semaphore, email via Resend)
+3. Bulk-import San Miguel's legacy business roster (`reference/legacy-data/BPLO_LBT_Backfill_v2.csv`) into `businesses` as `is_legacy_unclaimed = true`, `owner_id = null` — needed before step 5 can be tested against real data. Hold out `BPLO_LBT_NeedsReview.csv` rows for manual review, don't auto-import them.
+4. Staff auth (Google OAuth via Supabase) + the three dashboard views, read-only first (no decision buttons yet)
+5. Applicant phone/OTP flow + the application form, including the legacy-claim flow (section 5) against the imported roster
+6. Wire up the review workflow state machine end-to-end (this is where `review_rounds` and `department_reviews` logic lives)
+7. Fee computation engine — a function that reads active `fee_rules` for an LGU and computes `application_fee_lines` from an application's `form_inputs`
+8. Payments, permit PDF generation, notifications (SMS via Semaphore, email via Resend)
 
 ---
 
