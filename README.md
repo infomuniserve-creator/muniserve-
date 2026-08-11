@@ -15,7 +15,7 @@ Scaffolded, not yet wired to any live services.
 - [x] Supabase project created and migrations run (schema + RLS both verified live)
 - [x] GitHub repo created and pushed — [infomuniserve-creator/muniserve-](https://github.com/infomuniserve-creator/muniserve-)
 - [x] Vercel project connected, deployed, env vars set
-- [ ] Seed script for San Miguel's `fee_rules`
+- [x] Seed script written — `supabase/seed/seed_san_miguel_fee_rules.sql` (+ migration `0003_fee_rule_bracket_rate_basis.sql`). Not yet run against the live DB — see CLAUDE.md section 7a for discrepancies resolved while writing it.
 - [ ] Bulk-import legacy business roster into `businesses`
 - [ ] Staff auth + dashboards
 - [ ] Applicant OTP flow
@@ -28,6 +28,6 @@ Scaffolded, not yet wired to any live services.
 1. **Create the Supabase project** (supabase.com), then run the two migrations in `supabase/migrations/` in order via the SQL editor or `supabase db push`.
 2. **Create a GitHub repo** and push this folder to it.
 3. **Create a Vercel project** connected to that repo for auto-deploy on push.
-4. **Env vars** (once the above exist): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SEMAPHORE_API_KEY`, `RESEND_API_KEY` — put these in `.env.local` (already gitignored) and mirror them into Vercel's project settings.
+4. **Env vars** — done for Supabase + Resend, both locally in `.env.local` and in Vercel. Still missing: `SEMAPHORE_API_KEY` (needed for step 5, applicant OTP flow — not urgent yet).
 
 None of the above requires a code change — this is account creation and configuration, not something to script.

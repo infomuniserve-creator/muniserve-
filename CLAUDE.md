@@ -111,6 +111,25 @@ Flag for follow-up rather than guessing: the Health Card / Signboard / Weights-a
 
 ---
 
+## 7a. Fee-rule seeding: resolved discrepancies and schema conventions
+
+While writing the San Miguel seed script (`supabase/seed/seed_san_miguel_fee_rules.sql`), the two source-of-truth files turned out to diverge more than expected. Resolved with the project owner on 2026-08-11:
+
+- **v1.2 JS is the confirmed baseline** (it's what the old GHL system actually charged). Where v1.2 and the v2.0 ChatGPT prompt doc conflict, v1.2 wins.
+- **Mayor's Permit catch-all**: using v1.2's tiered ₱500 (new) / ₱150-₱250-₱350 (renewal, by prior LBT) structure. v2.0's flat ₱200 alternative is seeded but `is_active = false` — do not flip on without BPLO confirmation. (v2.0's own text on this point is internally inconsistent — see the seed script's section 15 comment.)
+- **~25 special Mayor's Permit business types that exist only in v2.0** (Golf Link, Tobacco Dealer, itemized liquor types, Insurance Company vs. Agency split, etc.) are seeded with `is_active = false`. Flip individually once BPLO confirms San Miguel actually charges each one — don't bulk-activate.
+- **CEDULA cooperative exemption**: the source doc contradicts itself (Section 7 says cooperatives pay CEDULA as a juridical entity; Section 9's "Legal Basis" summary says RA 9520 exempts them). Seeded assuming cooperatives **do** pay CEDULA (juridical formula) — Section 7's citation-backed reasoning (RA 9520 Art. 61 + LGC Sec. 133(n) cover LBT only) was judged more reliable than Section 9's one-line summary.
+
+**Schema convention added:** migration `0003_fee_rule_bracket_rate_basis.sql` adds `fee_rule_brackets.rate_basis` (`'excess_over_min'` default, or `'full_amount'`) — needed because Schedules A/B/E's open-ended top bracket multiplies the *entire* basis by the rate, not just the excess over the bracket floor, which the original bracket shape couldn't express.
+
+**Conventions documented in the seed script's header** (not yet reflected in the section 3 schema comments above — read the seed script itself for the full list): `basis_field = 'lbt_basis'` is a computed value the fee engine must derive (capital_investment if new, gross_sales if renewal), not a literal column; `fee_rule_brackets.max_amount` is exclusive except where a row comment says otherwise; `applies_to` uses a `key:variant` convention (e.g. `'commercial bank:branch'`) for rows that depend on `is_branch_office` or `is_aircon`, and `'standard:new'` / `'standard:renewal'` for the Mayor's Permit fallback when no special type matches; the essential-commodity discount's `applies_to` is a `|`-pipe-separated list since the column isn't an array.
+
+**For the step 6 fee computation engine, when it gets built:** CEDULA's "per every X, or fraction" (section 7 of the CEDULA doc) means `CEIL(basis / formula_increment_per)`, not floor/truncate — the schema has the right numbers in `formula_increment_per`/`formula_base_fee`/`formula_increment_amount`/`formula_cap` but the ceiling-division behavior lives in the engine, not the data.
+
+A known-but-not-fixed anomaly: v1.2's Food & Beverage / Amusement / Other LBT schedules have a real ~₱25 discontinuity in the original code at exactly `receipts = 100,000` (looks like a transcription slip, not an intentional rule). Seeded as continuous instead of preserving that one-point glitch — see the seed script's header note 7 if this ever needs auditing against the actual ordinance.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
