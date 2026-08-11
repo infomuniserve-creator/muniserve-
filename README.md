@@ -1,36 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MuniServe
 
-## Getting Started
+Multi-LGU electronic Business Permit and Licensing System (eBPLS) for the Philippines, piloting with San Miguel, Bulacan.
 
-First, run the development server:
+See [`CLAUDE.md`](./CLAUDE.md) for the full build specification — non-negotiable rules, schema, RLS, workflow state machine, and build order. Read that before touching anything in here.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Status
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Scaffolded, not yet wired to any live services.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [x] Next.js (App Router, TypeScript, Tailwind) scaffold
+- [x] Database schema drafted — [`supabase/migrations/0001_initial_schema.sql`](./supabase/migrations/0001_initial_schema.sql)
+- [x] RLS policies drafted — [`supabase/migrations/0002_rls_policies.sql`](./supabase/migrations/0002_rls_policies.sql)
+- [ ] Supabase project created and migrations run
+- [ ] GitHub repo created and pushed
+- [ ] Vercel project connected
+- [ ] `reference/` populated with the fee computation source files and HTML prototypes (see below)
+- [ ] Seed script for San Miguel's `fee_rules`
+- [ ] Staff auth + dashboards
+- [ ] Applicant OTP flow
+- [ ] Review workflow wiring
+- [ ] Fee computation engine
+- [ ] Payments, permits, notifications
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What needs to happen before development continues
 
-## Learn More
+1. **Create the Supabase project** (supabase.com), then run the two migrations in `supabase/migrations/` in order via the SQL editor or `supabase db push`.
+2. **Create a GitHub repo** and push this folder to it.
+3. **Create a Vercel project** connected to that repo for auto-deploy on push.
+4. **Drop the reference files into `reference/`**: `MUNISERVE_FeeComputation_v1.2.js`, `MuniServe_FeeComputation_ChatGPT_Prompt.md`, `MUNISERVE_DOC_CEDULA_Calculation.html`, `MuniServe_Interactive_Prototype.html`, `MuniServe_Applicant_Flow_Prototype.html`. Needed before the fee-rule seed script or any UI work.
+5. **Env vars** (once the above exist): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SEMAPHORE_API_KEY`, `RESEND_API_KEY` — put these in `.env.local` (already gitignored) and mirror them into Vercel's project settings.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+None of the above requires a code change — this is account creation and configuration, not something to script.
