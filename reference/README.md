@@ -19,6 +19,10 @@ Real San Miguel legacy business records, not yet used by any build step in the o
 
 **Not yet imported anywhere.** See the added build-order step in CLAUDE.md §9.
 
+### revenue-code-scans/
+
+The actual scanned Revenue Code — the primary legal source, provided 2026-08-11 to corroborate the two derived documents above. See `revenue-code-scans/README.md` and CLAUDE.md section 7b. This is what caught a real bug in the already-seeded new-business LBT calculation, among other findings — treat this as authoritative over the JS/prompt-doc translations wherever they conflict.
+
 ### unreconciled/
 
 - **`muniserve_new.docx` / `.txt`** — the "Assessment Calculation Setup Guide" referenced in CLAUDE.md §7 and §10. Describes Health Card, Signboard, Weights-and-Measures fees and Senior/PWD/BMBE discount stacking rules that **were never reconciled against the legacy fee computation code** and whose legal basis (for the discounts, specifically) hasn't been confirmed with counsel. **Do not seed any `fee_rules` from this document without that confirmation.** Kept here so it's on hand once that conversation happens, not as an active source.
