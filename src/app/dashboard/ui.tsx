@@ -140,3 +140,43 @@ export function Row({ children, onClick }: { children: React.ReactNode; onClick?
     </div>
   );
 }
+
+/**
+ * The business-profile block from reference/MuniServe_Interactive_Prototype.html's
+ * businessProfileBlock() -- address, nature of business, and the
+ * capital-investment-or-gross-sales figure a reviewer needs to actually
+ * judge an application, not just its name and a document list.
+ */
+export function BusinessProfileBlock({
+  address, natureOfBusiness, lbtCategory, applicationType, basisAmount,
+}: {
+  address: string | null;
+  natureOfBusiness: string | null;
+  lbtCategory: string | null;
+  applicationType: string;
+  basisAmount: number | null;
+}) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {address && <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>{address}</p>}
+      <table style={{ width: "100%", fontSize: 12 }}>
+        <tbody>
+          <tr>
+            <td style={{ color: colors.textSecondary, padding: "2px 0" }}>Nature of business</td>
+            <td style={{ textAlign: "right" }}>{natureOfBusiness ?? "—"}</td>
+          </tr>
+          <tr>
+            <td style={{ color: colors.textSecondary, padding: "2px 0" }}>LBT category</td>
+            <td style={{ textAlign: "right" }}>{lbtCategory ?? "—"}</td>
+          </tr>
+          <tr>
+            <td style={{ color: colors.textSecondary, padding: "2px 0" }}>
+              {applicationType === "new" ? "Capital investment" : "Gross sales (preceding year)"}
+            </td>
+            <td style={{ textAlign: "right" }}>{peso(basisAmount)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}

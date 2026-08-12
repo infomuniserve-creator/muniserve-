@@ -3,7 +3,7 @@ import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { Badge, Card, EmptyState, Pill, Row, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { Badge, BusinessProfileBlock, Card, EmptyState, Pill, Row, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, resubmitToDepartments, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 
 /**
@@ -21,7 +21,7 @@ export default async function BploDashboardPage() {
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      "id, application_type, status, submitted_at, business:businesses(business_name, legacy_owner_name, owner:owners(full_name))"
+      "id, application_type, status, submitted_at, form_inputs, business:businesses(business_name, legacy_owner_name, address, nature_of_business, lbt_category, owner:owners(full_name))"
     )
     .eq("lgu_id", staff.lgu_id)
     .order("submitted_at", { ascending: true });
@@ -68,13 +68,27 @@ export default async function BploDashboardPage() {
     }
   }
 
+  type BizFields = {
+    business_name: string;
+    legacy_owner_name: string | null;
+    address: string | null;
+    nature_of_business: string | null;
+    lbt_category: string | null;
+    owner: { full_name: string } | null;
+  };
+  function biz(a: (typeof all)[number]): BizFields | null {
+    return a.business as unknown as BizFields | null;
+  }
   function ownerName(a: (typeof all)[number]): string {
-    const biz = a.business as unknown as { legacy_owner_name: string | null; owner: { full_name: string } | null } | null;
-    return biz?.owner?.full_name ?? biz?.legacy_owner_name ?? "Unknown applicant";
+    const b = biz(a);
+    return b?.owner?.full_name ?? b?.legacy_owner_name ?? "Unknown applicant";
   }
   function businessName(a: (typeof all)[number]): string {
-    const biz = a.business as unknown as { business_name: string } | null;
-    return biz?.business_name ?? "(business record missing)";
+    return biz(a)?.business_name ?? "(business record missing)";
+  }
+  function basisAmount(a: (typeof all)[number]): number | null {
+    const inputs = a.form_inputs as { basis_amount?: number } | null;
+    return inputs?.basis_amount ?? null;
   }
 
   return (
@@ -94,12 +108,29 @@ export default async function BploDashboardPage() {
       ) : (
         <>
           {initial.map((a) => (
-            <InitialReviewCard key={a.id} applicationId={a.id} businessName={businessName(a)} ownerName={ownerName(a)} applicationType={a.application_type} />
+            <InitialReviewCard
+              key={a.id}
+              applicationId={a.id}
+              businessName={businessName(a)}
+              ownerName={ownerName(a)}
+              applicationType={a.application_type}
+              address={biz(a)?.address ?? null}
+              natureOfBusiness={biz(a)?.nature_of_business ?? null}
+              lbtCategory={biz(a)?.lbt_category ?? null}
+              basisAmount={basisAmount(a)}
+            />
           ))}
           {assessment.map((a) => (
             <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
               <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName(a)}</p>
               <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>Owner: {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}</p>
+              <BusinessProfileBlock
+                address={biz(a)?.address ?? null}
+                natureOfBusiness={biz(a)?.nature_of_business ?? null}
+                lbtCategory={biz(a)?.lbt_category ?? null}
+                applicationType={a.application_type}
+                basisAmount={basisAmount(a)}
+              />
               <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
                 Fee computation engine isn&rsquo;t built yet (build order step 7) — no computed amounts to show. This button only advances the status once you&rsquo;ve assessed the fee manually.
               </p>
@@ -187,8 +218,11 @@ export default async function BploDashboardPage() {
 }
 
 async function InitialReviewCard({
-  applicationId, businessName, ownerName, applicationType,
-}: { applicationId: string; businessName: string; ownerName: string; applicationType: string }) {
+  applicationId, businessName, ownerName, applicationType, address, natureOfBusiness, lbtCategory, basisAmount,
+}: {
+  applicationId: string; businessName: string; ownerName: string; applicationType: string;
+  address: string | null; natureOfBusiness: string | null; lbtCategory: string | null; basisAmount: number | null;
+}) {
   const documents = await getApplicationDocuments(applicationId);
   const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
 
@@ -196,6 +230,7 @@ async function InitialReviewCard({
     <Card style={{ padding: 12, marginBottom: 10 }}>
       <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName}</p>
       <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}</p>
+      <BusinessProfileBlock address={address} natureOfBusiness={natureOfBusiness} lbtCategory={lbtCategory} applicationType={applicationType} basisAmount={basisAmount} />
 
       <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>
       {documents.length === 0 ? (

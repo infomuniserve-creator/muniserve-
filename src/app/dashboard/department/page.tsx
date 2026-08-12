@@ -3,7 +3,7 @@ import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { Card, EmptyState, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { BusinessProfileBlock, Card, EmptyState, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
 import { getApplicationDocuments, submitOwnDepartmentDecision } from "./actions";
 
 /**
@@ -22,7 +22,7 @@ export default async function DepartmentDashboardPage() {
   const { data: pending } = await supabase
     .from("department_reviews")
     .select(
-      "id, decision, review_round:review_rounds(application:applications(id, application_type, business:businesses(business_name, legacy_owner_name, owner:owners(full_name))))"
+      "id, decision, review_round:review_rounds(application:applications(id, application_type, form_inputs, business:businesses(business_name, legacy_owner_name, address, nature_of_business, lbt_category, owner:owners(full_name))))"
     )
     .eq("decision", "pending")
     .eq("department", staff.department);
@@ -33,7 +33,15 @@ export default async function DepartmentDashboardPage() {
       application: {
         id: string;
         application_type: string;
-        business: { business_name: string; legacy_owner_name: string | null; owner: { full_name: string } | null } | null;
+        form_inputs: { basis_amount?: number } | null;
+        business: {
+          business_name: string;
+          legacy_owner_name: string | null;
+          address: string | null;
+          nature_of_business: string | null;
+          lbt_category: string | null;
+          owner: { full_name: string } | null;
+        } | null;
       } | null;
     } | null;
   };
@@ -70,6 +78,10 @@ export default async function DepartmentDashboardPage() {
               businessName={biz?.business_name ?? "(business record missing)"}
               ownerName={owner}
               applicationType={app?.application_type ?? ""}
+              address={biz?.address ?? null}
+              natureOfBusiness={biz?.nature_of_business ?? null}
+              lbtCategory={biz?.lbt_category ?? null}
+              basisAmount={app?.form_inputs?.basis_amount ?? null}
             />
           );
         })
@@ -79,8 +91,11 @@ export default async function DepartmentDashboardPage() {
 }
 
 async function DepartmentReviewCard({
-  departmentReviewId, applicationId, businessName, ownerName, applicationType,
-}: { departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string }) {
+  departmentReviewId, applicationId, businessName, ownerName, applicationType, address, natureOfBusiness, lbtCategory, basisAmount,
+}: {
+  departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string;
+  address: string | null; natureOfBusiness: string | null; lbtCategory: string | null; basisAmount: number | null;
+}) {
   const documents = applicationId ? await getApplicationDocuments(applicationId) : [];
   const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
 
@@ -90,6 +105,7 @@ async function DepartmentReviewCard({
       <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
         Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
       </p>
+      <BusinessProfileBlock address={address} natureOfBusiness={natureOfBusiness} lbtCategory={lbtCategory} applicationType={applicationType} basisAmount={basisAmount} />
 
       <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>
       {documents.length === 0 ? (

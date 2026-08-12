@@ -1,0 +1,12 @@
+Show business profile on BPLO/department review cards
+
+The dashboards only showed a document list -- missing the actual
+business-profile block (address, nature of business, LBT category,
+capital investment or gross sales) that reference/MuniServe_Interactive_Prototype.html's
+businessProfileBlock() shows and that a reviewer needs to actually
+judge legitimacy, not just see a name and a file list. Caught live
+while testing the real MS-2026-00001 application with the project
+owner. Added a shared BusinessProfileBlock component in ui.tsx, used
+by both BPLO's initial-review card and the department review card.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
