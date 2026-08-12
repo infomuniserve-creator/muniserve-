@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Badge, Card, EmptyState, Row, SectionLabel, StatCard, StatGrid, TopBar, colors, peso } from "../ui";
+import { signAndRelease } from "./actions";
 
 /**
  * Mayor's signature queue -- read-only (see bplo/page.tsx's header
@@ -71,6 +72,12 @@ export default async function MayorDashboardPage() {
                 </p>
               </div>
               <Badge label="Paid" status="approved" />
+              <form action={signAndRelease}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <button type="submit" style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" }}>
+                  Sign and release
+                </button>
+              </form>
             </Row>
           ))
         )}

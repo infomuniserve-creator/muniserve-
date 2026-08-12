@@ -1,0 +1,46 @@
+Wire up the review workflow state machine end-to-end (build order step 6)
+
+Real decision buttons on every dashboard, backed by real state
+transitions -- the full chain from pending_bplo_initial through to
+released.
+
+- lib/review-workflow.ts: shared submitDepartmentDecision (used by
+  both a department's own action and BPLO acting on their behalf --
+  rule #9) and areAllDepartmentsCleared (rule #6's latest-decision-
+  across-rounds all-clear check). Also getSignedDocumentUrl for
+  displaying uploaded documents on staff dashboards -- private bucket,
+  so this requires the service role, gated behind the staff member's
+  own RLS-scoped visibility into the application in the first place.
+
+- BPLO actions: submitInitialReview (approve/condition fans out to
+  every active department at once per rule #4, including BFP;
+  reject/request-info returns to applicant), resubmitToDepartments
+  (rule #6 -- only re-notifies flagged departments, new review round),
+  finalizeAssessment (status transition only -- fee engine is step 7),
+  submitDepartmentDecisionAsBplo (rule #9, tagged acted_on_behalf).
+
+- Department actions: submitOwnDepartmentDecision, using the shared
+  helper so RLS (migration 0002) is the actual rule #8 enforcement,
+  not application code re-checking department scope.
+
+- New Treasury dashboard (CLAUDE.md section 10's open item, now
+  resolved). recordPayment inserts via Treasury's own RLS-scoped
+  session (rule #7 enforced by the existing insert-only policy),
+  advances status via service role.
+
+- Mayor's signAndRelease: creates the permits row (reusing the
+  application's reference_number as permit_number), advances to
+  released. PDF/QR generation is step 8, not built yet.
+
+- Real-world discovery incorporated (CLAUDE.md section 7c): San
+  Miguel's actual departments are Engineering/MHO/MPDO/BFP/MENRO, now
+  seeded, replacing the prototype's illustrative Zoning/Fire names.
+  BFP reviews in the same parallel round as everyone else but won't
+  approve until it sees proof of payment made on BFP's own separate
+  payment portal -- so applicants can now upload an additional
+  document to an already-submitted application, and staff dashboards
+  now actually display uploaded documents via signed URLs.
+
+Build verified clean (npm run build, 0 errors/warnings, 21 routes).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

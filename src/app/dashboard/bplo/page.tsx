@@ -1,23 +1,15 @@
 import { getCurrentStaff } from "@/lib/staff";
+import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Badge, Card, EmptyState, Pill, Row, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { finalizeAssessment, getApplicationDocuments, resubmitToDepartments, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 
 /**
- * BPLO dashboard -- read-only, per CLAUDE.md section 9 build order step 4
- * ("read-only first, no decision buttons yet"). Layout follows
- * reference/MuniServe_Interactive_Prototype.html's BPLO view: stat cards,
- * a combined "needs your review" queue (initial + assessment review,
- * CLAUDE.md rule #9 -- BPLO also sees every department's queue, wired up
- * in the department dashboard once decisions land in a later step), a
- * cross-department pill view for applications currently out for review,
- * and a returned-to-applicant list.
- *
- * Detail panels (documents, department review log, decision buttons) are
- * deferred until the review workflow (build order step 5) actually
- * produces applications to act on -- right now this proves the
- * auth + RLS + data plumbing works, with real (currently empty) queries.
+ * BPLO dashboard. Now with real decision buttons (build order step 6) --
+ * see actions.ts for the workflow logic itself. Layout still follows
+ * reference/MuniServe_Interactive_Prototype.html's BPLO view.
  */
 export default async function BploDashboardPage() {
   const staff = await getCurrentStaff();
@@ -41,10 +33,12 @@ export default async function BploDashboardPage() {
   const returned = all.filter((a) => a.status === "returned_to_applicant");
   const released = all.filter((a) => a.status === "released");
 
-  // Latest review round + department decisions for applications out for review.
   const deptReviewIds = inDeptReview.map((a) => a.id);
-  let roundsByApp = new Map<string, { id: string; round_number: number }>();
-  let reviewsByRound = new Map<string, { department: string; decision: string; acted_on_behalf: boolean }[]>();
+  const roundsByApp = new Map<string, { id: string; round_number: number }>();
+  const reviewsByRound = new Map<
+    string,
+    { id: string; department: string; decision: string; acted_on_behalf: boolean }[]
+  >();
 
   if (deptReviewIds.length > 0) {
     const { data: rounds } = await supabase
@@ -63,7 +57,7 @@ export default async function BploDashboardPage() {
     if (latestRoundIds.length > 0) {
       const { data: reviews } = await supabase
         .from("department_reviews")
-        .select("review_round_id, department, decision, acted_on_behalf")
+        .select("id, review_round_id, department, decision, acted_on_behalf")
         .in("review_round_id", latestRoundIds);
 
       for (const rv of reviews ?? []) {
@@ -95,36 +89,28 @@ export default async function BploDashboardPage() {
       </StatGrid>
 
       <SectionLabel>Needs your review</SectionLabel>
-      <Card>
-        {initial.length === 0 && assessment.length === 0 ? (
-          <EmptyState>Nothing waiting on BPLO right now.</EmptyState>
-        ) : (
-          <>
-            {initial.map((a) => (
-              <Row key={a.id}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
-                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>
-                    {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
-                  </p>
-                </div>
-                <Badge label="Initial review" status="pending" />
-              </Row>
-            ))}
-            {assessment.map((a) => (
-              <Row key={a.id}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
-                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>
-                    {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
-                  </p>
-                </div>
-                <Badge label="Assessment review" status="approved_with_condition" />
-              </Row>
-            ))}
-          </>
-        )}
-      </Card>
+      {initial.length === 0 && assessment.length === 0 ? (
+        <Card><EmptyState>Nothing waiting on BPLO right now.</EmptyState></Card>
+      ) : (
+        <>
+          {initial.map((a) => (
+            <InitialReviewCard key={a.id} applicationId={a.id} businessName={businessName(a)} ownerName={ownerName(a)} applicationType={a.application_type} />
+          ))}
+          {assessment.map((a) => (
+            <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
+              <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName(a)}</p>
+              <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>{ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}</p>
+              <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
+                Fee computation engine isn&rsquo;t built yet (build order step 7) — no computed amounts to show. This button only advances the status once you&rsquo;ve assessed the fee manually.
+              </p>
+              <form action={finalizeAssessment}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <button type="submit" style={actBtnStyle}>Finalize assessment</button>
+              </form>
+            </Card>
+          ))}
+        </>
+      )}
 
       <SectionLabel>In review across departments</SectionLabel>
       {inDeptReview.length === 0 ? (
@@ -133,12 +119,13 @@ export default async function BploDashboardPage() {
         inDeptReview.map((a) => {
           const round = roundsByApp.get(a.id);
           const reviews = round ? reviewsByRound.get(round.id) ?? [] : [];
+          const flagged = reviews.filter((r) => r.decision === "rejected" || r.decision === "request_more_info");
           return (
             <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
               <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 8px" }}>
                 {businessName(a)} <span style={{ color: colors.textSecondary, fontWeight: 400 }}>· {ownerName(a)}</span>
               </p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                 {reviews.length === 0 ? (
                   <span style={{ fontSize: 12, color: colors.textSecondary }}>Waiting for department assignment.</span>
                 ) : (
@@ -151,6 +138,29 @@ export default async function BploDashboardPage() {
                   ))
                 )}
               </div>
+
+              {reviews.filter((r) => r.decision === "pending").map((r) => (
+                <form key={r.id} action={submitDepartmentDecisionAsBplo} style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+                  <input type="hidden" name="departmentReviewId" value={r.id} />
+                  <span style={{ fontSize: 11, color: colors.textSecondary, alignSelf: "center", marginRight: 4 }}>Act for {r.department}:</span>
+                  <button type="submit" name="decision" value="approved" style={smallBtnStyle}>Approve</button>
+                  <button type="submit" name="decision" value="approved_with_condition" style={smallBtnStyle}>Approve w/ condition</button>
+                  <button type="submit" name="decision" value="request_more_info" style={smallBtnStyle}>Request info</button>
+                  <button type="submit" name="decision" value="rejected" style={{ ...smallBtnStyle, color: colors.dangerText }}>Reject</button>
+                </form>
+              ))}
+
+              {flagged.length > 0 && (
+                <form action={resubmitToDepartments} style={{ marginTop: 8 }}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  {flagged.map((r) => (
+                    <input key={r.department} type="hidden" name="departments" value={r.department} />
+                  ))}
+                  <button type="submit" style={actBtnStyle}>
+                    Applicant resubmitted — notify {flagged.map((r) => r.department).join(", ")}
+                  </button>
+                </form>
+              )}
             </Card>
           );
         })
@@ -175,3 +185,48 @@ export default async function BploDashboardPage() {
     </div>
   );
 }
+
+async function InitialReviewCard({
+  applicationId, businessName, ownerName, applicationType,
+}: { applicationId: string; businessName: string; ownerName: string; applicationType: string }) {
+  const documents = await getApplicationDocuments(applicationId);
+  const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
+
+  return (
+    <Card style={{ padding: 12, marginBottom: 10 }}>
+      <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName}</p>
+      <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>{ownerName} · {applicationType === "new" ? "New" : "Renewal"}</p>
+
+      <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>
+      {documents.length === 0 ? (
+        <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>No documents uploaded.</p>
+      ) : (
+        <div style={{ marginBottom: 10 }}>
+          {documents.map((d, i) => (
+            <div key={d.id} style={{ fontSize: 12, marginBottom: 4 }}>
+              {signedUrls[i] ? (
+                <a href={signedUrls[i]!} target="_blank" rel="noreferrer" style={{ color: colors.accentText }}>{d.document_type}</a>
+              ) : (
+                <span>{d.document_type} (link unavailable)</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form action={submitInitialReview}>
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <textarea name="notes" placeholder="Notes (required if requesting info or rejecting)" style={{ width: "100%", fontSize: 12, padding: 8, borderRadius: 8, border: `0.5px solid ${colors.border}`, marginBottom: 8, minHeight: 50 }} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button type="submit" name="decision" value="approved" style={actBtnStyle}>Approve</button>
+          <button type="submit" name="decision" value="approved_with_condition" style={actBtnStyle}>Approve with condition</button>
+          <button type="submit" name="decision" value="request_more_info" style={actBtnStyle}>Request more info</button>
+          <button type="submit" name="decision" value="rejected" style={{ ...actBtnStyle, color: colors.dangerText }}>Reject</button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+const actBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" };
+const smallBtnStyle: React.CSSProperties = { fontSize: 11, padding: "4px 8px", borderRadius: 6, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" };

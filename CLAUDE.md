@@ -152,6 +152,24 @@ The project owner provided a 17-page scan of San Miguel's actual Revenue Code (`
 
 ---
 
+## 7c. San Miguel's real departments and the BFP payment quirk (2026-08-12)
+
+`lgu_departments` is seeded with San Miguel's actual 5 reviewing departments — replacing the illustrative Zoning/Fire/MENRO/Engineering names used in the prototype and earlier draft of this doc, which were never confirmed real:
+
+- **Engineering** (Municipal Engineering Office)
+- **MHO** (Municipal Health Office)
+- **MPDO** (Municipal Planning and Development Office)
+- **BFP** (Bureau of Fire Protection)
+- **MENRO** (Municipal Environment and Natural Resources Office)
+
+**BFP's payment happens outside MuniServe entirely**, on BFP's own separate payment portal — not through this system's `payments`/Treasury flow at all. The real process: applicant pays on BFP's portal, screenshots the confirmation, and needs to get that screenshot to BFP so they can verify it before approving. BFP still reviews in the same parallel round as the other four departments (rule #4 is unaffected — no state-machine change needed) — it just won't click Approve until it can see that proof.
+
+This is why the applicant needs a way to upload an *additional* document to an already-submitted application (not just at initial submission) — the payment screenshot isn't available at submission time, since the applicant usually hasn't paid BFP yet when they first apply. This also incidentally covers part of the "online resubmission isn't available yet" gap flagged in the status page (build order step 5): the upload mechanism is now real, even though the automatic BPLO-triggered resubmission notification is still a manual BPLO action, matching the prototype's design.
+
+Staff dashboards (BPLO, department) need to actually display uploaded documents for this to work — not just know they exist, which is also true for the original 5 document types (a department can't meaningfully review "proof of business address" without seeing it). This wasn't built in step 4 (read-only, no documents shown) and is part of step 6's scope.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

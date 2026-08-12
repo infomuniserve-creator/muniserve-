@@ -1,6 +1,7 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
+import { AdditionalDocumentUpload } from "./upload-form";
 
 /**
  * Status tracker (reference/MuniServe_Applicant_Flow_Prototype.html's
@@ -128,28 +129,41 @@ async function DeptReviewNote({ applicationId }: { applicationId: string }) {
     .order("round_number", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!round) return null;
 
-  const { data: reviews } = await supabase
-    .from("department_reviews")
-    .select("department, decision, notes")
-    .eq("review_round_id", round.id)
-    .in("decision", ["rejected", "request_more_info"]);
+  const { data: reviews } = round
+    ? await supabase
+        .from("department_reviews")
+        .select("department, decision, notes")
+        .eq("review_round_id", round.id)
+        .in("decision", ["rejected", "request_more_info"])
+    : { data: null };
 
-  if (!reviews || reviews.length === 0) return null;
+  const flagged = reviews ?? [];
 
   return (
-    <Card>
-      <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-        {reviews.map((r) => r.department).join(", ")} need{reviews.length === 1 ? "s" : ""} more information
-      </p>
-      {reviews.map((r) => r.notes && (
-        <p key={r.department} style={{ fontSize: 12, color: "#6b7280" }}>{r.department}: {r.notes}</p>
-      ))}
-      <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8 }}>
-        Please contact the BPLO office to submit corrections. Online resubmission isn&rsquo;t available yet.
-      </p>
-    </Card>
+    <>
+      {flagged.length > 0 && (
+        <Card>
+          <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            {flagged.map((r) => r.department).join(", ")} need{flagged.length === 1 ? "s" : ""} more information
+          </p>
+          {flagged.map((r) => r.notes && (
+            <p key={r.department} style={{ fontSize: 12, color: "#6b7280" }}>{r.department}: {r.notes}</p>
+          ))}
+          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8 }}>
+            Contact the BPLO office once you&rsquo;ve resolved this, so they can notify the department to take another
+            look. You can upload any requested document below in the meantime.
+          </p>
+        </Card>
+      )}
+      <Card>
+        <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Have a document to add?</p>
+        <p style={{ fontSize: 12, color: "#6b7280" }}>
+          If BFP asked you to pay on their own portal, upload your payment screenshot here so they can see it.
+        </p>
+        <AdditionalDocumentUpload applicationId={applicationId} defaultLabel="BFP Payment Proof" />
+      </Card>
+    </>
   );
 }
 

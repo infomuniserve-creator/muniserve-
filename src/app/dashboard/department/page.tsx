@@ -1,23 +1,16 @@
 import { getCurrentStaff } from "@/lib/staff";
+import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { Card, EmptyState, Row, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { Card, EmptyState, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { getApplicationDocuments, submitOwnDepartmentDecision } from "./actions";
 
 /**
- * Department dashboard -- read-only (see bplo/page.tsx's header comment
- * for why detail panels + decision buttons aren't here yet).
- *
- * Locked to this staff member's own department (CLAUDE.md rule #8). Note
- * this page doesn't need to filter by department in the query at all --
- * RLS's "department scoped access to department_reviews" policy
- * (migration 0002) already does that at the database layer, which is the
- * actual enforcement per rule #8 ("must be enforced at the database
- * layer, not just hidden in the UI"). Querying department_reviews
- * directly for decision = 'pending' also sidesteps needing to figure out
- * "latest round" -- rule #6 means a department only ever has a pending row
- * in the round it's actually supposed to act on; an already-approved
- * department's older round has no bearing on what needs their attention now.
+ * Department dashboard. Now with real decision buttons (build order step
+ * 6). Locked to this staff member's own department (rule #8) -- see the
+ * header comment history in git blame for why this page doesn't need to
+ * filter by department in the query itself: RLS already does that.
  */
 export default async function DepartmentDashboardPage() {
   const staff = await getCurrentStaff();
@@ -62,27 +55,71 @@ export default async function DepartmentDashboardPage() {
       </StatGrid>
 
       <SectionLabel>Awaiting your review</SectionLabel>
-      <Card>
-        {rows.length === 0 ? (
-          <EmptyState>Nothing waiting on {staff.department} right now.</EmptyState>
-        ) : (
-          rows.map((r) => {
-            const app = r.review_round?.application;
-            const biz = app?.business;
-            const owner = biz?.owner?.full_name ?? biz?.legacy_owner_name ?? "Unknown applicant";
-            return (
-              <Row key={r.id}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{biz?.business_name ?? "(business record missing)"}</p>
-                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>
-                    {owner} · {app?.application_type === "new" ? "New" : "Renewal"}
-                  </p>
-                </div>
-              </Row>
-            );
-          })
-        )}
-      </Card>
+      {rows.length === 0 ? (
+        <Card><EmptyState>Nothing waiting on {staff.department} right now.</EmptyState></Card>
+      ) : (
+        rows.map((r) => {
+          const app = r.review_round?.application;
+          const biz = app?.business;
+          const owner = biz?.owner?.full_name ?? biz?.legacy_owner_name ?? "Unknown applicant";
+          return (
+            <DepartmentReviewCard
+              key={r.id}
+              departmentReviewId={r.id}
+              applicationId={app?.id ?? ""}
+              businessName={biz?.business_name ?? "(business record missing)"}
+              ownerName={owner}
+              applicationType={app?.application_type ?? ""}
+            />
+          );
+        })
+      )}
     </div>
   );
 }
+
+async function DepartmentReviewCard({
+  departmentReviewId, applicationId, businessName, ownerName, applicationType,
+}: { departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string }) {
+  const documents = applicationId ? await getApplicationDocuments(applicationId) : [];
+  const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
+
+  return (
+    <Card style={{ padding: 12, marginBottom: 10 }}>
+      <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName}</p>
+      <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
+        {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
+      </p>
+
+      <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>
+      {documents.length === 0 ? (
+        <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>No documents uploaded.</p>
+      ) : (
+        <div style={{ marginBottom: 10 }}>
+          {documents.map((d, i) => (
+            <div key={d.id} style={{ fontSize: 12, marginBottom: 4 }}>
+              {signedUrls[i] ? (
+                <a href={signedUrls[i]!} target="_blank" rel="noreferrer" style={{ color: colors.accentText }}>{d.document_type}</a>
+              ) : (
+                <span>{d.document_type} (link unavailable)</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form action={submitOwnDepartmentDecision}>
+        <input type="hidden" name="departmentReviewId" value={departmentReviewId} />
+        <textarea name="notes" placeholder="Notes (required if requesting info or rejecting)" style={{ width: "100%", fontSize: 12, padding: 8, borderRadius: 8, border: `0.5px solid ${colors.border}`, marginBottom: 8, minHeight: 50 }} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button type="submit" name="decision" value="approved" style={actBtnStyle}>Approve</button>
+          <button type="submit" name="decision" value="approved_with_condition" style={actBtnStyle}>Approve with condition</button>
+          <button type="submit" name="decision" value="request_more_info" style={actBtnStyle}>Request more info</button>
+          <button type="submit" name="decision" value="rejected" style={{ ...actBtnStyle, color: colors.dangerText }}>Reject</button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+const actBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" };
