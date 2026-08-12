@@ -55,7 +55,7 @@ export default async function TreasuryDashboardPage() {
           <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
             <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName(a)}</p>
             <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
-              {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
+              Owner: {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
             </p>
             <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
               Fee computation engine isn&rsquo;t built yet (build order step 7) — enter the amount actually collected manually for now.

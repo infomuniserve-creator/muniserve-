@@ -68,7 +68,7 @@ export default async function MayorDashboardPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
                 <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>
-                  {ownerName(a)} · Paid {peso(totalPaid(a))}
+                  Owner: {ownerName(a)} · Paid {peso(totalPaid(a))}
                 </p>
               </div>
               <Badge label="Paid" status="approved" />
@@ -91,7 +91,7 @@ export default async function MayorDashboardPage() {
               <Row key={a.id}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
-                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>{ownerName(a)}</p>
+                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>Owner: {ownerName(a)}</p>
                 </div>
                 <Badge label="Released" status="approved" />
               </Row>

@@ -88,7 +88,7 @@ async function DepartmentReviewCard({
     <Card style={{ padding: 12, marginBottom: 10 }}>
       <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName}</p>
       <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
-        {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
+        Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
       </p>
 
       <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>

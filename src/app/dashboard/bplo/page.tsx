@@ -99,7 +99,7 @@ export default async function BploDashboardPage() {
           {assessment.map((a) => (
             <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
               <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName(a)}</p>
-              <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>{ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}</p>
+              <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>Owner: {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}</p>
               <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
                 Fee computation engine isn&rsquo;t built yet (build order step 7) — no computed amounts to show. This button only advances the status once you&rsquo;ve assessed the fee manually.
               </p>
@@ -123,7 +123,7 @@ export default async function BploDashboardPage() {
           return (
             <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
               <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 8px" }}>
-                {businessName(a)} <span style={{ color: colors.textSecondary, fontWeight: 400 }}>· {ownerName(a)}</span>
+                {businessName(a)} <span style={{ color: colors.textSecondary, fontWeight: 400 }}>· Owner: {ownerName(a)}</span>
               </p>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                 {reviews.length === 0 ? (
@@ -174,7 +174,7 @@ export default async function BploDashboardPage() {
               <Row key={a.id}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
-                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>{ownerName(a)}</p>
+                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>Owner: {ownerName(a)}</p>
                 </div>
                 <Badge label="Returned" status="rejected" />
               </Row>
@@ -195,7 +195,7 @@ async function InitialReviewCard({
   return (
     <Card style={{ padding: 12, marginBottom: 10 }}>
       <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName}</p>
-      <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>{ownerName} · {applicationType === "new" ? "New" : "Renewal"}</p>
+      <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}</p>
 
       <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>
       {documents.length === 0 ? (
