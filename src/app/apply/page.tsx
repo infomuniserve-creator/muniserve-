@@ -39,6 +39,7 @@ type LegacyMatch = {
   ownerNameMasked: string;
   barangay: string | null;
   natureOfBusiness: string | null;
+  lbtCategory: string | null;
   grossSales: number | null;
 };
 
@@ -47,6 +48,7 @@ type MyBusiness = {
   businessName: string;
   barangay: string | null;
   natureOfBusiness: string | null;
+  lbtCategory: string | null;
   grossSales: number | null;
 };
 
@@ -225,6 +227,7 @@ export default function ApplyPage() {
           businessName: matchedLegacy.businessName,
           barangay: matchedLegacy.barangay ?? "",
           natureOfBusiness: matchedLegacy.natureOfBusiness ?? "",
+          lbtCategory: matchedLegacy.lbtCategory ?? "",
           basisAmount: matchedLegacy.grossSales != null ? String(matchedLegacy.grossSales) : "",
         }));
         setScreen("form");
@@ -241,7 +244,8 @@ export default function ApplyPage() {
           setSelectedBusinessId(b.id);
           setForm((f) => ({
             ...f, businessName: b.businessName, barangay: b.barangay ?? "",
-            natureOfBusiness: b.natureOfBusiness ?? "", basisAmount: b.grossSales != null ? String(b.grossSales) : "",
+            natureOfBusiness: b.natureOfBusiness ?? "", lbtCategory: b.lbtCategory ?? "",
+            basisAmount: b.grossSales != null ? String(b.grossSales) : "",
           }));
           setScreen("form");
         } else {
@@ -450,12 +454,12 @@ export default function ApplyPage() {
           <Head title="Which business are you renewing?" sub="Select one to continue." />
           <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 8 }}>
             {myBusinesses.map((b) => (
-              <div key={b.id} onClick={() => pickBusiness(b)} style={rowStyle}>
+              <button key={b.id} onClick={() => pickBusiness(b)} style={{ ...rowStyle, width: "100%", background: "#fff", font: "inherit", color: "inherit", textAlign: "left" }}>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{b.businessName}</p>
                   <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{b.barangay} · {b.natureOfBusiness}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </>
@@ -559,10 +563,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function OptCard({ title, desc, onClick }: { title: string; desc: string; onClick: () => void }) {
   return (
-    <div onClick={onClick} style={{ border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "1rem", cursor: "pointer", flex: 1, minWidth: 200 }}>
+    <button onClick={onClick} style={{ textAlign: "left", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "1rem", cursor: "pointer", flex: 1, minWidth: 200, background: "#fff", font: "inherit", color: "inherit" }}>
       <p style={{ fontWeight: 500, fontSize: 14, marginBottom: 6 }}>{title}</p>
       <p style={{ fontSize: 12, color: "#6b7280" }}>{desc}</p>
-    </div>
+    </button>
   );
 }
 

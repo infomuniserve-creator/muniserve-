@@ -18,7 +18,7 @@ export async function GET() {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("businesses")
-    .select("id, business_name, barangay, nature_of_business, gross_sales_history")
+    .select("id, business_name, barangay, nature_of_business, lbt_category, gross_sales_history")
     .eq("owner_id", ownerId)
     .eq("is_active", true);
 
@@ -35,6 +35,7 @@ export async function GET() {
         businessName: b.business_name,
         barangay: b.barangay,
         natureOfBusiness: b.nature_of_business,
+        lbtCategory: b.lbt_category,
         grossSales: latestYear ? history[latestYear] : null,
       };
     }),

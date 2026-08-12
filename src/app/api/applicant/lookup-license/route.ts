@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const { data: business } = await supabase
     .from("businesses")
-    .select("id, business_name, legacy_owner_name, barangay, nature_of_business, gross_sales_history")
+    .select("id, business_name, legacy_owner_name, barangay, nature_of_business, lbt_category, gross_sales_history")
     .eq("lgu_id", lguId)
     .eq("legacy_license_no", licenseNumber)
     .eq("is_legacy_unclaimed", true)
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       ownerNameMasked: business.legacy_owner_name ? maskName(business.legacy_owner_name) : "Unknown",
       barangay: business.barangay,
       natureOfBusiness: business.nature_of_business,
+      lbtCategory: business.lbt_category,
       grossSales,
     },
   });
