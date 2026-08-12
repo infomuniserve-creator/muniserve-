@@ -18,8 +18,8 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] Seed script written and run against the live DB — `supabase/seed/seed_san_miguel_fee_rules.sql` (+ migration `0003_fee_rule_bracket_rate_basis.sql`). 112 fee_rules (88 active, 24 inactive pending BPLO confirmation), 139 fee_rule_brackets. See CLAUDE.md section 7a for discrepancies resolved while writing it.
 - [x] Bulk-import legacy business roster into `businesses` — 1,177 imported (`bt_source='actual'`), 168 held out for manual review (`needs_review`, matches `BPLO_LBT_NeedsReview.csv`), 5 held out for missing license numbers (`no_match`). See `supabase/seed/legacy_business_import.sql`.
 - [x] Staff auth + dashboards — Google OAuth via Supabase, verified end-to-end in production (real sign-in → `staff_users` lookup → role-routed → RLS-scoped queries). BPLO dashboard confirmed working live. Department and mayor dashboards share the same code path but haven't been tested with real accounts yet — provision a `staff_users` row for those roles when ready to check them too.
-- [ ] Applicant OTP flow ← **next**
-- [ ] Review workflow wiring
+- [x] Applicant OTP flow + application form + legacy-claim flow — verified end-to-end live: real SMS via Semaphore, real OTP, real legacy business claimed (license 7094956), real application submitted as reference `MS-2026-00001`. Document upload code is untested via browser (file-picker automation limitation) but follows the same proven auth pattern as the rest of the applicant routes.
+- [ ] Review workflow wiring ← **next**
 - [ ] Fee computation engine
 - [ ] Payments, permits, notifications
 
