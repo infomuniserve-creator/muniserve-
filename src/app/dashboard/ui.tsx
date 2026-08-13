@@ -212,17 +212,32 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * auto-fit instead of a fixed column count: a page with 3 stat cards
+ * (Mayor) gets 3 even wide columns, a page with 6 (BPLO) gets all 6 in
+ * one row on a wide-enough screen, without either page hardcoding the
+ * other's card count. Matches the original design concept's own stat
+ * card grid (reference/MuniServe_Interactive_Prototype.html).
+ */
 export function StatGrid({ children }: { children: React.ReactNode }) {
-  return <div className="mb-8 grid grid-cols-2 gap-3.5 sm:grid-cols-4">{children}</div>;
+  return <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3.5">{children}</div>;
 }
 
+/**
+ * Tone now colors the whole card, not just the icon chip -- the project
+ * owner asked for "a color that matches their status" so each stage
+ * reads at a glance instead of every card looking the same. Built as its
+ * own bordered surface rather than wrapping Card, since Card hardcodes
+ * bg-surface and a plain class-string append can't reliably override
+ * that (Tailwind's cascade order isn't JSX order).
+ */
 export function StatCard({ label, value, icon, tone = "neutral" }: {
   label: string;
   value: string | number;
   icon?: React.ReactNode;
   tone?: "good" | "warn" | "bad" | "info" | "male" | "female" | "neutral";
 }) {
-  const toneBg: Record<string, string> = {
+  const toneClasses: Record<string, string> = {
     good: "bg-good-bg text-good-ink",
     warn: "bg-warn-bg text-warn-ink",
     bad: "bg-bad-bg text-bad-ink",
@@ -232,11 +247,13 @@ export function StatCard({ label, value, icon, tone = "neutral" }: {
     neutral: "bg-surface-3 text-ink-faint",
   };
   return (
-    <Card className="flex flex-col gap-2.5 p-4">
-      {icon && <span className={`flex size-8 items-center justify-center rounded-xl ${toneBg[tone]}`}>{icon}</span>}
-      <div className="font-display text-[28px] font-bold leading-none tabular-nums">{value}</div>
-      <div className="text-[12.5px] font-bold text-ink-soft">{label}</div>
-    </Card>
+    <div
+      className={`flex flex-col gap-2 rounded-3xl border border-border p-4 shadow-[0_1px_2px_rgba(23,33,66,0.05),0_10px_28px_-12px_rgba(23,33,66,0.14)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_28px_-14px_rgba(0,0,0,0.5)] ${toneClasses[tone]}`}
+    >
+      {icon && <span className="flex size-8 items-center justify-center rounded-xl bg-white/55 dark:bg-black/25">{icon}</span>}
+      <div className="font-display text-[26px] font-bold leading-none tabular-nums">{value}</div>
+      <div className="text-[12.5px] font-bold opacity-80">{label}</div>
+    </div>
   );
 }
 

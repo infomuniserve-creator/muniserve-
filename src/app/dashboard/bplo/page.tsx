@@ -115,11 +115,19 @@ export default async function BploDashboardPage() {
         rightSlot={<SignOutButton />}
       />
 
+      {/*
+        Tone reflects what KIND of stage it is, not just "pending": warn =
+        BPLO has to make a judgment call (approve/reject/assess); info =
+        either waiting on someone else (departments) or a simple physical
+        confirmation with no judgment involved (printing/release); good =
+        done. Six stages, five real tones -- some overlap is inherent, not
+        a mistake.
+      */}
       <StatGrid>
         <StatCard label="Initial review" value={initial.length} icon={<ClockIcon />} tone="warn" />
         <StatCard label="In dept. review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />
         <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />
-        <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="warn" />
+        <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="info" />
         <StatCard label="For release" value={forRelease.length} icon={<ClockIcon />} tone="info" />
         <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />
       </StatGrid>
