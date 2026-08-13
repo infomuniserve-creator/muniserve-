@@ -299,6 +299,10 @@ This wasn't just a labeling fix — printing and release are real checkpoints th
 
 **Also fixed, same request:** the dashboard shell (`dashboard/layout.tsx`) wrapped every staff page in `max-w-3xl` (768px) — the project owner asked to "maximize the width" since review cards (business profile grid, document lists, the now-8-step pipeline) felt constricted. Widened to `max-w-7xl` (1280px).
 
+**Follow-up, same day — BPLO's stat-card row was still missing two stages.** The first pass only added stat cards for stages BPLO directly acts on (Initial/Assessment review, printing, release), so "Treasurer Approval" and "Mayor's Signature" had no count anywhere on BPLO's dashboard even though they're real, named stages in the pipeline the project owner gave. Added both (`awaitingPayment`/`awaitingSignature` filters on `pending_payment`/`pending_mayor`) as stat-card-only entries — no action queue underneath, since BPLO doesn't act on either (Treasury and the Mayor each own their own dashboard for that). Reasoning: BPLO is the one office that should see the *entire* pipeline end to end, not just its own actionable slice. `StatGrid`'s auto-fit minimum width was also tightened from 140px to 120px so all 8 cards still fit in one row at the dashboard's current 1280px width instead of wrapping to two.
+
+**Follow-up, same day — stat card colors.** The project owner also asked for the stat cards themselves (not just the small icon chip) to carry a color matching their status. `StatCard` now applies `bg-{tone}-bg`/`text-{tone}-ink` to the whole card. Tone means "what kind of stage," not literally "how urgent": warn = BPLO has to make a judgment call (approve/reject/assess); info = waiting on someone else (departments, Treasury, Mayor) or a simple physical confirmation with no judgment involved (printing/release); good = done. Eight stages, five real tones — the overlap is intentional grouping, not a missed distinction.
+
 ---
 
 ## 8. UI reference

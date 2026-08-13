@@ -220,7 +220,7 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
  * card grid (reference/MuniServe_Interactive_Prototype.html).
  */
 export function StatGrid({ children }: { children: React.ReactNode }) {
-  return <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3.5">{children}</div>;
+  return <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3.5">{children}</div>;
 }
 
 /**

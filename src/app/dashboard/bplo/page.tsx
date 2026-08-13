@@ -9,7 +9,7 @@ import Link from "next/link";
 import { SignOutButton } from "../sign-out-button";
 import {
   BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList,
-  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso,
+  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper, peso,
 } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 
@@ -41,7 +41,9 @@ export default async function BploDashboardPage() {
   const initial = all.filter((a) => a.status === "pending_bplo_initial");
   const assessment = all.filter((a) => a.status === "pending_bplo_assessment");
   const inDeptReview = all.filter((a) => a.status === "pending_dept_review");
+  const awaitingPayment = all.filter((a) => a.status === "pending_payment");
   const printing = all.filter((a) => a.status === "pending_printing");
+  const awaitingSignature = all.filter((a) => a.status === "pending_mayor");
   const forRelease = all.filter((a) => a.status === "pending_release");
   const returned = all.filter((a) => a.status === "returned_to_applicant");
   const released = all.filter((a) => a.status === "released");
@@ -116,18 +118,25 @@ export default async function BploDashboardPage() {
       />
 
       {/*
-        Tone reflects what KIND of stage it is, not just "pending": warn =
-        BPLO has to make a judgment call (approve/reject/assess); info =
-        either waiting on someone else (departments) or a simple physical
+        Every stage of the pipeline gets a count here, not just the ones
+        BPLO directly acts on (Treasurer approval and Mayor's signature
+        are shown for visibility even though Treasury/Mayor own those
+        actions on their own dashboards -- BPLO is the one office that
+        should see the whole thing end to end). Tone reflects what KIND
+        of stage it is, not just "pending": warn = BPLO has to make a
+        judgment call (approve/reject/assess); info = waiting on someone
+        else (departments, Treasury, Mayor) or a simple physical
         confirmation with no judgment involved (printing/release); good =
-        done. Six stages, five real tones -- some overlap is inherent, not
-        a mistake.
+        done. Eight stages, five real tones -- some overlap is inherent,
+        not a mistake.
       */}
       <StatGrid>
         <StatCard label="Initial review" value={initial.length} icon={<ClockIcon />} tone="warn" />
         <StatCard label="In dept. review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />
         <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />
+        <StatCard label="Treasurer approval" value={awaitingPayment.length} icon={<ClockIcon />} tone="info" />
         <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="info" />
+        <StatCard label="Mayor's signature" value={awaitingSignature.length} icon={<UserIcon className="size-4" />} tone="info" />
         <StatCard label="For release" value={forRelease.length} icon={<ClockIcon />} tone="info" />
         <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />
       </StatGrid>
