@@ -231,6 +231,17 @@ const BUSINESS_OPERATION_FIELDS: FieldDescriptor[] = [
   { key: "animalCount", label: "Number of animals", kind: "number" },
 ];
 
+/** Turns a raw FieldKey (what the server's missing_required_fields error returns) into the same label shown on the form, instead of the camelCase key itself. */
+function fieldLabel(key: string): string {
+  const found =
+    BUSINESS_INFO_FIELDS.find((f) => f.key === key) ??
+    ADDRESS_FIELDS.find((f) => f.key === key) ??
+    BUSINESS_OPERATION_FIELDS.find((f) => f.key === key);
+  if (found) return found.label;
+  const doc = DOCUMENT_FIELDS.find((d) => d.key === key);
+  return doc ? doc.label : key;
+}
+
 const DECLARATION_TEXT =
   "I DECLARE UNDER PENALTY OF PERJURY that all information in this application are true and correct based on my " +
   "personal knowledge and authentic records submitted to the BPLO San Miguel Bulacan. Any false or misleading " +
@@ -581,7 +592,7 @@ export default function ApplyPage() {
         const data = await res.json().catch(() => ({}));
         setError(
           data.error === "missing_required_fields"
-            ? `Please fill in: ${(data.fields ?? []).join(", ")}`
+            ? `Please fill in: ${(data.fields ?? []).map(fieldLabel).join(", ")}`
             : data.error === "declaration_not_accepted"
               ? "Please accept the declaration before submitting."
               : "Something went wrong submitting your application. Please try again."
@@ -678,7 +689,7 @@ export default function ApplyPage() {
           <Field label="License number">
             <input value={licenseInput} onChange={(e) => setLicenseInput(e.target.value)} placeholder="e.g. 7094956" style={inputStyle} />
           </Field>
-          <button onClick={lookupLicense} disabled={loading || !licenseInput.trim()} style={actBtnStyle}>Continue</button>
+          <button onClick={lookupLicense} disabled={loading || !licenseInput.trim()} style={{ ...actBtnStyle, ...((loading || !licenseInput.trim()) ? disabledBtnStyle : {}) }}>Continue</button>
           <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
             Already claimed your business before?{" "}
             <a href="#" onClick={(e) => { e.preventDefault(); setPhoneSigninMode(true); setScreen("phone"); }} style={{ color: "#0C447C" }}>
@@ -717,7 +728,7 @@ export default function ApplyPage() {
           <Field label="Mobile number">
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09XX XXX XXXX" style={inputStyle} />
           </Field>
-          <button onClick={sendOtp} disabled={loading || !phone.trim()} style={actBtnStyle}>{loading ? "Sending…" : "Send code"}</button>
+          <button onClick={sendOtp} disabled={loading || !phone.trim()} style={{ ...actBtnStyle, ...((loading || !phone.trim()) ? disabledBtnStyle : {}) }}>{loading ? "Sending…" : "Send code"}</button>
         </>
       )}
 
@@ -728,8 +739,8 @@ export default function ApplyPage() {
             <input value={otpInput} onChange={(e) => setOtpInput(e.target.value)} placeholder="6-digit code" style={inputStyle} />
           </Field>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={verifyOtp} disabled={loading || otpInput.trim().length !== 6} style={actBtnStyle}>Verify</button>
-            <button onClick={sendOtp} disabled={loading} style={actBtnStyle}>Resend code</button>
+            <button onClick={verifyOtp} disabled={loading || otpInput.trim().length !== 6} style={{ ...actBtnStyle, ...((loading || otpInput.trim().length !== 6) ? disabledBtnStyle : {}) }}>Verify</button>
+            <button onClick={sendOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Resend code</button>
           </div>
           {otpSent && <p style={{ fontSize: 11, color: "#6b7280", marginTop: 10 }}>Code sent via SMS.</p>}
         </>
@@ -749,7 +760,13 @@ export default function ApplyPage() {
               {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </Field>
-          <button onClick={submitIdentity} disabled={loading || firstName.trim().length < 1 || lastName.trim().length < 1 || !emailInput.trim()} style={actBtnStyle}>Continue</button>
+          <button
+            onClick={submitIdentity}
+            disabled={loading || firstName.trim().length < 1 || lastName.trim().length < 1 || !emailInput.trim()}
+            style={{ ...actBtnStyle, ...((loading || firstName.trim().length < 1 || lastName.trim().length < 1 || !emailInput.trim()) ? disabledBtnStyle : {}) }}
+          >
+            Continue
+          </button>
         </>
       )}
 
@@ -832,11 +849,14 @@ export default function ApplyPage() {
 
           <button
             onClick={submitApplication}
-            disabled={loading || !form.businessName || !form.natureOfBusiness || !declarationAccepted}
-            style={{ ...actBtnStyle, marginTop: 8 }}
+            disabled={loading}
+            style={{ ...actBtnStyle, ...primaryBtnStyle, marginTop: 8, ...(loading ? disabledBtnStyle : {}) }}
           >
             {loading ? "Submitting…" : "Submit application"}
           </button>
+          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8 }}>
+            * required. If anything&rsquo;s missing, you&rsquo;ll see exactly what right here after you submit.
+          </p>
         </>
       )}
 
@@ -888,11 +908,33 @@ function OptCard({ title, desc, onClick }: { title: string; desc: string; onClic
   );
 }
 
-/** Plain-canvas signature capture -- no drawing library, just pointer events + toBlob(). Matches the source form's (optional, per fields.json) signature field. */
+/**
+ * Plain-canvas signature capture -- no drawing library, just pointer
+ * events + toBlob(). Matches the source form's (optional, per fields.json)
+ * signature field.
+ *
+ * Auto-saves ~900ms after the pen lifts, instead of requiring the
+ * "Save signature" click every time -- a signature is usually drawn in
+ * several strokes (lifting between letters), so this can't just save on
+ * every pointer-up or it'd re-upload a half-finished signature; it waits
+ * for a pause long enough to mean "done," and resets that timer the
+ * moment a new stroke starts. The manual button stays too, both because
+ * it doubles as an immediate "no, save it now" option and because
+ * needing it in the first place is what surfaced this.
+ */
 function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void; saving: boolean; saved: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  const hasStrokesRef = useRef(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearAutoSaveTimer() {
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+  }
 
   function getPos(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
@@ -902,6 +944,7 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     drawingRef.current = true;
     lastPoint.current = getPos(e);
+    clearAutoSaveTimer(); // a new stroke starting means the signature isn't finished yet
   }
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!drawingRef.current || !lastPoint.current) return;
@@ -916,23 +959,32 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
     lastPoint.current = pos;
+    hasStrokesRef.current = true;
   }
   function handlePointerUp() {
+    if (!drawingRef.current) return;
     drawingRef.current = false;
     lastPoint.current = null;
+    if (hasStrokesRef.current) {
+      clearAutoSaveTimer();
+      autoSaveTimer.current = setTimeout(save, 900);
+    }
   }
   function clear() {
+    clearAutoSaveTimer();
+    hasStrokesRef.current = false;
     const canvas = canvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
   }
   function save() {
+    clearAutoSaveTimer();
     canvasRef.current?.toBlob((blob) => {
       if (blob) onSave(new File([blob], "signature.png", { type: "image/png" }));
     }, "image/png");
   }
 
   return (
-    <Field label={`Signature${saved ? " ✓" : ""}`}>
+    <Field label={`Signature${saved ? " ✓ saved" : ""}`}>
       <canvas
         ref={canvasRef}
         width={560}
@@ -943,9 +995,12 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
-      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
         <button type="button" onClick={clear} style={actBtnStyle}>Clear</button>
-        <button type="button" onClick={save} disabled={saving} style={actBtnStyle}>{saving ? "Saving…" : "Save signature"}</button>
+        <button type="button" onClick={save} disabled={saving} style={{ ...actBtnStyle, ...(saving ? disabledBtnStyle : {}) }}>
+          {saving ? "Saving…" : "Save now"}
+        </button>
+        {!saving && !saved && <span style={{ fontSize: 11, color: "#6b7280" }}>Saves automatically a moment after you finish signing.</span>}
       </div>
     </Field>
   );
@@ -953,6 +1008,14 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
 
 const backBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#fff", cursor: "pointer", marginBottom: 16 };
 const actBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#fff", cursor: "pointer" };
+const primaryBtnStyle: React.CSSProperties = { background: "#0C447C", color: "#fff", borderColor: "#0C447C", fontWeight: 600 };
+/** actBtnStyle/primaryBtnStyle have no disabled variant on their own -- a
+ * disabled <button> looks identical to an enabled one with plain inline
+ * styles, which is exactly what made "Submit application" look broken
+ * (it was silently disabled, not unresponsive -- CLAUDE.md's write-up of
+ * this fix has the full story). Spread this in last whenever a button's
+ * `disabled` prop can be true. */
+const disabledBtnStyle: React.CSSProperties = { opacity: 0.45, cursor: "not-allowed" };
 const inputStyle: React.CSSProperties = { width: "100%", height: 36, border: "0.5px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, background: "#fff", color: "#1a1a2e" };
 const cardStyle: React.CSSProperties = { border: "0.5px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: "1rem" };
 const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderBottom: "0.5px solid #e5e7eb", cursor: "pointer" };
