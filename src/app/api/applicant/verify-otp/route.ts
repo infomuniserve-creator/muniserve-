@@ -17,12 +17,12 @@ import { NextResponse } from "next/server";
  * the business is claimed atomically. Otherwise a placeholder-named owner
  * is created and the client is told to collect a real name next.
  *
- * `needsIdentity` (was `needsName`) now also covers email: the real intake
- * form (reference/official-application-form/) collects First/Last Name
- * *and* Email, and owners.email existed as a column but was never
- * populated before this. Any owner without an email on file -- brand new,
- * or created before this field existed -- gets routed through the
- * (expanded) identity screen once; after that it's on file for good.
+ * Identity (First/Last Name, Email, Gender) now lives directly on the main
+ * application form itself -- pre-filled here from whatever's on file (blank
+ * for a brand-new owner) -- rather than gating on a separate "identity"
+ * screen the way this used to work. This route's job is just to report
+ * what's on file today so the client can pre-fill; the form's own submit
+ * writes any corrections back to the owners row.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -43,20 +43,22 @@ export async function POST(request: Request) {
 
   const { data: existingOwner } = await supabase
     .from("owners")
-    .select("id, full_name, email")
+    .select("id, full_name, email, gender")
     .eq("phone", phone)
     .maybeSingle();
 
   let ownerId: string;
   let ownerName: string;
+  let ownerEmail: string | null = null;
+  let ownerGender: string | null = null;
   let matched: boolean;
-  let needsIdentity = false;
 
   if (existingOwner) {
     ownerId = existingOwner.id;
     ownerName = existingOwner.full_name;
+    ownerEmail = existingOwner.email;
+    ownerGender = existingOwner.gender;
     matched = true;
-    needsIdentity = !existingOwner.email;
   } else {
     matched = false;
 
@@ -92,7 +94,6 @@ export async function POST(request: Request) {
 
       ownerId = newOwner.id;
       ownerName = newOwner.full_name;
-      needsIdentity = true; // real name from the legacy record, but no email on file yet
     } else {
       const { data: newOwner, error: ownerError } = await supabase
         .from("owners")
@@ -103,8 +104,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "owner_create_failed" }, { status: 500 });
       }
       ownerId = newOwner.id;
-      ownerName = newOwner.full_name;
-      needsIdentity = true; // placeholder name, ask the applicant for their real one (+ email)
+      ownerName = newOwner.full_name; // placeholder (= phone) -- the form's own identity fields ask for their real one
     }
   }
 
@@ -120,7 +120,8 @@ export async function POST(request: Request) {
   return NextResponse.json({
     matched,
     ownerName,
-    needsIdentity,
+    ownerEmail,
+    ownerGender,
     businessCount: businessCount ?? 0,
   });
 }

@@ -13,6 +13,15 @@ type SubmitBody = {
   applicationType: "new" | "renewal";
   businessId?: string;
 
+  // Owner / Representative Info -- now collected on every submission (see
+  // application-form-logic.ts's Owner / Representative Info fields), not
+  // just once via the old identity screen. Written back to the owners row
+  // below, in addition to being validated as part of this application.
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  gender?: string;
+
   // Business Info & Registration
   businessName: string;
   natureOfBusiness: string;
@@ -69,8 +78,7 @@ type SubmitBody = {
   documents: Partial<Record<DocumentFieldKey, string>>;
 };
 
-/** Owner-identity fields (first/last name, email, gender, phone) are collected earlier in the flow via update-name/verify-otp -- not resubmitted here, so they're excluded from this route's required-field check even though they're part of the shared FieldKey/REQUIRED_FIELDS domain. applicationType and declarationAccepted are validated separately below. */
-const OWNER_IDENTITY_FIELDS = new Set<FieldKey>(["firstName", "lastName", "email", "phone", "gender"]);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Creates the application (and, for a genuinely new business, the
@@ -102,8 +110,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "declaration_not_accepted" }, { status: 400 });
   }
 
+  const firstName = String(body.firstName ?? "").trim();
+  const lastName = String(body.lastName ?? "").trim();
+  const email = String(body.email ?? "").trim();
+  const gender = body.gender ? String(body.gender).trim() : null;
+
   const values: Partial<Record<FieldKey, unknown>> = {
     applicationType: body.applicationType === "new" ? "New" : "Renewal",
+    firstName,
+    lastName,
+    email,
+    gender: gender ?? undefined,
+    // "phone" is required per REQUIRED_FIELDS, but it's the OTP-verified
+    // session identity, not a value this route accepts from the client (see
+    // CLAUDE.md 7d/7h) -- ownerId's existence already guarantees a real
+    // phone is on file, so this is just a non-blank placeholder to satisfy
+    // the shared required-field check, not a value that gets written anywhere.
+    phone: "verified",
     businessName: body.businessName,
     natureOfBusiness: body.natureOfBusiness,
     organizationType: body.organizationType,
@@ -156,13 +179,27 @@ export async function POST(request: Request) {
   };
 
   const missing = [...REQUIRED_FIELDS].filter(
-    (field) => !OWNER_IDENTITY_FIELDS.has(field) && field !== "declarationAccepted" && isFieldCurrentlyRequired(field, values) && isBlank(values[field])
+    (field) => field !== "declarationAccepted" && isFieldCurrentlyRequired(field, values) && isBlank(values[field])
   );
   if (missing.length > 0) {
     return NextResponse.json({ error: "missing_required_fields", fields: missing }, { status: 400 });
   }
+  if (!EMAIL_RE.test(email)) {
+    return NextResponse.json({ error: "invalid_email" }, { status: 400 });
+  }
 
   const supabase = createServiceClient();
+
+  // Every submission can correct a typo'd name/email or update gender --
+  // this is now the only place that writes to it (the old standalone
+  // "update-name" endpoint/identity screen is gone, see CLAUDE.md 7h).
+  const { error: ownerUpdateError } = await supabase
+    .from("owners")
+    .update({ full_name: `${firstName} ${lastName}`, email, gender })
+    .eq("id", ownerId);
+  if (ownerUpdateError) {
+    return NextResponse.json({ error: "owner_update_failed" }, { status: 500 });
+  }
   const lguId = await getPilotLguId();
   const year = new Date().getFullYear();
 

@@ -41,7 +41,6 @@ type Screen =
   | "renewal_confirm"
   | "phone"
   | "otp"
-  | "identity"
   | "owner_match"
   | "business_picker"
   | "form"
@@ -172,6 +171,14 @@ const DOCUMENT_FIELDS: { key: DocumentFieldKey; label: string }[] = [
   { key: "taxIncentivesDoc", label: "Tax incentives certificate" },
   { key: "swornStatementDoc", label: "Sworn statement of gross sales (BIR ITR / AFS / VAT returns)" },
 ];
+const DOCUMENT_FIELD_KEYS = new Set<FieldKey>(DOCUMENT_FIELDS.map((d) => d.key));
+
+function isBlankValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
 
 type FieldDescriptor =
   | { key: FieldKey; label: string; kind: "text" | "number" }
@@ -264,7 +271,6 @@ export default function ApplyPage() {
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
 
-  const [matched, setMatched] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [emailInput, setEmailInput] = useState("");
@@ -292,7 +298,6 @@ export default function ApplyPage() {
     setPhone("");
     setOtpInput("");
     setOtpSent(false);
-    setMatched(false);
     setFirstName("");
     setLastName("");
     setEmailInput("");
@@ -427,18 +432,25 @@ export default function ApplyPage() {
         return;
       }
       const data = await res.json();
-      setMatched(data.matched);
       setBusinessCount(data.businessCount);
-      if (data.ownerName) {
+      // Placeholder-named owners (brand new, or claimed-but-unnamed legacy)
+      // have full_name === phone -- leave the name fields blank for those
+      // rather than pre-filling with the phone number itself.
+      if (data.ownerName && data.ownerName !== phone) {
         const [first, ...rest] = String(data.ownerName).split(" ");
         setFirstName(first ?? "");
         setLastName(rest.join(" "));
+      } else {
+        setFirstName("");
+        setLastName("");
       }
+      setEmailInput(data.ownerEmail ?? "");
+      setGenderInput(data.ownerGender ?? "");
 
       if (path === "renewal" && matchedLegacy) {
         // Legacy claim just completed -- go straight to the form for that business.
         applyProfile(matchedLegacy);
-        setScreen(data.needsIdentity ? "identity" : "form");
+        setScreen("form");
       } else if (path === "renewal" && phoneSigninMode) {
         // Returning owner signing in by phone for a later renewal.
         if (!data.matched) {
@@ -447,48 +459,13 @@ export default function ApplyPage() {
           return;
         }
         const businesses = await fetchMyBusinesses();
-        if (data.needsIdentity) {
-          setScreen("identity");
-        } else if (businesses.length === 1) {
-          applyProfile(businesses[0]);
-          setScreen("form");
-        } else {
-          setScreen("business_picker");
-        }
-      } else if (data.needsIdentity) {
-        setScreen("identity");
-      } else if (data.matched) {
-        setScreen("owner_match");
-      } else {
-        setScreen("form");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function submitIdentity() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/applicant/update-name", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), email: emailInput.trim(), gender: genderInput || undefined }),
-      });
-      if (!res.ok) {
-        setError("Please check your name and email address.");
-        return;
-      }
-      if (path === "renewal" && phoneSigninMode) {
-        const businesses = myBusinesses ?? (await fetchMyBusinesses());
         if (businesses.length === 1) {
           applyProfile(businesses[0]);
           setScreen("form");
         } else {
           setScreen("business_picker");
         }
-      } else if (matched) {
+      } else if (data.matched) {
         setScreen("owner_match");
       } else {
         setScreen("form");
@@ -526,6 +503,11 @@ export default function ApplyPage() {
   function buildVisibleValues(): Partial<Record<FieldKey, unknown>> {
     return {
       applicationType: path === "new" ? "New" : path === "renewal" ? "Renewal" : "",
+      firstName,
+      lastName,
+      email: emailInput,
+      phone,
+      gender: genderInput,
       ...form,
     };
   }
@@ -540,6 +522,10 @@ export default function ApplyPage() {
         body: JSON.stringify({
           applicationType: path,
           businessId: selectedBusinessId ?? undefined,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: emailInput.trim(),
+          gender: genderInput || undefined,
           businessName: form.businessName,
           natureOfBusiness: form.natureOfBusiness,
           organizationType: form.organizationType,
@@ -608,6 +594,22 @@ export default function ApplyPage() {
   }
 
   const formValues = buildVisibleValues();
+
+  /**
+   * Matches the real form's own behavior: document uploads, signature, and
+   * the declaration/submit step only appear once every other currently-
+   * required field has a value -- not unconditionally alongside everything
+   * else. Document fields themselves are excluded here (obviously nothing
+   * can be uploaded to a section that isn't shown yet); declarationAccepted
+   * is its own final checkbox, not a prerequisite for showing that checkbox.
+   */
+  const readyForDocuments = [...REQUIRED_FIELDS].every(
+    (key) =>
+      key === "declarationAccepted" ||
+      DOCUMENT_FIELD_KEYS.has(key) ||
+      !isFieldVisible(key, formValues) ||
+      !isBlankValue(formValues[key])
+  );
 
   function renderField(fd: FieldDescriptor) {
     if (!isFieldVisible(fd.key, formValues)) return null;
@@ -746,30 +748,6 @@ export default function ApplyPage() {
         </>
       )}
 
-      {screen === "identity" && (
-        <>
-          <Head title="A few details about you" sub="This is how BPLO and department staff will identify you as the owner." />
-          <div style={{ display: "flex", gap: 8 }}>
-            <Field label="First name"><input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Juan" style={inputStyle} /></Field>
-            <Field label="Last name"><input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Dela Cruz" style={inputStyle} /></Field>
-          </div>
-          <Field label="Email"><input value={emailInput} onChange={(e) => setEmailInput(e.target.value)} placeholder="juan@example.com" style={inputStyle} /></Field>
-          <Field label="Gender (optional)">
-            <select value={genderInput} onChange={(e) => setGenderInput(e.target.value)} style={inputStyle}>
-              <option value="">Prefer not to say</option>
-              {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </Field>
-          <button
-            onClick={submitIdentity}
-            disabled={loading || firstName.trim().length < 1 || lastName.trim().length < 1 || !emailInput.trim()}
-            style={{ ...actBtnStyle, ...((loading || firstName.trim().length < 1 || lastName.trim().length < 1 || !emailInput.trim()) ? disabledBtnStyle : {}) }}
-          >
-            Continue
-          </button>
-        </>
-      )}
-
       {screen === "owner_match" && (
         <>
           <Head title="We found an account" sub="A profile already exists for this mobile number." />
@@ -813,50 +791,88 @@ export default function ApplyPage() {
           <SectionHeading>Main office address</SectionHeading>
           {ADDRESS_FIELDS.map(renderField)}
 
+          <SectionHeading>Owner / representative info</SectionHeading>
+          <p style={{ fontSize: 11, color: "#6b7280", marginTop: -6, marginBottom: 12 }}>
+            For a corporation, cooperative, or partnership, enter the name of the president or officer-in-charge.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Field label="First name *">
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Juan" style={inputStyle} />
+            </Field>
+            <Field label="Last name *">
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Dela Cruz" style={inputStyle} />
+            </Field>
+          </div>
+          <Field label="Email *">
+            <input value={emailInput} onChange={(e) => setEmailInput(e.target.value)} placeholder="juan@example.com" style={inputStyle} />
+          </Field>
+          <Field label="Mobile phone *">
+            <input value={phone} readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
+          </Field>
+          <Field label="Owner's gender (optional)">
+            <select value={genderInput} onChange={(e) => setGenderInput(e.target.value)} style={inputStyle}>
+              <option value="">Prefer not to say</option>
+              {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </Field>
+          <p style={{ fontSize: 11, color: "#6b7280", marginTop: -6, marginBottom: 14 }}>
+            Your mobile number is tied to your verified sign-in and can&rsquo;t be changed here — use &ldquo;Start over&rdquo; if it&rsquo;s wrong.
+          </p>
+
           <SectionHeading>Business operation</SectionHeading>
           {BUSINESS_OPERATION_FIELDS.map(renderField)}
 
-          <SectionHeading>Documents to submit</SectionHeading>
-          {DOCUMENT_FIELDS.filter((d) => isFieldVisible(d.key, formValues)).map((d) => (
-            <div key={d.key} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 6 }}>
-              <span style={{ fontSize: 12 }}>
-                {d.label}{REQUIRED_FIELDS.has(d.key) ? " *" : ""}{documents[d.key] ? " ✓" : ""}
-              </span>
-              <label style={{ ...actBtnStyle, display: "inline-block" }}>
-                {uploadingDoc === d.key ? "Uploading…" : documents[d.key] ? "Replace" : "Choose file"}
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp"
-                  style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDocument(d.key, d.label, f); }}
-                />
-              </label>
+          {readyForDocuments ? (
+            <>
+              <SectionHeading>Documents to submit</SectionHeading>
+              {DOCUMENT_FIELDS.filter((d) => isFieldVisible(d.key, formValues)).map((d) => (
+                <div key={d.key} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12 }}>
+                    {d.label}{REQUIRED_FIELDS.has(d.key) ? " *" : ""}{documents[d.key] ? " ✓" : ""}
+                  </span>
+                  <label style={{ ...actBtnStyle, display: "inline-block" }}>
+                    {uploadingDoc === d.key ? "Uploading…" : documents[d.key] ? "Replace" : "Choose file"}
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      style={{ display: "none" }}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDocument(d.key, d.label, f); }}
+                    />
+                  </label>
+                </div>
+              ))}
+              <SignaturePad
+                saving={uploadingDoc === "signatureDoc"}
+                saved={Boolean(documents.signatureDoc)}
+                onSave={(file) => uploadDocument("signatureDoc", "Signature", file)}
+              />
+
+              <div style={{ ...cardStyle, marginTop: 12 }}>
+                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>{DECLARATION_TEXT}</p>
+                <label style={{ fontSize: 12, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                  <input type="checkbox" checked={declarationAccepted} onChange={(e) => setDeclarationAccepted(e.target.checked)} style={{ marginTop: 2 }} />
+                  I have read and agree to the above.
+                </label>
+              </div>
+
+              <button
+                onClick={submitApplication}
+                disabled={loading}
+                style={{ ...actBtnStyle, ...primaryBtnStyle, marginTop: 8, ...(loading ? disabledBtnStyle : {}) }}
+              >
+                {loading ? "Submitting…" : "Submit application"}
+              </button>
+              <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8 }}>
+                * required. If anything&rsquo;s missing, you&rsquo;ll see exactly what right here after you submit.
+              </p>
+            </>
+          ) : (
+            <div style={{ ...cardStyle, background: "#f4f6fb", border: "none", marginTop: 20 }}>
+              <p style={{ fontSize: 12, color: "#6b7280" }}>
+                Fill in the required fields above (marked *) to continue to document uploads, your signature, and submission.
+              </p>
             </div>
-          ))}
-          <SignaturePad
-            saving={uploadingDoc === "signatureDoc"}
-            saved={Boolean(documents.signatureDoc)}
-            onSave={(file) => uploadDocument("signatureDoc", "Signature", file)}
-          />
-
-          <div style={{ ...cardStyle, marginTop: 12 }}>
-            <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>{DECLARATION_TEXT}</p>
-            <label style={{ fontSize: 12, display: "flex", alignItems: "flex-start", gap: 6 }}>
-              <input type="checkbox" checked={declarationAccepted} onChange={(e) => setDeclarationAccepted(e.target.checked)} style={{ marginTop: 2 }} />
-              I have read and agree to the above.
-            </label>
-          </div>
-
-          <button
-            onClick={submitApplication}
-            disabled={loading}
-            style={{ ...actBtnStyle, ...primaryBtnStyle, marginTop: 8, ...(loading ? disabledBtnStyle : {}) }}
-          >
-            {loading ? "Submitting…" : "Submit application"}
-          </button>
-          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8 }}>
-            * required. If anything&rsquo;s missing, you&rsquo;ll see exactly what right here after you submit.
-          </p>
+          )}
         </>
       )}
 

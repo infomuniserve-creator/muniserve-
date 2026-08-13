@@ -255,6 +255,23 @@ Second view added to the Businesses section, alongside the card-based Directory 
 
 ---
 
+## 7h. Identity fields moved onto the main applicant form (2026-08-13, same day)
+
+7d's decision — collect First Name/Last Name/Email once via a separate "identity" screen, keyed off the phone-OTP step — turned out not to match the real form after all. The project owner shared screenshots of the actual live GoHighLevel form: it shows First Name, Last Name, Email, Mobile Phone, and Owner's Gender directly on the main form itself, in an "Owner / Representative Info" section between Main Office Address and Business Operation, on *every* submission — not a one-time separate step.
+
+**Reversed 7d's decision accordingly.** `src/app/apply/page.tsx`'s standalone `"identity"` screen and `submitIdentity()` are gone; the same five fields now render inline on the `"form"` screen's own "Owner / representative info" section, pre-filled from `verify-otp`'s response (blank for a genuinely new owner) and editable on every submission, per the project owner's explicit choice ("Show on the main form, editable every time... submitting the form also updates their owners record, not just this one application"):
+- **First Name / Last Name / Email / Gender** are real, editable inputs — a typo'd email or a legal-name update goes through cleanly on any submission, not just the first one.
+- **Mobile Phone** is shown but **read-only** — a deliberate deviation from pixel-matching the real form, not an oversight. Phone is the OTP-verified session identity itself (how MuniServe knows who's filling out the form at all); silently letting it be edited inline would decouple the displayed number from the actual verified session, with no re-verification step to back it up. Changing your registered number is a different, more sensitive operation than fixing a typo'd email, and isn't handled by this form at all (use "Start over" to sign in with a different number).
+- `verify-otp/route.ts` now returns `ownerEmail`/`ownerGender` (previously only `ownerName`) so the form can pre-fill them; the `needsIdentity` flag and all its branching are gone — every path now goes straight to `"form"` (or `"owner_match"`/`"business_picker"` as before), never to a separate identity step.
+- `submit-application/route.ts` now validates `firstName`/`lastName`/`email` as ordinary required fields (matching what the client already enforces via the shared `REQUIRED_FIELDS`/`isFieldCurrentlyRequired` from `application-form-logic.ts` — no more `OWNER_IDENTITY_FIELDS` carve-out) and writes them back to the `owners` row on every successful submission. `phone` stays required-but-not-client-supplied: the route injects a non-blank placeholder for the shared required-field check rather than trusting a client-submitted value, since `ownerId` already having a session guarantees a real phone is on file.
+- `/api/applicant/update-name` is deleted — it only ever existed to serve the now-removed identity screen.
+
+**Also addressed the same day, from the same screenshots** — the project owner noted "the rest of the uploads only shows when all required fields has been filled up," matching the real form's own progressive disclosure. `apply/page.tsx` now computes `readyForDocuments` (every currently-required, currently-visible, non-document field has a value) and hides the entire Documents-to-submit / Signature / Declaration / Submit block behind it, showing a plain "fill in the required fields above" notice instead. Document fields themselves are excluded from that check (nothing can be uploaded to a section that isn't shown yet), and `declarationAccepted` isn't a prerequisite for showing its own checkbox.
+
+Not yet done, flagged for later rather than guessed: the real form's screenshots show "Business Premises Ownership" *without* a required asterisk, which may conflict with `premisesOwnership` currently being in `REQUIRED_FIELDS` — worth checking against `reference/official-application-form/fields.json` directly before changing it either way. Also out of scope here: the real form's navy header banner, two-column field grid, and Cloudflare bot-protection widget — this pass was about field placement/data-flow correctness, not a pixel-parity visual rebuild (a fair follow-up if wanted, but a separately-scoped one).
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
