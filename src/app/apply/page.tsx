@@ -6,7 +6,7 @@ import {
   TAX_TYPE_OPTIONS, GENDER_OPTIONS, BUSINESS_ACTIVITY_OPTIONS, OPERATION_ADDRESS_OPTIONS, PREMISES_OWNERSHIP_OPTIONS,
   YES_NO_OPTIONS, BARANGAY_CLEARANCE_OPTIONS,
 } from "@/lib/san-miguel-form-options";
-import { computeVisibleFields, REQUIRED_FIELDS, type FieldKey } from "@/lib/application-form-logic";
+import { isFieldVisible, REQUIRED_FIELDS, type FieldKey } from "@/lib/application-form-logic";
 
 /**
  * Applicant flow -- new business / renewal, phone OTP, legacy-claim, and
@@ -607,10 +607,10 @@ export default function ApplyPage() {
     }
   }
 
-  const visibleFields = computeVisibleFields(buildVisibleValues());
+  const formValues = buildVisibleValues();
 
   function renderField(fd: FieldDescriptor) {
-    if (!visibleFields.has(fd.key)) return null;
+    if (!isFieldVisible(fd.key, formValues)) return null;
     const required = REQUIRED_FIELDS.has(fd.key);
     const label = fd.label + (required ? " *" : "");
 
@@ -817,7 +817,7 @@ export default function ApplyPage() {
           {BUSINESS_OPERATION_FIELDS.map(renderField)}
 
           <SectionHeading>Documents to submit</SectionHeading>
-          {DOCUMENT_FIELDS.filter((d) => visibleFields.has(d.key)).map((d) => (
+          {DOCUMENT_FIELDS.filter((d) => isFieldVisible(d.key, formValues)).map((d) => (
             <div key={d.key} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 6 }}>
               <span style={{ fontSize: 12 }}>
                 {d.label}{REQUIRED_FIELDS.has(d.key) ? " *" : ""}{documents[d.key] ? " ✓" : ""}
