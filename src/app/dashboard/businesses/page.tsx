@@ -76,7 +76,7 @@ export default async function BusinessesPage({
     fetchAllRows((offset, limit) =>
       supabase
         .from("businesses")
-        .select(`${BUSINESS_PROFILE_COLUMNS}, address, legacy_license_no, is_active, is_legacy_unclaimed, owner_id, created_at, owner:owners(full_name, phone)`)
+        .select(`${BUSINESS_PROFILE_COLUMNS}, address, legacy_license_no, is_active, is_legacy_unclaimed, owner_id, created_at, owner:owners(full_name, phone)`, { count: "exact" })
         .eq("lgu_id", staff.lgu_id)
         .order("business_name", { ascending: true })
         .range(offset, offset + limit - 1)
@@ -84,14 +84,14 @@ export default async function BusinessesPage({
     fetchAllRows((offset, limit) =>
       supabase
         .from("applications")
-        .select("id, business_id, status, application_type, application_year, reference_number, submitted_at")
+        .select("id, business_id, status, application_type, application_year, reference_number, submitted_at", { count: "exact" })
         .eq("lgu_id", staff.lgu_id)
         .range(offset, offset + limit - 1)
     ),
     fetchAllRows((offset, limit) =>
       supabase
         .from("permits")
-        .select("valid_until, application:applications!inner(business_id, lgu_id)")
+        .select("valid_until, application:applications!inner(business_id, lgu_id)", { count: "exact" })
         .eq("application.lgu_id", staff.lgu_id)
         .range(offset, offset + limit - 1)
     ),

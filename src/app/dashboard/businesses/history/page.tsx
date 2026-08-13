@@ -16,7 +16,7 @@ export default async function PermitHistoryPage() {
   const raw = await fetchAllRows<Record<string, unknown>>((offset, limit) =>
     supabase
       .from("permit_history")
-      .select("id, year, permit_no, business_name, owner_name, barangay, application_type, category, description, owner_type, gender, amount_paid, capital, gross_sales, pay_frequency, legacy_license_no")
+      .select("id, year, permit_no, business_name, owner_name, barangay, application_type, category, description, owner_type, gender, amount_paid, capital, gross_sales, pay_frequency, legacy_license_no", { count: "exact" })
       .eq("lgu_id", staff.lgu_id)
       .range(offset, offset + limit - 1)
   );
