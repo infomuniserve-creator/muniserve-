@@ -668,6 +668,7 @@ export default function ApplyPage() {
 
   return (
     <div style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
+      <LguBanner />
       {screen !== "landing" && screen !== "submitted" && (
         <button onClick={startOver} style={backBtnStyle}>Start over</button>
       )}
@@ -885,6 +886,24 @@ export default function ApplyPage() {
           <a href={`/status/${submittedReference}`} style={{ ...actBtnStyle, display: "inline-block", textDecoration: "none" }}>View application status</a>
         </>
       )}
+    </div>
+  );
+}
+
+/** LGU letterhead banner from the real form's header -- shown once, persistently, above every screen (not per-screen like Head below). Tax year is derived from the current date rather than hardcoded, so this doesn't need a manual edit every January. */
+function LguBanner() {
+  const year = new Date().getFullYear();
+  return (
+    <div style={{ background: "#0C4DA2", color: "#fff", borderRadius: 12, padding: "18px 20px", marginBottom: 20, textAlign: "center" }}>
+      <p style={{ fontSize: 13, margin: 0 }}>Republic of Philippines</p>
+      <p style={{ fontSize: 13, margin: 0 }}>Province of Bulacan</p>
+      <p style={{ fontSize: 13, margin: 0 }}>Municipality of San Miguel Bulacan</p>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: "2px 0 0", textTransform: "uppercase" }}>
+        Office of the Municipal Business Permit and Licensing Officer
+      </p>
+      <div style={{ borderTop: "1px dashed rgba(255,255,255,0.55)", margin: "12px 0" }} />
+      <p style={{ fontSize: 13, fontWeight: 700, margin: 0, textTransform: "uppercase" }}>Unified Application Form for Business Permit</p>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: "2px 0 0", textTransform: "uppercase" }}>Tax Year {year}</p>
     </div>
   );
 }
