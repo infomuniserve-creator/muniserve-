@@ -1,6 +1,7 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { classifyBusinessStatus, BUSINESS_STATUS_LABEL, BUSINESS_STATUS_TONE, type BusinessStatus } from "@/lib/business-status";
+import { fetchAllRows } from "@/lib/db-pagination";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -9,6 +10,7 @@ import {
   BuildingIcon, ChevronRightIcon, ClockIcon, DashboardTopBar, EmptyState, InfoIcon, BusinessProfileBlock,
   PrimaryButton, SearchIcon, StatCard, StatGrid, TonePill, XIcon,
 } from "../ui";
+import { BusinessesSubNav } from "./sub-nav";
 import { startWalkInApplication } from "./actions";
 
 const STATUS_FILTERS: { value: "all" | BusinessStatus; label: string }[] = [
@@ -65,20 +67,34 @@ export default async function BusinessesPage({
   const office = officeIdentity(staff);
   const supabase = await createClient();
 
-  const [{ data: businesses }, { data: applications }, { data: permits }] = await Promise.all([
-    supabase
-      .from("businesses")
-      .select(`${BUSINESS_PROFILE_COLUMNS}, address, legacy_license_no, is_active, is_legacy_unclaimed, owner_id, created_at, owner:owners(full_name, phone)`)
-      .eq("lgu_id", staff.lgu_id)
-      .order("business_name", { ascending: true }),
-    supabase
-      .from("applications")
-      .select("id, business_id, status, application_type, application_year, reference_number, submitted_at")
-      .eq("lgu_id", staff.lgu_id),
-    supabase
-      .from("permits")
-      .select("valid_until, application:applications!inner(business_id, lgu_id)")
-      .eq("application.lgu_id", staff.lgu_id),
+  // San Miguel alone already has 1,177 businesses -- more than PostgREST's
+  // silent 1,000-row default cap, which under-populated this exact page
+  // before this fix (see db-pagination.ts and CLAUDE.md for how that was
+  // caught). applications/permits are far smaller today but get the same
+  // treatment so this can't quietly recur as they grow.
+  const [businesses, applications, permits] = await Promise.all([
+    fetchAllRows((offset, limit) =>
+      supabase
+        .from("businesses")
+        .select(`${BUSINESS_PROFILE_COLUMNS}, address, legacy_license_no, is_active, is_legacy_unclaimed, owner_id, created_at, owner:owners(full_name, phone)`)
+        .eq("lgu_id", staff.lgu_id)
+        .order("business_name", { ascending: true })
+        .range(offset, offset + limit - 1)
+    ),
+    fetchAllRows((offset, limit) =>
+      supabase
+        .from("applications")
+        .select("id, business_id, status, application_type, application_year, reference_number, submitted_at")
+        .eq("lgu_id", staff.lgu_id)
+        .range(offset, offset + limit - 1)
+    ),
+    fetchAllRows((offset, limit) =>
+      supabase
+        .from("permits")
+        .select("valid_until, application:applications!inner(business_id, lgu_id)")
+        .eq("application.lgu_id", staff.lgu_id)
+        .range(offset, offset + limit - 1)
+    ),
   ]);
 
   type AppRow = { id: string; business_id: string; status: string; application_type: string; application_year: number | null; reference_number: string | null; submitted_at: string };
@@ -144,6 +160,7 @@ export default async function BusinessesPage({
         applicationsHref={office.homeHref}
         rightSlot={<SignOutButton />}
       />
+      <BusinessesSubNav active="directory" />
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>

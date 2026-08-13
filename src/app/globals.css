@@ -46,6 +46,16 @@
   --color-cond: #7c5cd4;
   --color-cond-bg: #efe9fb;
   --color-cond-ink: #5535a8;
+
+  /* gender breakdown (Permit History) -- not a status color, just a
+     legible male/female split, matching the reference dashboard's
+     purple/pink convention */
+  --color-male: #7c3aed;
+  --color-male-bg: #f0e9fe;
+  --color-male-ink: #5b21b6;
+  --color-female: #db2777;
+  --color-female-bg: #fce4f1;
+  --color-female-ink: #9d174d;
 }
 
 /*
@@ -94,6 +104,13 @@
     --color-cond: #b79cf0;
     --color-cond-bg: #241938;
     --color-cond-ink: #e4d9fb;
+
+    --color-male: #a78bfa;
+    --color-male-bg: #2c1f4a;
+    --color-male-ink: #ddd6fe;
+    --color-female: #f472b6;
+    --color-female-bg: #3d1530;
+    --color-female-ink: #fbcfe8;
   }
 }
 
@@ -127,6 +144,13 @@
   --color-cond: #b79cf0;
   --color-cond-bg: #241938;
   --color-cond-ink: #e4d9fb;
+
+  --color-male: #a78bfa;
+  --color-male-bg: #2c1f4a;
+  --color-male-ink: #ddd6fe;
+  --color-female: #f472b6;
+  --color-female-bg: #3d1530;
+  --color-female-ink: #fbcfe8;
 }
 
 [data-theme="light"] {
@@ -159,6 +183,13 @@
   --color-cond: #7c5cd4;
   --color-cond-bg: #efe9fb;
   --color-cond-ink: #5535a8;
+
+  --color-male: #7c3aed;
+  --color-male-bg: #f0e9fe;
+  --color-male-ink: #5b21b6;
+  --color-female: #db2777;
+  --color-female-bg: #fce4f1;
+  --color-female-ink: #9d174d;
 }
 
 body {

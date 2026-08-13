@@ -175,12 +175,14 @@ const TONE_CLASSES: Record<string, string> = {
   bad: "bg-bad-bg text-bad-ink",
   info: "bg-info-bg text-info-ink",
   cond: "bg-cond-bg text-cond-ink",
+  male: "bg-male-bg text-male-ink",
+  female: "bg-female-bg text-female-ink",
   neutral: "bg-surface-3 text-ink-soft",
 };
 
-export function TonePill({ label, tone, dot }: { label: string; tone: "good" | "warn" | "bad" | "info" | "cond" | "neutral"; dot?: boolean }) {
+export function TonePill({ label, tone, dot }: { label: string; tone: "good" | "warn" | "bad" | "info" | "cond" | "male" | "female" | "neutral"; dot?: boolean }) {
   const dotClasses: Record<string, string> = {
-    good: "bg-good", warn: "bg-warn", bad: "bg-bad", info: "bg-info", cond: "bg-cond", neutral: "bg-ink-faint",
+    good: "bg-good", warn: "bg-warn", bad: "bg-bad", info: "bg-info", cond: "bg-cond", male: "bg-male", female: "bg-female", neutral: "bg-ink-faint",
   };
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-bold ${TONE_CLASSES[tone]}`}>
@@ -218,13 +220,15 @@ export function StatCard({ label, value, icon, tone = "neutral" }: {
   label: string;
   value: string | number;
   icon?: React.ReactNode;
-  tone?: "good" | "warn" | "bad" | "info" | "neutral";
+  tone?: "good" | "warn" | "bad" | "info" | "male" | "female" | "neutral";
 }) {
   const toneBg: Record<string, string> = {
     good: "bg-good-bg text-good-ink",
     warn: "bg-warn-bg text-warn-ink",
     bad: "bg-bad-bg text-bad-ink",
     info: "bg-info-bg text-info-ink",
+    male: "bg-male-bg text-male-ink",
+    female: "bg-female-bg text-female-ink",
     neutral: "bg-surface-3 text-ink-faint",
   };
   return (
