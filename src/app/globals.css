@@ -48,8 +48,23 @@
   --color-cond-ink: #5535a8;
 }
 
+/*
+ * Dark mode has two independent triggers, same as the design-review
+ * artifact's pattern:
+ *   1. OS/browser preference (this media query) -- applies everywhere,
+ *      site-wide, with no explicit choice made.
+ *   2. An explicit choice from the dashboard's ThemeToggle (theme-toggle.tsx),
+ *      scoped to #dashboard-shell (src/app/dashboard/layout.tsx) via the
+ *      [data-theme] attribute selectors below -- only the dashboard has a
+ *      toggle, so only the dashboard can override the OS preference.
+ * :not([data-theme="light"]) on the media-query block lets an explicit
+ * "light" choice win even when the OS is dark; the explicit "dark" block
+ * below it wins in the other direction regardless of media query state,
+ * since a descendant's own custom-property definition always beats one
+ * inherited from an ancestor.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --color-brand-navy: #7fa3ee;
     --color-brand-teal: #3fe0b0;
     --color-brand-mint: #8ff3cc;
@@ -80,6 +95,70 @@
     --color-cond-bg: #241938;
     --color-cond-ink: #e4d9fb;
   }
+}
+
+[data-theme="dark"] {
+  --color-brand-navy: #7fa3ee;
+  --color-brand-teal: #3fe0b0;
+  --color-brand-mint: #8ff3cc;
+
+  --color-bg: #0d1426;
+  --color-surface: #151e38;
+  --color-surface-2: #1b2745;
+  --color-surface-3: #233052;
+  --color-border: #2a3a63;
+  --color-border-strong: #3c4f80;
+  --color-ink: #eaf0fc;
+  --color-ink-soft: #a6b3d6;
+  --color-ink-faint: #7883a8;
+
+  --color-good: #34d399;
+  --color-good-bg: #12301f;
+  --color-good-ink: #a7f3d0;
+  --color-warn: #f0b94a;
+  --color-warn-bg: #332507;
+  --color-warn-ink: #fbe0a5;
+  --color-bad: #fb7185;
+  --color-bad-bg: #341019;
+  --color-bad-ink: #fecbd4;
+  --color-info: #7aa6ff;
+  --color-info-bg: #101f3d;
+  --color-info-ink: #c9dbff;
+  --color-cond: #b79cf0;
+  --color-cond-bg: #241938;
+  --color-cond-ink: #e4d9fb;
+}
+
+[data-theme="light"] {
+  --color-brand-navy: #1b3e8c;
+  --color-brand-teal: #0fb88c;
+  --color-brand-mint: #7fe8c4;
+
+  --color-bg: #f2f6fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eaf0fa;
+  --color-surface-3: #e1e9f7;
+  --color-border: #dce4f0;
+  --color-border-strong: #c1cee4;
+  --color-ink: #172142;
+  --color-ink-soft: #5b6785;
+  --color-ink-faint: #8a93ac;
+
+  --color-good: #1fa971;
+  --color-good-bg: #e4f7ed;
+  --color-good-ink: #0b6b44;
+  --color-warn: #d69a1f;
+  --color-warn-bg: #fbf1dd;
+  --color-warn-ink: #7a5309;
+  --color-bad: #e1495b;
+  --color-bad-bg: #fce9ea;
+  --color-bad-ink: #a82a3b;
+  --color-info: #3b7be0;
+  --color-info-bg: #e8f0fd;
+  --color-info-ink: #1d4fa3;
+  --color-cond: #7c5cd4;
+  --color-cond-bg: #efe9fb;
+  --color-cond-ink: #5535a8;
 }
 
 body {

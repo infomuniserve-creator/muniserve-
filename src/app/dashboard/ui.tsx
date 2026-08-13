@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { BusinessProfile } from "@/lib/business-profile";
+import { ThemeToggle } from "./theme-toggle";
 export type { BusinessProfile };
 
 /**
@@ -309,7 +310,8 @@ export function DashboardTopBar({
         </Link>
       </nav>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        <ThemeToggle />
         {rightSlot}
         <div className="flex size-8.5 items-center justify-center rounded-full border border-border-strong bg-surface-3 font-display text-[12.5px] font-bold text-brand-navy">
           {initials}

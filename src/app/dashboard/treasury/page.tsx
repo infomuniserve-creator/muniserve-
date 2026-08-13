@@ -39,7 +39,7 @@ export default async function TreasuryDashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <>
       <DashboardTopBar
         officeLabel={office.label}
         officeSub="San Miguel, Bulacan"
@@ -85,6 +85,6 @@ export default async function TreasuryDashboardPage() {
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }

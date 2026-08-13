@@ -49,7 +49,7 @@ export default async function MayorDashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <>
       <DashboardTopBar
         officeLabel={office.label}
         officeSub="San Miguel, Bulacan"
@@ -102,6 +102,6 @@ export default async function MayorDashboardPage() {
           </Card>
         </div>
       )}
-    </div>
+    </>
   );
 }

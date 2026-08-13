@@ -101,7 +101,7 @@ export default async function BploDashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <>
       <DashboardTopBar
         officeLabel={office.label}
         officeSub="San Miguel, Bulacan"
@@ -235,7 +235,7 @@ export default async function BploDashboardPage() {
           </Card>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

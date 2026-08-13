@@ -48,7 +48,7 @@ export default async function DepartmentDashboardPage() {
   const rows = (pending ?? []) as unknown as PendingRow[];
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <>
       <DashboardTopBar
         officeLabel={office.label}
         officeSub="San Miguel, Bulacan"
@@ -88,7 +88,7 @@ export default async function DepartmentDashboardPage() {
           })}
         </div>
       )}
-    </div>
+    </>
   );
 }
 

@@ -135,7 +135,7 @@ export default async function BusinessesPage({
   const qsSuffix = q ? `&q=${encodeURIComponent(q)}` : "";
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <>
       <DashboardTopBar
         officeLabel={office.label}
         officeSub="San Miguel, Bulacan"
@@ -214,7 +214,7 @@ export default async function BusinessesPage({
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
