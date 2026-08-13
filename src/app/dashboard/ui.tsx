@@ -1,29 +1,129 @@
+import Link from "next/link";
+import type { BusinessProfile } from "@/lib/business-profile";
+export type { BusinessProfile };
+
 /**
- * Shared visual pieces for the staff dashboards, translated from
- * reference/MuniServe_Interactive_Prototype.html -- same colors, same
- * shapes, so the real dashboards read as continuations of that prototype
- * rather than a redesign. Kept as inline styles (no Tailwind yet) to stay
- * a direct, easy-to-diff port of the prototype's own inline-styled markup.
+ * Shared visual language for every staff dashboard (BPLO, department,
+ * treasury, mayor, and the Business Registry) -- Tailwind-based, replacing
+ * the earlier inline-style prototype port. Palette/type tokens live in
+ * globals.css (@theme); this file is components only. See the design
+ * concept this was built from (card-based review queue, soft rounded
+ * everything, brand navy-to-teal gradient) -- CLAUDE.md's design-system
+ * note has the full rationale.
  */
 
-export const colors = {
-  textPrimary: "#1a1a2e",
-  textSecondary: "#6b7280",
-  border: "#e5e7eb",
-  borderStrong: "#c7cbd1",
-  surface1: "#f4f6fb",
-  surface2: "#ffffff",
-  warningBg: "#FAEEDA",
-  warningText: "#854F0B",
-  successBg: "#EAF3DE",
-  successText: "#27500A",
-  dangerBg: "#FCEBEB",
-  dangerText: "#791F1F",
-  accentBg: "#E6F1FB",
-  accentText: "#0C447C",
-  proBg: "#EEEDFE",
-  proText: "#3C3489",
-};
+export function peso(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) return "—";
+  return "₱" + Math.round(amount).toLocaleString();
+}
+
+// ============================================================
+// Icons -- small hand-authored line icons (stroke, round caps/joins) so
+// they match the soft aesthetic without pulling in an icon library.
+// ============================================================
+
+type IconProps = { className?: string };
+const iconBase = "shrink-0";
+
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+export function XIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+export function InfoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5" />
+      <path d="M12 16.5v.01" />
+    </svg>
+  );
+}
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+export function BuildingIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M4 21V9l8-5 8 5v12" />
+      <path d="M9 21v-7h6v7" />
+    </svg>
+  );
+}
+export function UserIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-3.5"}`}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21v-1a8 8 0 0 1 16 0v1" />
+    </svg>
+  );
+}
+export function PinIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-3"}`}>
+      <path d="M12 21s-7-6.5-7-11a7 7 0 1 1 14 0c0 4.5-7 11-7 11Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+export function FileIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-3.5"}`}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+export function SearchIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+export function ChevronRightIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+export function RefreshIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M21 12a9 9 0 1 1-2.6-6.4L21 8" />
+      <path d="M21 3v5h-5" />
+    </svg>
+  );
+}
+export function ArrowLeftIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h11a5 5 0 0 1 5 5v1" />
+    </svg>
+  );
+}
+
+// ============================================================
+// Status → color mapping. Literal Tailwind class strings throughout
+// (never template-built) so the compiler's class scanner picks them up.
+// ============================================================
 
 export type StatusKind =
   | "pending"
@@ -32,49 +132,70 @@ export type StatusKind =
   | "rejected"
   | "request_more_info";
 
-export function statusColors(status: string): { bg: string; text: string } {
-  if (status === "approved") return { bg: colors.successBg, text: colors.successText };
-  if (status === "approved_with_condition") return { bg: colors.proBg, text: colors.proText };
-  if (status === "rejected") return { bg: colors.dangerBg, text: colors.dangerText };
-  if (status === "request_more_info") return { bg: colors.accentBg, text: colors.accentText };
-  return { bg: colors.warningBg, text: colors.warningText };
+const STATUS_STYLES: Record<StatusKind, { bg: string; text: string }> = {
+  pending: { bg: "bg-warn-bg", text: "text-warn-ink" },
+  approved: { bg: "bg-good-bg", text: "text-good-ink" },
+  approved_with_condition: { bg: "bg-cond-bg", text: "text-cond-ink" },
+  rejected: { bg: "bg-bad-bg", text: "text-bad-ink" },
+  request_more_info: { bg: "bg-info-bg", text: "text-info-ink" },
+};
+
+function statusClasses(status: string): string {
+  const s = STATUS_STYLES[status as StatusKind] ?? STATUS_STYLES.pending;
+  return `${s.bg} ${s.text}`;
 }
 
-export function peso(amount: number | null | undefined): string {
-  if (amount === null || amount === undefined) return "—";
-  return "₱" + Math.round(amount).toLocaleString();
+export function Pill({ label, status, icon }: { label: string; status: string; icon?: React.ReactNode }) {
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClasses(status)}`}>
+      {icon}
+      {label}
+    </span>
+  );
 }
 
 export function Badge({ label, status }: { label: string; status: string }) {
-  const c = statusColors(status);
   return (
-    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, whiteSpace: "nowrap", background: c.bg, color: c.text }}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClasses(status)}`}>
       {label}
     </span>
   );
 }
 
-export function Pill({ label, status }: { label: string; status: string }) {
-  const c = statusColors(status);
+/**
+ * Pill variant keyed by the same "good/warn/bad/info/neutral/cond" tone
+ * vocabulary as StatCard, for statuses that aren't one of department_
+ * reviews.decision's five literal values (business registry status,
+ * dept-pending indicators, etc).
+ */
+const TONE_CLASSES: Record<string, string> = {
+  good: "bg-good-bg text-good-ink",
+  warn: "bg-warn-bg text-warn-ink",
+  bad: "bg-bad-bg text-bad-ink",
+  info: "bg-info-bg text-info-ink",
+  cond: "bg-cond-bg text-cond-ink",
+  neutral: "bg-surface-3 text-ink-soft",
+};
+
+export function TonePill({ label, tone, dot }: { label: string; tone: "good" | "warn" | "bad" | "info" | "cond" | "neutral"; dot?: boolean }) {
+  const dotClasses: Record<string, string> = {
+    good: "bg-good", warn: "bg-warn", bad: "bg-bad", info: "bg-info", cond: "bg-cond", neutral: "bg-ink-faint",
+  };
   return (
-    <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, whiteSpace: "nowrap", background: c.bg, color: c.text }}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-bold ${TONE_CLASSES[tone]}`}>
+      {dot && <span className={`size-2 shrink-0 rounded-full ${dotClasses[tone]}`} />}
       {label}
     </span>
   );
 }
 
-export function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={{ background: colors.surface1, borderRadius: 8, padding: "1rem" }}>
-      <p style={{ fontSize: 13, color: colors.textSecondary, margin: "0 0 4px" }}>{label}</p>
-      <p style={{ fontSize: 24, fontWeight: 500, margin: 0 }}>{value}</p>
-    </div>
-  );
-}
+// ============================================================
+// Layout primitives
+// ============================================================
 
-export function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div style={{ border: `0.5px solid ${colors.border}`, borderRadius: 8, ...style }}>
+    <div className={`rounded-3xl border border-border bg-surface shadow-[0_1px_2px_rgba(23,33,66,0.05),0_10px_28px_-12px_rgba(23,33,66,0.14)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_28px_-14px_rgba(0,0,0,0.5)] ${className}`}>
       {children}
     </div>
   );
@@ -82,101 +203,373 @@ export function Card({ children, style }: { children: React.ReactNode; style?: R
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: 16, fontSize: 13, color: colors.textSecondary }}>{children}</div>
-  );
-}
-
-export function TopBar({
-  title,
-  subtitle,
-  initials,
-  bg,
-  fg,
-  rightSlot,
-}: {
-  title: string;
-  subtitle: string;
-  initials: string;
-  bg: string;
-  fg: string;
-  rightSlot?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 500, fontSize: 13, color: fg }}>
-          {initials}
-        </div>
-        <div>
-          <p style={{ fontWeight: 500, fontSize: 14, margin: 0 }}>{title}</p>
-          <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>{subtitle}</p>
-        </div>
-      </div>
-      {rightSlot}
+    <div className="rounded-3xl border border-dashed border-border-strong bg-surface px-6 py-7 text-center text-[13.5px] text-ink-soft">
+      {children}
     </div>
   );
 }
 
 export function StatGrid({ children }: { children: React.ReactNode }) {
+  return <div className="mb-8 grid grid-cols-2 gap-3.5 sm:grid-cols-4">{children}</div>;
+}
+
+export function StatCard({ label, value, icon, tone = "neutral" }: {
+  label: string;
+  value: string | number;
+  icon?: React.ReactNode;
+  tone?: "good" | "warn" | "bad" | "info" | "neutral";
+}) {
+  const toneBg: Record<string, string> = {
+    good: "bg-good-bg text-good-ink",
+    warn: "bg-warn-bg text-warn-ink",
+    bad: "bg-bad-bg text-bad-ink",
+    info: "bg-info-bg text-info-ink",
+    neutral: "bg-surface-3 text-ink-faint",
+  };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: "1.5rem" }}>
-      {children}
+    <Card className="flex flex-col gap-2.5 p-4">
+      {icon && <span className={`flex size-8 items-center justify-center rounded-xl ${toneBg[tone]}`}>{icon}</span>}
+      <div className="font-display text-[28px] font-bold leading-none tabular-nums">{value}</div>
+      <div className="text-[12.5px] font-bold text-ink-soft">{label}</div>
+    </Card>
+  );
+}
+
+export function SectionHead({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-3">
+      <h2 className="font-display text-[18px] font-bold text-ink">{title}</h2>
+      {sub && <span className="text-[12.5px] text-ink-faint">{sub}</span>}
     </div>
   );
 }
 
+/** Kept for the few spots that just need a plain label, not a full section head. */
 export function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-2 mt-6 text-[13px] font-bold text-ink-soft">{children}</p>;
+}
+
+export function Row({ children }: { children: React.ReactNode }) {
+  return <div className="flex items-center gap-3 border-b border-border px-4.5 py-3 last:border-b-0">{children}</div>;
+}
+
+// ============================================================
+// Top bar + nav tabs -- shared shell for every dashboard page.
+// Server Component: which tab is active is passed in explicitly rather
+// than read from usePathname, so nothing here needs "use client".
+// ============================================================
+
+export function DashboardTopBar({
+  officeLabel,
+  officeSub,
+  initials,
+  active,
+  applicationsHref,
+  rightSlot,
+}: {
+  officeLabel: string;
+  officeSub: string;
+  initials: string;
+  active: "applications" | "businesses";
+  applicationsHref: string;
+  rightSlot?: React.ReactNode;
+}) {
   return (
-    <p style={{ fontSize: 13, fontWeight: 500, color: colors.textSecondary, margin: "1.5rem 0 8px" }}>{children}</p>
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-surface px-5 py-3.5 shadow-[0_1px_2px_rgba(23,33,66,0.05),0_10px_28px_-12px_rgba(23,33,66,0.14)]">
+      <div className="flex items-center gap-2.5">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-navy via-[#1470a8] to-brand-teal shadow-[0_4px_10px_-2px_rgba(15,184,140,0.4)]">
+          <BuildingIcon className="size-5 text-white" />
+        </div>
+        <span className="font-display text-[17px] font-bold tracking-tight">
+          <span className="text-brand-navy">Muni</span>
+          <span className="text-brand-teal">Serve</span>
+        </span>
+        <span className="ml-1 flex flex-col border-l border-border-strong pl-2.5 leading-tight">
+          <strong className="text-[12.5px] font-bold text-ink">{officeLabel}</strong>
+          <span className="text-[12px] text-ink-soft">{officeSub}</span>
+        </span>
+      </div>
+
+      <nav className="flex gap-0.5 rounded-full bg-surface-2 p-0.5">
+        <Link
+          href={applicationsHref}
+          className={`rounded-full px-4.5 py-2 font-display text-[13px] font-bold transition-colors ${
+            active === "applications" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          Applications
+        </Link>
+        <Link
+          href="/dashboard/businesses"
+          className={`rounded-full px-4.5 py-2 font-display text-[13px] font-bold transition-colors ${
+            active === "businesses" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          Businesses
+        </Link>
+      </nav>
+
+      <div className="flex items-center gap-3">
+        {rightSlot}
+        <div className="flex size-8.5 items-center justify-center rounded-full border border-border-strong bg-surface-3 font-display text-[12.5px] font-bold text-brand-navy">
+          {initials}
+        </div>
+      </div>
+    </div>
   );
 }
 
-export function Row({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+// ============================================================
+// Button variants -- shared so every "approve / condition / info / reject"
+// action row (BPLO's own review, department's own review, BPLO acting on
+// a department's behalf) looks and behaves identically.
+// ============================================================
+
+const btnBase = "inline-flex items-center gap-1.5 rounded-full text-[13px] font-bold transition-transform active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
+
+export function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { className = "", children, ...rest } = props;
   return (
-    <div
-      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderBottom: `0.5px solid ${colors.border}`, cursor: onClick ? "pointer" : "default" }}
+    <button
+      {...rest}
+      className={`${btnBase} border border-good bg-good px-4.5 py-2.5 text-white shadow-[0_6px_14px_-4px_rgba(31,169,113,0.45)] hover:bg-[#188e5e] ${className}`}
     >
       {children}
-    </div>
+    </button>
+  );
+}
+
+export function OutlineButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone: "cond" | "info" | "bad" | "neutral" }) {
+  const { className = "", children, tone, ...rest } = props;
+  const toneClasses: Record<string, string> = {
+    cond: "border-cond text-cond hover:bg-cond-bg",
+    info: "border-info text-info hover:bg-info-bg",
+    bad: "border-bad text-bad hover:bg-bad-bg",
+    neutral: "border-border-strong text-ink-soft hover:bg-surface-2 hover:text-ink",
+  };
+  return (
+    <button {...rest} className={`${btnBase} border bg-surface px-4.5 py-2.5 ${toneClasses[tone]} ${className}`}>
+      {children}
+    </button>
+  );
+}
+
+export function MiniButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "good" | "info" | "bad" | "neutral" }) {
+  const { className = "", children, tone = "good", ...rest } = props;
+  const toneClasses: Record<string, string> = {
+    good: "border-brand-teal text-brand-teal hover:bg-good-bg",
+    info: "border-info text-info hover:bg-info-bg",
+    bad: "border-bad text-bad hover:bg-bad-bg",
+    neutral: "border-border-strong text-ink-soft hover:bg-surface-2",
+  };
+  return (
+    <button {...rest} className={`rounded-full border bg-surface px-3.5 py-1.5 text-[12px] font-bold transition-colors ${toneClasses[tone]} ${className}`}>
+      {children}
+    </button>
+  );
+}
+
+export function GhostButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { className = "", children, ...rest } = props;
+  return (
+    <button {...rest} className={`rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-bold text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink ${className}`}>
+      {children}
+    </button>
   );
 }
 
 /**
- * The business-profile block from reference/MuniServe_Interactive_Prototype.html's
- * businessProfileBlock() -- address, nature of business, and the
- * capital-investment-or-gross-sales figure a reviewer needs to actually
- * judge an application, not just its name and a document list.
+ * The four decision buttons every review surface uses (BPLO initial
+ * review, BPLO assessment isn't decision-based, department's own review,
+ * BPLO acting on a department's behalf). `compact` renders MiniButtons
+ * without icons for the "act on behalf" inline row.
  */
+export function DecisionButtons({ compact }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        <MiniButton type="submit" name="decision" value="approved" tone="good">Approve</MiniButton>
+        <MiniButton type="submit" name="decision" value="approved_with_condition" tone="good">Approve w/ condition</MiniButton>
+        <MiniButton type="submit" name="decision" value="request_more_info" tone="info">Request info</MiniButton>
+        <MiniButton type="submit" name="decision" value="rejected" tone="bad">Reject</MiniButton>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      <PrimaryButton type="submit" name="decision" value="approved"><CheckIcon />Approve</PrimaryButton>
+      <OutlineButton type="submit" name="decision" value="approved_with_condition" tone="cond"><InfoIcon />Approve with condition</OutlineButton>
+      <OutlineButton type="submit" name="decision" value="request_more_info" tone="info"><InfoIcon />Request more info</OutlineButton>
+      <OutlineButton type="submit" name="decision" value="rejected" tone="bad"><XIcon />Reject</OutlineButton>
+    </div>
+  );
+}
+
+export function NotesField(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const { className = "", ...rest } = props;
+  return (
+    <textarea
+      {...rest}
+      className={`mb-3 min-h-[52px] w-full resize-y rounded-2xl border border-border bg-surface px-3.5 py-2.5 text-[13px] text-ink placeholder:text-ink-faint ${className}`}
+    />
+  );
+}
+
+// ============================================================
+// Workflow stepper -- the 7-stage pipeline every application moves
+// through. Terminal exception states (returned / rejected) don't render
+// a linear stepper -- a Badge elsewhere already communicates those.
+// ============================================================
+
+const STEPS = ["Submitted", "BPLO check", "Departments", "Assessment", "Payment", "Mayor's signature", "Released"];
+
+const STATUS_STEP_INDEX: Record<string, number> = {
+  submitted: 0,
+  pending_bplo_initial: 1,
+  pending_dept_review: 2,
+  pending_bplo_assessment: 3,
+  pending_payment: 4,
+  pending_mayor: 5,
+  released: 6,
+};
+
+export function WorkflowStepper({ status }: { status: string }) {
+  const current = STATUS_STEP_INDEX[status];
+  if (current === undefined) return null;
+
+  return (
+    <div className="mb-4 flex items-center overflow-x-auto pb-1">
+      {STEPS.map((label, i) => (
+        <div key={label} className="flex shrink-0 items-center">
+          {i > 0 && <div className={`mx-0.5 h-0.5 w-5.5 shrink-0 ${i <= current ? "bg-good" : "bg-border-strong"}`} />}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              className={`flex size-5 items-center justify-center rounded-full border-2 text-[10px] font-bold ${
+                i < current
+                  ? "border-good bg-good text-white"
+                  : i === current
+                    ? "border-brand-teal bg-brand-teal text-white shadow-[0_0_0_4px_var(--color-good-bg)]"
+                    : "border-border-strong bg-surface text-ink-faint"
+              }`}
+            >
+              {i < current ? "✓" : i + 1}
+            </span>
+            <span className={`whitespace-nowrap text-[11px] font-bold ${i <= current ? "text-ink" : "text-ink-faint"}`}>{label}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================
+// Business profile detail grid -- shared by every review card and the
+// Business Registry's expanded row. Rows with no value are omitted
+// rather than padding the grid with dashes.
+// ============================================================
+
 export function BusinessProfileBlock({
-  address, natureOfBusiness, lbtCategory, applicationType, basisAmount,
+  legacyAddress, profile, applicationType, basisAmount,
 }: {
-  address: string | null;
-  natureOfBusiness: string | null;
-  lbtCategory: string | null;
+  legacyAddress: string | null;
+  profile: BusinessProfile | null;
   applicationType: string;
   basisAmount: number | null;
 }) {
+  const structuredAddress = profile
+    ? [profile.unitStreet, profile.cityTown, profile.barangay, profile.province, profile.zipCode].filter(Boolean).join(", ")
+    : "";
+  const address = structuredAddress || legacyAddress;
+
+  const rows: [string, string][] = [
+    ["Nature of business", profile?.natureOfBusiness ?? "—"],
+    ["LBT category", profile?.lbtCategory ?? "—"],
+    [applicationType === "new" ? "Capital investment" : "Gross sales (preceding year)", peso(basisAmount)],
+  ];
+  if (profile?.organizationType) rows.push(["Organization type", profile.organizationType]);
+  if (profile?.registrationAuthority || profile?.registrationNo)
+    rows.push(["Registration", [profile.registrationAuthority, profile.registrationNo].filter(Boolean).join(" — ")]);
+  if (profile?.businessTaxPayment) rows.push(["Business tax payment", profile.businessTaxPayment]);
+  if (profile?.tin) rows.push(["TIN", profile.tin]);
+  if (profile?.taxType) rows.push(["Tax type", profile.taxType]);
+  if (profile?.tradeName) rows.push(["Trade/franchise name", profile.tradeName]);
+  if (profile?.premisesOwnership) rows.push(["Premises ownership", profile.premisesOwnership]);
+  if (profile?.premisesOwnership === "Owned" && profile.taxDeclarationNo)
+    rows.push(["Tax declaration no.", profile.taxDeclarationNo]);
+  if (profile?.premisesOwnership && profile.premisesOwnership !== "Owned" && (profile.lessorName || profile.monthlyRent))
+    rows.push(["Lessor", [profile.lessorName, profile.lessorContactNo, profile.monthlyRent && `₱${profile.monthlyRent}/mo`].filter(Boolean).join(" · ")]);
+  if (profile?.hasEmployees === "Yes")
+    rows.push(["Employees", `${profile.maleEmployeeCount ?? 0} male, ${profile.femaleEmployeeCount ?? 0} female (${profile.employeesResidingInLguCount ?? 0} residing in LGU)`]);
+  else if (profile?.hasEmployees === "No") rows.push(["Employees", "None"]);
+  if (profile?.billiardTableCount != null) rows.push(["Billiard tables", String(profile.billiardTableCount)]);
+  if (profile?.lodgerCount != null) rows.push(["Lodgers/rooms", String(profile.lodgerCount)]);
+  if (profile?.landAreaHectares != null) rows.push(["Land area", `${profile.landAreaHectares} ha`]);
+  if (profile?.guardPostCount != null) rows.push(["Guard posts", String(profile.guardPostCount)]);
+  if (profile?.warehouseFloorAreaSqm != null) rows.push(["Floor area", `${profile.warehouseFloorAreaSqm} sqm`]);
+  if (profile?.seatingCapacity != null) rows.push(["Seating capacity", String(profile.seatingCapacity)]);
+  if (profile?.isAircon) rows.push(["Air-conditioned", profile.isAircon]);
+  if (profile?.isBranchOffice) rows.push(["Branch office", profile.isBranchOffice]);
+  if (profile?.animalCount != null) rows.push(["Number of animals", String(profile.animalCount)]);
+
   return (
-    <div style={{ marginBottom: 10 }}>
-      {address && <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>{address}</p>}
-      <table style={{ width: "100%", fontSize: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ color: colors.textSecondary, padding: "2px 0" }}>Nature of business</td>
-            <td style={{ textAlign: "right" }}>{natureOfBusiness ?? "—"}</td>
-          </tr>
-          <tr>
-            <td style={{ color: colors.textSecondary, padding: "2px 0" }}>LBT category</td>
-            <td style={{ textAlign: "right" }}>{lbtCategory ?? "—"}</td>
-          </tr>
-          <tr>
-            <td style={{ color: colors.textSecondary, padding: "2px 0" }}>
-              {applicationType === "new" ? "Capital investment" : "Gross sales (preceding year)"}
-            </td>
-            <td style={{ textAlign: "right" }}>{peso(basisAmount)}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="mb-4 rounded-2xl bg-surface-2 p-4">
+      {address && (
+        <p className="mb-2.5 flex items-center gap-1 border-b border-border pb-2.5 text-[12.5px] text-ink-soft">
+          <PinIcon className="size-3 text-ink-faint" />
+          {address}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">{label}</div>
+            <div className="text-[14px] font-bold text-ink">{value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Documents list -- shared by BPLO's initial review card and the
+// department review card.
+// ============================================================
+
+export function DocumentList({
+  documents, signedUrls,
+}: {
+  documents: { id: string; document_type: string | null }[];
+  signedUrls: (string | null)[];
+}) {
+  return (
+    <div className="mb-4">
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-soft">Documents submitted</p>
+      {documents.length === 0 ? (
+        <p className="text-[12.5px] text-ink-faint">No documents uploaded.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {documents.map((d, i) =>
+            signedUrls[i] ? (
+              <a
+                key={d.id}
+                href={signedUrls[i]!}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[12.5px] font-bold text-ink transition-colors hover:border-brand-teal hover:bg-good-bg"
+              >
+                <FileIcon className="size-3.5 text-good" />
+                {d.document_type}
+              </a>
+            ) : (
+              <span key={d.id} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12.5px] font-bold text-ink-faint">
+                <FileIcon className="size-3.5" />
+                {d.document_type} (link unavailable)
+              </span>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -32,3 +32,19 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
   if (error || !data || !data.is_active) return null;
   return data as CurrentStaff;
 }
+
+/**
+ * The office identity (label, avatar initials, "Applications" home link)
+ * shown in every dashboard page's top bar -- including the shared
+ * Business Registry page, which needs to show the right office even
+ * though it isn't role-specific itself. One place for this instead of
+ * four slightly different inline versions (the pre-redesign pages each
+ * built their own title/subtitle/initials by hand).
+ */
+export function officeIdentity(staff: CurrentStaff): { label: string; initials: string; homeHref: string } {
+  if (staff.role === "bplo") return { label: "BPLO Office", initials: "BP", homeHref: "/dashboard/bplo" };
+  if (staff.role === "treasury") return { label: "Treasury Office", initials: "TR", homeHref: "/dashboard/treasury" };
+  if (staff.role === "mayor") return { label: "Mayor's Office", initials: "MO", homeHref: "/dashboard/mayor" };
+  const dept = staff.department ?? "Department";
+  return { label: `${dept} Office`, initials: dept.slice(0, 2).toUpperCase(), homeHref: "/dashboard/department" };
+}

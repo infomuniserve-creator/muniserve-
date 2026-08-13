@@ -23,6 +23,10 @@ Real San Miguel legacy business records, not yet used by any build step in the o
 
 The actual scanned Revenue Code — the primary legal source, provided 2026-08-11 to corroborate the two derived documents above. See `revenue-code-scans/README.md` and CLAUDE.md section 7b. This is what caught a real bug in the already-seeded new-business LBT calculation, among other findings — treat this as authoritative over the JS/prompt-doc translations wherever they conflict.
 
+### official-application-form/
+
+The real, currently-live intake form San Miguel's BPLO uses, extracted 2026-08-13 straight from its GoHighLevel widget config (not a manual click-through) — full field list plus all conditional show/hide logic. See `official-application-form/README.md` and CLAUDE.md §7c (department review) for context. This is the authoritative shape for `src/app/apply/page.tsx`, which currently covers only a fraction of it — treat like the revenue-code scans: primary source, not a nice-to-have.
+
 ### unreconciled/
 
 - **`muniserve_new.docx` / `.txt`** — the "Assessment Calculation Setup Guide" referenced in CLAUDE.md §7 and §10. Describes Health Card, Signboard, Weights-and-Measures fees and Senior/PWD/BMBE discount stacking rules that **were never reconciled against the legacy fee computation code** and whose legal basis (for the discounts, specifically) hasn't been confirmed with counsel. **Do not seed any `fee_rules` from this document without that confirmation.** Kept here so it's on hand once that conversation happens, not as an active source.

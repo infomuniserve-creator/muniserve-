@@ -1,28 +1,27 @@
-import { getCurrentStaff } from "@/lib/staff";
+import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { Card, EmptyState, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { Card, ClockIcon, DashboardTopBar, EmptyState, InfoIcon, PrimaryButton, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
 import { recordPayment } from "./actions";
 
 /**
- * Treasury dashboard -- CLAUDE.md section 10 flagged this as "not yet
- * mocked up... likely a short one: view assessed amount, record payment
- * method/OR number, done." That's exactly what this is. Rule #7: Treasury
- * confirms payment and records an OR number, never adjusts the fee
- * amount -- there's deliberately no way to edit anything here but those
- * two fields plus the amount actually received.
+ * Treasury dashboard -- redesigned per the approved design concept.
+ * Rule #7: Treasury confirms payment and records an OR number, never
+ * adjusts the fee amount -- there's deliberately no way to edit anything
+ * here but those two fields plus the amount actually received.
  */
 export default async function TreasuryDashboardPage() {
   const staff = await getCurrentStaff();
   if (!staff) redirect("/login");
   if (staff.role !== "treasury") redirect("/dashboard");
 
+  const office = officeIdentity(staff);
   const supabase = await createClient();
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      "id, application_type, business:businesses(business_name, legacy_owner_name, owner:owners(full_name))"
+      "id, application_type, status, business:businesses(business_name, legacy_owner_name, owner:owners(full_name))"
     )
     .eq("lgu_id", staff.lgu_id)
     .eq("status", "pending_payment")
@@ -40,44 +39,52 @@ export default async function TreasuryDashboardPage() {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", background: colors.surface2, borderRadius: 16, padding: 24, border: `0.5px solid ${colors.border}` }}>
-      <TopBar title="Treasury office" subtitle="San Miguel, Bulacan" initials="TR" bg={colors.proBg} fg={colors.proText} rightSlot={<SignOutButton />} />
+    <div className="mx-auto max-w-3xl">
+      <DashboardTopBar
+        officeLabel={office.label}
+        officeSub="San Miguel, Bulacan"
+        initials={office.initials}
+        active="applications"
+        applicationsHref={office.homeHref}
+        rightSlot={<SignOutButton />}
+      />
 
       <StatGrid>
-        <StatCard label="Awaiting payment" value={rows.length} />
+        <StatCard label="Awaiting payment" value={rows.length} icon={<ClockIcon />} tone="warn" />
       </StatGrid>
 
-      <SectionLabel>Awaiting payment</SectionLabel>
+      <SectionHead title="Awaiting payment" />
       {rows.length === 0 ? (
-        <Card><EmptyState>Nothing waiting on payment right now.</EmptyState></Card>
+        <EmptyState>Nothing waiting on payment right now.</EmptyState>
       ) : (
-        rows.map((a) => (
-          <Card key={a.id} style={{ padding: 12, marginBottom: 10 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName(a)}</p>
-            <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
-              Owner: {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
-            </p>
-            <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
-              Fee computation engine isn&rsquo;t built yet (build order step 7) — enter the amount actually collected manually for now.
-            </p>
-            <form action={recordPayment} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <input type="hidden" name="applicationId" value={a.id} />
-              <input name="amount" type="number" step="0.01" placeholder="Amount (₱)" required style={inputStyle} />
-              <select name="method" style={inputStyle} defaultValue="Cash">
-                <option>Cash</option>
-                <option>GCash</option>
-                <option>Bank Transfer</option>
-                <option>Check</option>
-              </select>
-              <input name="orNumber" placeholder="OR number" required style={inputStyle} />
-              <button type="submit" style={actBtnStyle}>Record payment</button>
-            </form>
-          </Card>
-        ))
+        <div className="flex flex-col gap-4">
+          {rows.map((a) => (
+            <Card key={a.id} className="p-5">
+              <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName(a)}</p>
+              <p className="mb-3 text-[12.5px] text-ink-soft">
+                Owner: {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
+              </p>
+              <WorkflowStepper status={a.status} />
+              <div className="mb-4 flex items-start gap-2 rounded-2xl bg-info-bg px-4 py-3 text-[12.5px] font-bold text-info-ink">
+                <InfoIcon className="mt-0.5 size-4 shrink-0" />
+                Automatic fee computation isn&rsquo;t built yet — enter the amount actually collected manually for now.
+              </div>
+              <form action={recordPayment} className="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="applicationId" value={a.id} />
+                <input name="amount" type="number" step="0.01" placeholder="Amount (₱)" required className="h-9 w-36 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
+                <select name="method" defaultValue="Cash" className="h-9 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink">
+                  <option>Cash</option>
+                  <option>GCash</option>
+                  <option>Bank Transfer</option>
+                  <option>Check</option>
+                </select>
+                <input name="orNumber" placeholder="OR number" required className="h-9 w-36 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
+                <PrimaryButton type="submit">Record payment</PrimaryButton>
+              </form>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = { height: 32, border: `0.5px solid ${colors.border}`, borderRadius: 8, padding: "0 8px", fontSize: 12, width: 140 };
-const actBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" };

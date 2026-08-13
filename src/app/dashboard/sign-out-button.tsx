@@ -16,7 +16,7 @@ export function SignOutButton() {
   return (
     <button
       onClick={signOut}
-      style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#fff", cursor: "pointer" }}
+      className="rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-bold text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
     >
       Sign out
     </button>

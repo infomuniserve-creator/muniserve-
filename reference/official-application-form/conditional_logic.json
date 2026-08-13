@@ -1,0 +1,800 @@
+[
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "application_type",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "capital_investment",
+        "total_gross_sales",
+        "sworn_statement_of_gross_sales,_bir_itr,_afs,_vat/percentage_tax_returns"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "and",
+    "conditions": [
+      {
+        "inputValue": "New",
+        "selectedField": "application_type",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "total_gross_sales",
+        "sworn_statement_of_gross_sales,_bir_itr,_afs,_vat/percentage_tax_returns"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "New",
+        "selectedField": "application_type",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "capital_investment"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Renewal",
+        "selectedField": "application_type",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "capital_investment"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Renewal",
+        "selectedField": "application_type",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "total_gross_sales"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "total_gross_sales",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "sworn_statement_of_gross_sales,_bir_itr,_afs,_vat/percentage_tax_returns"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "is_your_main_office_address_same_as_your_business_operation_address?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "business_operation_address"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "The Same as Main Office Address",
+        "selectedField": "is_your_main_office_address_same_as_your_business_operation_address?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "business_operation_address"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Business Operation is in Different Address",
+        "selectedField": "is_your_main_office_address_same_as_your_business_operation_address?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "business_operation_address"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "business_premises_ownership",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "tax_declaration_no._or_property_identification_no.",
+        "monthly_rent",
+        "lessor_name",
+        "lessor_contact_no.",
+        "lessor_complete_address",
+        "lease_contract"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Owned",
+        "selectedField": "business_premises_ownership",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "tax_declaration_no._or_property_identification_no."
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Rented",
+        "selectedField": "business_premises_ownership",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Other",
+        "selectedField": "business_premises_ownership",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "monthly_rent",
+        "lessor_name",
+        "lessor_contact_no.",
+        "lessor_complete_address",
+        "lease_contract"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Renewal",
+        "selectedField": "application_type",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "business_location_sketch_/_vicinity_map"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "do_you_have_employees?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "total_male_employees",
+        "total_female_employees",
+        "total_employees_residing_in_lgu"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Yes",
+        "selectedField": "do_you_have_employees?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "total_male_employees",
+        "total_female_employees",
+        "total_employees_residing_in_lgu"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "No",
+        "selectedField": "do_you_have_employees?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "total_male_employees",
+        "total_female_employees",
+        "total_employees_residing_in_lgu"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "do_you_have_a_barangay_clearance?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "upload_barangay_clearance_or_permit_(if_any)"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Yes",
+        "selectedField": "do_you_have_a_barangay_clearance?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "upload_barangay_clearance_or_permit_(if_any)"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "is_your_main_office_address_same_as_your_business_operation_address?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "business_premises_ownership",
+        "do_you_have_employees?",
+        "do_you_have_a_cedula?",
+        "do_you_have_tax_incentives_from_any_government_entity?",
+        "do_you_have_a_barangay_clearance?"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "business_premises_ownership",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "do_you_have_employees?",
+        "do_you_have_a_cedula?",
+        "do_you_have_a_barangay_clearance?",
+        "do_you_have_tax_incentives_from_any_government_entity?"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "do_you_have_employees?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "do_you_have_a_cedula?",
+        "do_you_have_a_barangay_clearance?",
+        "do_you_have_tax_incentives_from_any_government_entity?"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "do_you_have_tax_incentives_from_any_government_entity?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "upload_a_copy_of_your_tax_incentives_certificate"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Yes",
+        "selectedField": "do_you_have_tax_incentives_from_any_government_entity?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "upload_a_copy_of_your_tax_incentives_certificate"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "No",
+        "selectedField": "do_you_have_tax_incentives_from_any_government_entity?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "upload_a_copy_of_your_tax_incentives_certificate"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "No, generate my Brgy. clearance",
+        "selectedField": "do_you_have_a_barangay_clearance?",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "upload_barangay_clearance_or_permit_(if_any)"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "do_you_have_tax_incentives_from_any_government_entity?",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "upload_a_government_issued_id",
+        "upload_copy_of_dti_|_sec_|_cda",
+        "lease_contract",
+        "business_location_sketch_/_vicinity_map"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Owned",
+        "selectedField": "business_premises_ownership",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide",
+      "type": "showHideFields",
+      "value": "lease_contract"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": null,
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEmpty"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "number_of_billiard_tables",
+        "number_of_lodgers_/_rooms",
+        "land_area_(hectares)",
+        "number_of_localities_with_posted_guards",
+        "floor_area_(square_meters)",
+        "seating_capacity",
+        "air-conditioned?",
+        "is_branch_office?",
+        "number_of_animals"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Billiard Hall",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "number_of_billiard_tables"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Inn/Lodge",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Dormitory/Bedspace",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Transient House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Boarding House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Pension House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Lodging House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "number_of_lodgers_/_rooms"
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Real Estate Brokerage",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Property Developer/Subdivision",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "land_area_(hectares)"
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Security Agency",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "number_of_localities_with_posted_guards"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Warehouse/Storage Facility",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Cold Storage",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "floor_area_(square_meters)"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "then",
+    "conditions": [
+      {
+        "inputValue": "Cinema/Movie Theater",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "air-conditioned?",
+        "seating_capacity"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Billiard Hall",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Inn/Lodge",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Lodging House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Dormitory/Bedspace",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Transient House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Boarding House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Pension House",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Real Estate Brokerage",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Property Developer/Subdivision",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Security Agency",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Warehouse/Storage Facility",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Cold Storage",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Cinema/Movie Theater",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Piggery/Hog Raising",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Poultry Farm",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      },
+      {
+        "inputValue": "Chicken Farm",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isNotEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Hide Multiple",
+      "type": "showHideFields",
+      "value": [
+        "number_of_billiard_tables",
+        "number_of_lodgers_/_rooms",
+        "land_area_(hectares)",
+        "number_of_localities_with_posted_guards",
+        "floor_area_(square_meters)",
+        "seating_capacity",
+        "air-conditioned?",
+        "is_branch_office?",
+        "number_of_animals"
+      ]
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Rural Bank",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Commercial Bank",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Savings Bank",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Bank Branch",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Finance Company",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Finance & Investment Company",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show",
+      "type": "showHideFields",
+      "value": "is_branch_office?"
+    }
+  },
+  {
+    "conditionalOperation": "or",
+    "conditions": [
+      {
+        "inputValue": "Piggery/Hog Raising",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Poultry Farm",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      },
+      {
+        "inputValue": "Chicken Farm",
+        "selectedField": "nature_of_business",
+        "selectedOperation": "isEqualTo"
+      }
+    ],
+    "outcome": {
+      "hideType": "Show Multiple",
+      "type": "showHideFields",
+      "value": [
+        "number_of_animals"
+      ]
+    }
+  }
+]

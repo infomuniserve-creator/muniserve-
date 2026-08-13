@@ -1,23 +1,23 @@
-import { getCurrentStaff } from "@/lib/staff";
+import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { Badge, Card, EmptyState, Row, SectionLabel, StatCard, StatGrid, TopBar, colors, peso } from "../ui";
+import { Card, CheckIcon, ClockIcon, DashboardTopBar, EmptyState, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso } from "../ui";
 import { signAndRelease } from "./actions";
 
 /**
- * Mayor's signature queue -- read-only (see bplo/page.tsx's header
- * comment). "Revenue released" sums payments.amount for released
- * applications -- the actual amount Treasury recorded as received
- * (CLAUDE.md rule #7: Treasury confirms payment, never adjusts it), not
- * the computed assessment, since those can differ if BPLO overrode a fee
- * line after the fact.
+ * Mayor's signature queue -- redesigned per the approved design concept.
+ * Read-only besides the sign-and-release action itself. "Revenue
+ * released" sums payments.amount for released applications -- the actual
+ * amount Treasury recorded as received (rule #7), not the computed
+ * assessment.
  */
 export default async function MayorDashboardPage() {
   const staff = await getCurrentStaff();
   if (!staff) redirect("/login");
   if (staff.role !== "mayor") redirect("/dashboard");
 
+  const office = officeIdentity(staff);
   const supabase = await createClient();
 
   const { data: apps } = await supabase
@@ -49,55 +49,58 @@ export default async function MayorDashboardPage() {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", background: colors.surface2, borderRadius: 16, padding: 24, border: `0.5px solid ${colors.border}` }}>
-      <TopBar title="Mayor's office" subtitle="San Miguel, Bulacan" initials="MO" bg={colors.accentBg} fg={colors.accentText} rightSlot={<SignOutButton />} />
+    <div className="mx-auto max-w-3xl">
+      <DashboardTopBar
+        officeLabel={office.label}
+        officeSub="San Miguel, Bulacan"
+        initials={office.initials}
+        active="applications"
+        applicationsHref={office.homeHref}
+        rightSlot={<SignOutButton />}
+      />
 
       <StatGrid>
-        <StatCard label="Awaiting signature" value={queue.length} />
-        <StatCard label="Released" value={released.length} />
-        <StatCard label="Revenue released" value={peso(revenueReleased)} />
+        <StatCard label="Awaiting signature" value={queue.length} icon={<ClockIcon />} tone="warn" />
+        <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />
+        <StatCard label="Revenue released" value={peso(revenueReleased)} icon={<CheckIcon />} tone="good" />
       </StatGrid>
 
-      <SectionLabel>Ready for your signature</SectionLabel>
-      <Card>
+      <div className="mb-9">
+        <SectionHead title="Ready for your signature" />
         {queue.length === 0 ? (
           <EmptyState>Nothing waiting on your signature right now.</EmptyState>
         ) : (
-          queue.map((a) => (
-            <Row key={a.id}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
-                <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>
-                  Owner: {ownerName(a)} · Paid {peso(totalPaid(a))}
-                </p>
-              </div>
-              <Badge label="Paid" status="approved" />
-              <form action={signAndRelease}>
-                <input type="hidden" name="applicationId" value={a.id} />
-                <button type="submit" style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" }}>
-                  Sign and release
-                </button>
-              </form>
-            </Row>
-          ))
+          <div className="flex flex-col gap-4">
+            {queue.map((a) => (
+              <Card key={a.id} className="p-5">
+                <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName(a)}</p>
+                <p className="mb-3 text-[12.5px] text-ink-soft">Owner: {ownerName(a)} · Paid {peso(totalPaid(a))}</p>
+                <WorkflowStepper status={a.status} />
+                <form action={signAndRelease}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <PrimaryButton type="submit"><CheckIcon />Sign and release</PrimaryButton>
+                </form>
+              </Card>
+            ))}
+          </div>
         )}
-      </Card>
+      </div>
 
       {released.length > 0 && (
-        <>
-          <SectionLabel>Recently released</SectionLabel>
+        <div>
+          <SectionHead title="Recently released" />
           <Card>
             {released.map((a) => (
               <Row key={a.id}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{businessName(a)}</p>
-                  <p style={{ fontSize: 12, color: colors.textSecondary, margin: 0 }}>Owner: {ownerName(a)}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
                 </div>
-                <Badge label="Released" status="approved" />
+                <TonePill label="Released" tone="good" />
               </Row>
             ))}
           </Card>
-        </>
+        </div>
       )}
     </div>
   );

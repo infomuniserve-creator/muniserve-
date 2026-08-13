@@ -1,8 +1,49 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { CurrentStaff } from "@/lib/staff";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type DepartmentDecision = "approved" | "approved_with_condition" | "request_more_info" | "rejected";
+
+/**
+ * Opens a review round and fans it out to every active department at once
+ * (rule #4). Shared by BPLO's "approve initial review" action and the
+ * Business Registry's walk-in action -- both land an application at
+ * pending_dept_review and need the exact same round-opening side effect,
+ * so this used to be duplicated inline in bplo/actions.ts before the
+ * walk-in feature needed it a second time.
+ *
+ * Takes the CALLER's own RLS-scoped client (not service-role) -- both
+ * call sites run as BPLO, and migration 0008's review_rounds INSERT
+ * policy + migration 0002's "bplo full access to department_reviews"
+ * policy already cover this at the database layer.
+ */
+export async function openDepartmentReviewRound(
+  supabase: SupabaseClient,
+  applicationId: string,
+  lguId: string,
+  roundNumber = 1
+) {
+  const { data: round, error: roundError } = await supabase
+    .from("review_rounds")
+    .insert({ application_id: applicationId, round_number: roundNumber })
+    .select("id")
+    .single();
+  if (roundError || !round) throw roundError ?? new Error("Failed to create review round");
+
+  const { data: departments } = await supabase
+    .from("lgu_departments")
+    .select("name")
+    .eq("lgu_id", lguId)
+    .eq("is_active", true);
+
+  if (departments?.length) {
+    const { error: fanOutError } = await supabase.from("department_reviews").insert(
+      departments.map((d) => ({ review_round_id: round.id, department: d.name, decision: "pending" }))
+    );
+    if (fanOutError) throw fanOutError;
+  }
+}
 
 /**
  * Whether every active department for an LGU has, as of its MOST RECENT

@@ -1,22 +1,76 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { getPilotLguId } from "@/lib/lgu";
 import { createServiceClient } from "@/lib/supabase/service";
+import { REQUIRED_FIELDS, isFieldCurrentlyRequired, type FieldKey } from "@/lib/application-form-logic";
 import { NextResponse } from "next/server";
+
+/** Documents are uploaded ahead of submit (via /upload-document), then referenced here by id -- one id per real document field, matching the source form's isMultipleFile: false on every upload field. */
+type DocumentFieldKey =
+  | "cedulaDoc" | "govIdDoc" | "dtiSecCdaDoc" | "leaseContractDoc" | "vicinityMapDoc"
+  | "barangayClearanceDoc" | "taxIncentivesDoc" | "swornStatementDoc" | "signatureDoc";
 
 type SubmitBody = {
   applicationType: "new" | "renewal";
   businessId?: string;
+
+  // Business Info & Registration
   businessName: string;
-  barangay?: string;
-  address?: string;
   natureOfBusiness: string;
-  lbtCategory: string;
-  basisAmount: number;
+  organizationType: string;
+  businessTaxPayment?: string;
+  registrationAuthority?: string;
+  registrationNo?: string;
+  tin?: string;
+  taxType?: string;
+  tradeName?: string;
+  capitalInvestment?: number;
+  grossSales?: number;
+
+  // Main Office Address
+  unitStreet?: string;
+  cityTown?: string;
+  barangay?: string;
+  province?: string;
+  zipCode?: string;
+
+  // Business Operation
+  businessActivity?: string[];
+  deliveryVehicleCount?: string;
+  operationAddressSame?: string;
+  operationAddress?: string;
+  businessAreaSqm?: string;
+  totalFloorAreaSqm?: string;
+  secondaryBusinessActivity?: string;
+  premisesOwnership?: string;
+  taxDeclarationNo?: string;
+  monthlyRent?: string;
+  lessorName?: string;
+  lessorContactNo?: string;
+  lessorAddress?: string;
+  hasEmployees?: string;
+  maleEmployeeCount?: number;
+  femaleEmployeeCount?: number;
+  employeesResidingInLguCount?: number;
+  hasBarangayClearance?: string;
+  hasTaxIncentives?: string;
+
+  // Nature-of-business-conditional cluster
   billiardTableCount?: number;
   lodgerCount?: number;
-  floorAreaSqm?: number;
-  documentIds: string[];
+  landAreaHectares?: number;
+  guardPostCount?: number;
+  warehouseFloorAreaSqm?: number;
+  seatingCapacity?: number;
+  isAircon?: string;         // "Yes" / "No"
+  isBranchOffice?: string;   // "Yes" / "No"
+  animalCount?: number;
+
+  declarationAccepted: boolean;
+  documents: Partial<Record<DocumentFieldKey, string>>;
 };
+
+/** Owner-identity fields (first/last name, email, gender, phone) are collected earlier in the flow via update-name/verify-otp -- not resubmitted here, so they're excluded from this route's required-field check even though they're part of the shared FieldKey/REQUIRED_FIELDS domain. applicationType and declarationAccepted are validated separately below. */
+const OWNER_IDENTITY_FIELDS = new Set<FieldKey>(["firstName", "lastName", "email", "phone", "gender"]);
 
 /**
  * Creates the application (and, for a genuinely new business, the
@@ -28,6 +82,11 @@ type SubmitBody = {
  * queue" for a document-based review, so this skips straight there.
  * Fee computation and department fan-out are later build-order steps --
  * this route only captures the submission itself.
+ *
+ * Field set and required-ness now mirror reference/official-application-
+ * form/ (the real, currently-live BPLO intake form) instead of the smaller
+ * approximation this route started with -- see application-form-logic.ts
+ * for the shared show/hide + required-field rules this validates against.
  */
 export async function POST(request: Request) {
   const ownerId = await getApplicantOwnerId();
@@ -36,13 +95,121 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as SubmitBody | null;
-  if (!body || !body.applicationType || !body.businessName || !body.natureOfBusiness) {
+  if (!body || !body.applicationType) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  if (!body.declarationAccepted) {
+    return NextResponse.json({ error: "declaration_not_accepted" }, { status: 400 });
+  }
+
+  const values: Partial<Record<FieldKey, unknown>> = {
+    applicationType: body.applicationType === "new" ? "New" : "Renewal",
+    businessName: body.businessName,
+    natureOfBusiness: body.natureOfBusiness,
+    organizationType: body.organizationType,
+    businessTaxPayment: body.businessTaxPayment,
+    registrationAuthority: body.registrationAuthority,
+    registrationNo: body.registrationNo,
+    tin: body.tin,
+    taxType: body.taxType,
+    capitalInvestment: body.capitalInvestment,
+    grossSales: body.grossSales,
+    unitStreet: body.unitStreet,
+    cityTown: body.cityTown,
+    province: body.province,
+    zipCode: body.zipCode,
+    businessActivity: body.businessActivity?.length ? body.businessActivity : undefined,
+    operationAddressSame: body.operationAddressSame,
+    operationAddress: body.operationAddress,
+    businessAreaSqm: body.businessAreaSqm,
+    totalFloorAreaSqm: body.totalFloorAreaSqm,
+    premisesOwnership: body.premisesOwnership,
+    taxDeclarationNo: body.taxDeclarationNo,
+    monthlyRent: body.monthlyRent,
+    lessorName: body.lessorName,
+    lessorContactNo: body.lessorContactNo,
+    lessorAddress: body.lessorAddress,
+    hasEmployees: body.hasEmployees,
+    maleEmployeeCount: body.maleEmployeeCount,
+    femaleEmployeeCount: body.femaleEmployeeCount,
+    employeesResidingInLguCount: body.employeesResidingInLguCount,
+    hasBarangayClearance: body.hasBarangayClearance,
+    hasTaxIncentives: body.hasTaxIncentives,
+    billiardTableCount: body.billiardTableCount,
+    lodgerCount: body.lodgerCount,
+    landAreaHectares: body.landAreaHectares,
+    guardPostCount: body.guardPostCount,
+    warehouseFloorAreaSqm: body.warehouseFloorAreaSqm,
+    seatingCapacity: body.seatingCapacity,
+    isAircon: body.isAircon,
+    isBranchOffice: body.isBranchOffice,
+    animalCount: body.animalCount,
+    // Document fields: "value" is the uploaded document's id, or undefined if not uploaded yet.
+    cedulaDoc: body.documents?.cedulaDoc,
+    govIdDoc: body.documents?.govIdDoc,
+    dtiSecCdaDoc: body.documents?.dtiSecCdaDoc,
+    leaseContractDoc: body.documents?.leaseContractDoc,
+    vicinityMapDoc: body.documents?.vicinityMapDoc,
+    barangayClearanceDoc: body.documents?.barangayClearanceDoc,
+    taxIncentivesDoc: body.documents?.taxIncentivesDoc,
+    swornStatementDoc: body.documents?.swornStatementDoc,
+  };
+
+  const missing = [...REQUIRED_FIELDS].filter(
+    (field) => !OWNER_IDENTITY_FIELDS.has(field) && field !== "declarationAccepted" && isFieldCurrentlyRequired(field, values) && isBlank(values[field])
+  );
+  if (missing.length > 0) {
+    return NextResponse.json({ error: "missing_required_fields", fields: missing }, { status: 400 });
   }
 
   const supabase = createServiceClient();
   const lguId = await getPilotLguId();
   const year = new Date().getFullYear();
+
+  const businessColumns = {
+    business_name: body.businessName,
+    nature_of_business: body.natureOfBusiness,
+    organization_type: body.organizationType ?? null,
+    business_tax_payment: body.businessTaxPayment ?? null,
+    registration_authority: body.registrationAuthority ?? null,
+    registration_no: body.registrationNo ?? null,
+    tin: body.tin ?? null,
+    tax_type: body.taxType ?? null,
+    trade_name: body.tradeName ?? null,
+    unit_street: body.unitStreet ?? null,
+    city_town: body.cityTown ?? null,
+    barangay: body.barangay ?? null,
+    province: body.province ?? null,
+    zip_code: body.zipCode ?? null,
+    business_activity: body.businessActivity?.length ? body.businessActivity : null,
+    delivery_vehicle_count: body.deliveryVehicleCount ?? null,
+    operation_address_different: body.operationAddressSame === "Business Operation is in Different Address",
+    operation_address: body.operationAddress ?? null,
+    business_area_sqm: body.businessAreaSqm ?? null,
+    total_floor_area_sqm: body.totalFloorAreaSqm ?? null,
+    secondary_business_activity: body.secondaryBusinessActivity ?? null,
+    premises_ownership: body.premisesOwnership ?? null,
+    tax_declaration_no: body.taxDeclarationNo ?? null,
+    monthly_rent: body.monthlyRent ?? null,
+    lessor_name: body.lessorName ?? null,
+    lessor_contact_no: body.lessorContactNo ?? null,
+    lessor_address: body.lessorAddress ?? null,
+    has_employees: yesNoToBoolean(body.hasEmployees),
+    male_employee_count: body.maleEmployeeCount ?? null,
+    female_employee_count: body.femaleEmployeeCount ?? null,
+    employees_residing_in_lgu_count: body.employeesResidingInLguCount ?? null,
+    has_barangay_clearance: body.hasBarangayClearance ?? null,
+    has_tax_incentives: yesNoToBoolean(body.hasTaxIncentives),
+    billiard_table_count: body.billiardTableCount ?? null,
+    lodger_count: body.lodgerCount ?? null,
+    land_area_hectares: body.landAreaHectares ?? null,
+    guard_post_count: body.guardPostCount ?? null,
+    warehouse_floor_area_sqm: body.warehouseFloorAreaSqm ?? null,
+    seating_capacity: body.seatingCapacity ?? null,
+    is_aircon: yesNoToBoolean(body.isAircon),
+    is_branch_office: yesNoToBoolean(body.isBranchOffice),
+    animal_count: body.animalCount ?? null,
+  };
 
   let businessId: string;
 
@@ -61,18 +228,11 @@ export async function POST(request: Request) {
     }
 
     const history = (business.gross_sales_history as Record<string, number> | null) ?? {};
-    history[String(year)] = body.basisAmount;
+    if (body.grossSales != null) history[String(year)] = body.grossSales;
 
     const { error: updateError } = await supabase
       .from("businesses")
-      .update({
-        business_name: body.businessName,
-        barangay: body.barangay ?? null,
-        address: body.address ?? null,
-        nature_of_business: body.natureOfBusiness,
-        lbt_category: body.lbtCategory,
-        gross_sales_history: history,
-      })
+      .update({ ...businessColumns, gross_sales_history: history })
       .eq("id", body.businessId);
     if (updateError) {
       return NextResponse.json({ error: "business_update_failed" }, { status: 500 });
@@ -82,13 +242,9 @@ export async function POST(request: Request) {
     const { data: newBusiness, error: createError } = await supabase
       .from("businesses")
       .insert({
+        ...businessColumns,
         lgu_id: lguId,
         owner_id: ownerId,
-        business_name: body.businessName,
-        barangay: body.barangay ?? null,
-        address: body.address ?? null,
-        nature_of_business: body.natureOfBusiness,
-        lbt_category: body.lbtCategory,
         is_legacy_unclaimed: false,
         is_active: true,
       })
@@ -108,13 +264,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "reference_generation_failed" }, { status: 500 });
   }
 
+  // Only the genuinely per-submission financial figures live in form_inputs,
+  // per fee_rules.basis_field's existing convention -- everything else
+  // durable about the business lives on the businesses row updated/created
+  // above.
   const formInputs = {
-    nature_of_business: body.natureOfBusiness,
-    lbt_category: body.lbtCategory,
-    basis_amount: body.basisAmount,
-    billiard_table_count: body.billiardTableCount ?? null,
-    lodger_count: body.lodgerCount ?? null,
-    floor_area_sqm: body.floorAreaSqm ?? null,
+    capital_investment: body.applicationType === "new" ? body.capitalInvestment ?? null : null,
+    gross_sales: body.applicationType === "renewal" ? body.grossSales ?? null : null,
   };
 
   const { data: application, error: appError } = await supabase
@@ -127,6 +283,7 @@ export async function POST(request: Request) {
       status: "pending_bplo_initial",
       form_inputs: formInputs,
       reference_number: referenceNumber,
+      declaration_accepted_at: new Date().toISOString(),
     })
     .select("id, reference_number")
     .single();
@@ -134,14 +291,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "application_create_failed" }, { status: 500 });
   }
 
-  if (body.documentIds?.length) {
+  const documentIds = Object.values(body.documents ?? {}).filter((id): id is string => Boolean(id));
+  if (documentIds.length > 0) {
     await supabase
       .from("documents")
       .update({ application_id: application.id })
-      .in("id", body.documentIds)
+      .in("id", documentIds)
       .is("application_id", null)
       .like("file_url", `${ownerId}/%`);
   }
 
   return NextResponse.json({ referenceNumber: application.reference_number });
+}
+
+function isBlank(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function yesNoToBoolean(value: string | undefined): boolean | null {
+  if (value === "Yes") return true;
+  if (value === "No") return false;
+  return null;
 }

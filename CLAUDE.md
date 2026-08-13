@@ -170,12 +170,51 @@ Staff dashboards (BPLO, department) need to actually display uploaded documents 
 
 ---
 
+## 7d. The applicant form was built against the wrong source (2026-08-13)
+
+`src/app/apply/page.tsx` (build order step 5) was built against `reference/MuniServe_Applicant_Flow_Prototype.html` — a mockup, not San Miguel's actual production intake form. The project owner surfaced the real form (`https://links.muniserve.ph/widget/form/LLkWXPS7wlzQ5bjDUSxZ`, a GoHighLevel widget) and it turned out to have roughly 3x the fields, most of them behind conditional show/hide logic the mockup never modeled at all.
+
+The real form's exact configuration — all 68 field definitions and all 37 conditional rules — was extracted directly from the page's server-rendered data (not read visually) and saved to `reference/official-application-form/` (see that folder's `README.md`). **Treat this the same as the revenue-code scans in `reference/revenue-code-scans/`: the primary source, not a nice-to-have** — the same "never seed/build from a derived summary alone" rule from section 7b applies here too, just for form fields instead of fee rates.
+
+The rebuild (migration `0009_official_application_form_fields.sql`, `src/lib/application-form-logic.ts`, `src/lib/san-miguel-form-options.ts`, `src/lib/business-profile.ts`, and the applicant/BPLO/department code that consumes them) added ~36 columns to `businesses`, one to `owners` (`gender`), one to `applications` (`declaration_accepted_at`), and a shared show/hide-rule evaluator so the client form and the server-side required-field check can't drift apart. Two added columns — `is_branch_office`, `is_aircon` — aren't new concepts: section 7a already named them as part of `fee_rules.applies_to`'s `key:variant` convention; they just had nowhere to be captured until now.
+
+**Scope decisions worth knowing about before touching this again:**
+- The applicant no longer self-selects an **LBT category** — the real form never asked for one either. `businesses.lbt_category` stays in the schema; BPLO gets a manual-override dropdown on the initial-review card (reusing the same `fee_rules` "LBT Schedule%" query) as a stopgap until the fee engine (build order step 7) can derive it from `nature_of_business` automatically. Don't remove that BPLO control until step 7 actually does this.
+- `First Name`/`Last Name`/`Email` are collected once per owner (on first use, or on any owner still missing an email — including pre-existing owners from before this rebuild), not resubmitted with every application. `owners.full_name` stays a single joined column rather than splitting the schema.
+- The perjury/data-privacy declaration is mandatory in this build even though the source form's own field is `required: false` — a deliberate, intentional deviation, not an oversight.
+- One rule in the source form's own conditional logic is unimplementable literally (a 16-condition `isNotEqualTo`/`or` combination that, read as exported, would fire for every value including the ones it's supposed to exempt). It's replaced by a `defaultVisible = false` rule for exactly the fields it targets — see the comment at the top of `application-form-logic.ts` before changing that file's rule list.
+- The essential-commodity discount mapping gap and the other open items in section 7a are unaffected by this — this section is about the applicant-facing form/schema, not fee computation itself.
+
+---
+
+## 7e. Staff dashboard redesign + Business Registry (2026-08-13)
+
+The staff dashboards (`src/app/dashboard/**`) were flagged as "zero design, complicated" for non-technical BPLO/department/treasury/mayor staff. Redesigned to a card-based, soft-rounded, friendly-but-professional visual language, and given a real design-concept pass (an HTML mockup, approved before any code changed) rather than iterating blind in the actual app.
+
+**Design system**, all in `src/app/globals.css`'s `@theme` block + `src/app/layout.tsx`:
+- Typography: Quicksand (headings/display/numbers) + Nunito (body/UI), via `next/font/google` — replaced Geist. Applies app-wide, not just the dashboard, so the applicant-facing pages read as the same product.
+- Palette: brand navy→teal gradient pulled from the marketing site, kept deliberately separate from the semantic good/warn/bad/info/cond colors used for status (a business/application's state should read at a glance regardless of the brand hue). Full light + dark tokens; dark mode follows `prefers-color-scheme`, no manual toggle in the real app (the mockup's toggle was a design-review aid only).
+- Components live in `src/app/dashboard/ui.tsx` (Tailwind-based, replacing the earlier inline-style prototype port) — shared across all five dashboard pages so BPLO/department/treasury/mayor/Business Registry can't visually drift apart.
+
+**Business Registry** (`src/app/dashboard/businesses/`) is new: a searchable, filterable list of every business on file, not just the ones with an application currently in flight — surfaced because BPLO had no way to just look up "is this business on file" without an active application, which matters since most of the 1,177 imported legacy businesses stay invisible until their owner claims them. Read-only for every staff role (RLS's existing "staff can view businesses/applications at their own lgu" policies from migration 0002 already cover this); a nav tab (Applications | Businesses) appears on every dashboard.
+
+Status shown per business (`src/lib/business-status.ts`) isn't a stored column — it's derived from `is_legacy_unclaimed`/`is_active`, whether an application is currently in flight, and the latest `permits.valid_until` for that business (permits expire Dec 31 of the application year, per section 6/mayor's sign-and-release — that's the authoritative "is this permit current" check, not `application_year` alone). `in_progress` is a fifth bucket beyond the four in the original design concept, checked *before* legacy/inactive, so a business BPLO is actively mid-filing-for doesn't get mislabeled.
+
+**Scope decisions from the design discussion, worth knowing about before touching this again:**
+- BPLO can start a renewal (or a reactivation/"new" permit for an inactive business) on behalf of a walk-in owner directly from a registry row (`businesses/actions.ts`'s `startWalkInApplication`) — the counter-transaction case, someone who shows up in person instead of using the phone-OTP flow. Deliberately minimal: it does **not** re-collect the ~40-field profile (already on file; editing it is out of scope for this feature) — just the one figure that changes year to year (gross sales for a renewal, capital investment for new/reactivation).
+- It skips `pending_bplo_initial` and opens the department round immediately (`initial_review_decision` is still recorded, pre-filled `approved`, for the audit trail) — BPLO is standing at the counter vouching for the documents right now, so there's no separate initial-review step left to do. The round-opening fan-out logic used to be duplicated inline in `bplo/actions.ts`; it's now shared via `review-workflow.ts`'s `openDepartmentReviewRound`.
+- The walk-in form has an *optional* mobile number field. If given, it claims the business exactly like the self-service legacy-claim flow (find-or-create an `owners` row, link it) — without it, a legacy-unclaimed business stays `is_legacy_unclaimed = true` even after this filing (see the `in_progress`-before-`legacy` classification note above for why that's still displayed correctly), because flipping that flag without a phone on file would strand the real owner with no way to ever self-serve.
+- New RLS policy, migration `0010_bplo_walkin_application_insert_policy.sql`: BPLO can now INSERT into `applications` at their own LGU (checking the referenced business belongs to that LGU too). Every `applications` row before this was created exclusively via the applicant-facing service-role route — there was no staff-side INSERT policy on `applications` at all.
+- Full new-business walk-ins (no existing `businesses` row at all) are explicitly **not** handled by this feature — the registry only ever lists existing rows, so there's nothing to click for a business that isn't on file yet. Building a staff-facing equivalent of the full applicant wizard is separate future work, not done here.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
 
 - `reference/MuniServe_Interactive_Prototype.html` — staff side: BPLO dashboard (initial review, assessment review, cross-department visibility), a generic department dashboard (locked to one department's queue), and the Mayor's signature queue. Demonstrates the access-control model directly — the "demo controls" bar in that file simulates switching logins; there is no equivalent control in the real product.
-- `reference/MuniServe_Applicant_Flow_Prototype.html` — applicant side: new vs. renewal entry point, License Number lookup, phone/OTP verification, the application form with conditional fields, and the six-stage status tracker.
+- `reference/MuniServe_Applicant_Flow_Prototype.html` — applicant side: new vs. renewal entry point, License Number lookup, phone/OTP verification, and the six-stage status tracker. **Not** the source of truth for the application form's actual fields or conditional logic — see `reference/official-application-form/` and section 7d for that; this mockup predates it and is a much smaller approximation.
 
 ---
 

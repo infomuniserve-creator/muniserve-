@@ -1,26 +1,119 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * MuniServe design tokens -- staff-dashboard redesign (see CLAUDE.md).
+ * Palette pulled from the marketing site's navy-to-teal brand gradient;
+ * semantic colors (good/warn/bad/info/cond) are deliberately separate
+ * from the brand hue so status reads at a glance regardless of theme.
+ * These are plain CSS custom properties inside @theme, so Tailwind's
+ * generated utilities (bg-brand-teal, text-ink-soft, ...) reference
+ * var(--color-*) at runtime -- the dark-mode block below only needs to
+ * redefine the token values, not any component code.
+ */
+@theme {
+  --font-sans: var(--font-nunito), -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-quicksand), -apple-system, "Segoe UI", sans-serif;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* brand */
+  --color-brand-navy: #1b3e8c;
+  --color-brand-teal: #0fb88c;
+  --color-brand-mint: #7fe8c4;
+
+  /* neutrals -- cool blue-tinted, not pure grey/white */
+  --color-bg: #f2f6fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eaf0fa;
+  --color-surface-3: #e1e9f7;
+  --color-border: #dce4f0;
+  --color-border-strong: #c1cee4;
+  --color-ink: #172142;
+  --color-ink-soft: #5b6785;
+  --color-ink-faint: #8a93ac;
+
+  /* semantic -- separate from the brand accent on purpose */
+  --color-good: #1fa971;
+  --color-good-bg: #e4f7ed;
+  --color-good-ink: #0b6b44;
+  --color-warn: #d69a1f;
+  --color-warn-bg: #fbf1dd;
+  --color-warn-ink: #7a5309;
+  --color-bad: #e1495b;
+  --color-bad-bg: #fce9ea;
+  --color-bad-ink: #a82a3b;
+  --color-info: #3b7be0;
+  --color-info-bg: #e8f0fd;
+  --color-info-ink: #1d4fa3;
+  --color-cond: #7c5cd4;
+  --color-cond-bg: #efe9fb;
+  --color-cond-ink: #5535a8;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-brand-navy: #7fa3ee;
+    --color-brand-teal: #3fe0b0;
+    --color-brand-mint: #8ff3cc;
+
+    --color-bg: #0d1426;
+    --color-surface: #151e38;
+    --color-surface-2: #1b2745;
+    --color-surface-3: #233052;
+    --color-border: #2a3a63;
+    --color-border-strong: #3c4f80;
+    --color-ink: #eaf0fc;
+    --color-ink-soft: #a6b3d6;
+    --color-ink-faint: #7883a8;
+
+    --color-good: #34d399;
+    --color-good-bg: #12301f;
+    --color-good-ink: #a7f3d0;
+    --color-warn: #f0b94a;
+    --color-warn-bg: #332507;
+    --color-warn-ink: #fbe0a5;
+    --color-bad: #fb7185;
+    --color-bad-bg: #341019;
+    --color-bad-ink: #fecbd4;
+    --color-info: #7aa6ff;
+    --color-info-bg: #101f3d;
+    --color-info-ink: #c9dbff;
+    --color-cond: #b79cf0;
+    --color-cond-bg: #241938;
+    --color-cond-ink: #e4d9fb;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: var(--color-brand-mint);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--color-brand-teal);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Native <details> rows (business registry), styled instead of relying
+   on the browser's default disclosure triangle. */
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+.chev {
+  transition: transform 0.15s;
+}
+details[open] > summary .chev {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chev {
+    transition: none;
+  }
 }

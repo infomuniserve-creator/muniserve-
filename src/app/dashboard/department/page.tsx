@@ -1,28 +1,29 @@
-import { getCurrentStaff } from "@/lib/staff";
+import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { getSignedDocumentUrl } from "@/lib/review-workflow";
+import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { BusinessProfileBlock, Card, EmptyState, SectionLabel, StatCard, StatGrid, TopBar, colors } from "../ui";
+import { BusinessProfileBlock, Card, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList, EmptyState, NotesField, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
 import { getApplicationDocuments, submitOwnDepartmentDecision } from "./actions";
 
 /**
- * Department dashboard. Now with real decision buttons (build order step
- * 6). Locked to this staff member's own department (rule #8) -- see the
- * header comment history in git blame for why this page doesn't need to
- * filter by department in the query itself: RLS already does that.
+ * Department dashboard -- redesigned per the approved design concept.
+ * Data-fetching unchanged from build order step 6; still locked to this
+ * staff member's own department (rule #8) via RLS, not a query filter.
  */
 export default async function DepartmentDashboardPage() {
   const staff = await getCurrentStaff();
   if (!staff) redirect("/login");
   if (staff.role !== "department" || !staff.department) redirect("/dashboard");
 
+  const office = officeIdentity(staff);
   const supabase = await createClient();
 
   const { data: pending } = await supabase
     .from("department_reviews")
     .select(
-      "id, decision, review_round:review_rounds(application:applications(id, application_type, form_inputs, business:businesses(business_name, legacy_owner_name, address, nature_of_business, lbt_category, owner:owners(full_name))))"
+      `id, decision, review_round:review_rounds(application:applications(id, application_type, status, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))))`
     )
     .eq("decision", "pending")
     .eq("department", staff.department);
@@ -33,109 +34,89 @@ export default async function DepartmentDashboardPage() {
       application: {
         id: string;
         application_type: string;
-        form_inputs: { basis_amount?: number } | null;
-        business: {
+        status: string;
+        form_inputs: { capital_investment?: number | null; gross_sales?: number | null } | null;
+        business: (Record<string, unknown> & {
           business_name: string;
           legacy_owner_name: string | null;
           address: string | null;
-          nature_of_business: string | null;
-          lbt_category: string | null;
           owner: { full_name: string } | null;
-        } | null;
+        }) | null;
       } | null;
     } | null;
   };
   const rows = (pending ?? []) as unknown as PendingRow[];
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", background: colors.surface2, borderRadius: 16, padding: 24, border: `0.5px solid ${colors.border}` }}>
-      <TopBar
-        title={`${staff.department} office`}
-        subtitle="San Miguel, Bulacan"
-        initials={staff.department.slice(0, 2).toUpperCase()}
-        bg={colors.proBg}
-        fg={colors.proText}
+    <div className="mx-auto max-w-3xl">
+      <DashboardTopBar
+        officeLabel={office.label}
+        officeSub="San Miguel, Bulacan"
+        initials={office.initials}
+        active="applications"
+        applicationsHref={office.homeHref}
         rightSlot={<SignOutButton />}
       />
 
       <StatGrid>
-        <StatCard label="Awaiting your review" value={rows.length} />
+        <StatCard label="Awaiting your review" value={rows.length} icon={<ClockIcon />} tone="warn" />
       </StatGrid>
 
-      <SectionLabel>Awaiting your review</SectionLabel>
+      <SectionHead title="Awaiting your review" />
       {rows.length === 0 ? (
-        <Card><EmptyState>Nothing waiting on {staff.department} right now.</EmptyState></Card>
+        <EmptyState>Nothing waiting on {staff.department} right now.</EmptyState>
       ) : (
-        rows.map((r) => {
-          const app = r.review_round?.application;
-          const biz = app?.business;
-          const owner = biz?.owner?.full_name ?? biz?.legacy_owner_name ?? "Unknown applicant";
-          return (
-            <DepartmentReviewCard
-              key={r.id}
-              departmentReviewId={r.id}
-              applicationId={app?.id ?? ""}
-              businessName={biz?.business_name ?? "(business record missing)"}
-              ownerName={owner}
-              applicationType={app?.application_type ?? ""}
-              address={biz?.address ?? null}
-              natureOfBusiness={biz?.nature_of_business ?? null}
-              lbtCategory={biz?.lbt_category ?? null}
-              basisAmount={app?.form_inputs?.basis_amount ?? null}
-            />
-          );
-        })
+        <div className="flex flex-col gap-4">
+          {rows.map((r) => {
+            const app = r.review_round?.application;
+            const biz = app?.business;
+            const owner = biz?.owner?.full_name ?? biz?.legacy_owner_name ?? "Unknown applicant";
+            return (
+              <DepartmentReviewCard
+                key={r.id}
+                departmentReviewId={r.id}
+                applicationId={app?.id ?? ""}
+                businessName={biz?.business_name ?? "(business record missing)"}
+                ownerName={owner}
+                applicationType={app?.application_type ?? ""}
+                status={app?.status ?? ""}
+                legacyAddress={biz?.address ?? null}
+                profile={biz ? mapBusinessProfile(biz) : null}
+                basisAmount={app?.form_inputs?.capital_investment ?? app?.form_inputs?.gross_sales ?? null}
+              />
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
 async function DepartmentReviewCard({
-  departmentReviewId, applicationId, businessName, ownerName, applicationType, address, natureOfBusiness, lbtCategory, basisAmount,
+  departmentReviewId, applicationId, businessName, ownerName, applicationType, status, legacyAddress, profile, basisAmount,
 }: {
-  departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string;
-  address: string | null; natureOfBusiness: string | null; lbtCategory: string | null; basisAmount: number | null;
+  departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
+  legacyAddress: string | null; profile: import("../ui").BusinessProfile | null; basisAmount: number | null;
 }) {
   const documents = applicationId ? await getApplicationDocuments(applicationId) : [];
   const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
 
   return (
-    <Card style={{ padding: 12, marginBottom: 10 }}>
-      <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px" }}>{businessName}</p>
-      <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>
+    <Card className="p-5">
+      <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName}</p>
+      <p className="mb-3 text-[12.5px] text-ink-soft">
         Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
       </p>
-      <BusinessProfileBlock address={address} natureOfBusiness={natureOfBusiness} lbtCategory={lbtCategory} applicationType={applicationType} basisAmount={basisAmount} />
+      <WorkflowStepper status={status} />
+      <BusinessProfileBlock legacyAddress={legacyAddress} profile={profile} applicationType={applicationType} basisAmount={basisAmount} />
 
-      <p style={{ fontSize: 11, fontWeight: 500, color: colors.textSecondary, marginBottom: 6 }}>Documents submitted</p>
-      {documents.length === 0 ? (
-        <p style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 10 }}>No documents uploaded.</p>
-      ) : (
-        <div style={{ marginBottom: 10 }}>
-          {documents.map((d, i) => (
-            <div key={d.id} style={{ fontSize: 12, marginBottom: 4 }}>
-              {signedUrls[i] ? (
-                <a href={signedUrls[i]!} target="_blank" rel="noreferrer" style={{ color: colors.accentText }}>{d.document_type}</a>
-              ) : (
-                <span>{d.document_type} (link unavailable)</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <DocumentList documents={documents} signedUrls={signedUrls} />
 
       <form action={submitOwnDepartmentDecision}>
         <input type="hidden" name="departmentReviewId" value={departmentReviewId} />
-        <textarea name="notes" placeholder="Notes (required if requesting info or rejecting)" style={{ width: "100%", fontSize: 12, padding: 8, borderRadius: 8, border: `0.5px solid ${colors.border}`, marginBottom: 8, minHeight: 50 }} />
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button type="submit" name="decision" value="approved" style={actBtnStyle}>Approve</button>
-          <button type="submit" name="decision" value="approved_with_condition" style={actBtnStyle}>Approve with condition</button>
-          <button type="submit" name="decision" value="request_more_info" style={actBtnStyle}>Request more info</button>
-          <button type="submit" name="decision" value="rejected" style={{ ...actBtnStyle, color: colors.dangerText }}>Reject</button>
-        </div>
+        <NotesField name="notes" placeholder="Notes (required if requesting info or rejecting)" />
+        <DecisionButtons />
       </form>
     </Card>
   );
 }
-
-const actBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: `0.5px solid ${colors.border}`, background: "#fff", cursor: "pointer" };

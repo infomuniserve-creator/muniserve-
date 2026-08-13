@@ -1,5 +1,6 @@
 import { getPilotLguId } from "@/lib/lgu";
 import { maskName } from "@/lib/mask";
+import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createServiceClient } from "@/lib/supabase/service";
 import { NextResponse } from "next/server";
 
@@ -21,32 +22,27 @@ export async function POST(request: Request) {
   const supabase = createServiceClient();
   const lguId = await getPilotLguId();
 
-  const { data: business } = await supabase
+  // BUSINESS_PROFILE_COLUMNS is a runtime string, not a literal template, so
+  // supabase-js can't infer a real row type here -- cast once at the
+  // boundary rather than fighting it field by field.
+  const { data } = await supabase
     .from("businesses")
-    .select("id, business_name, legacy_owner_name, barangay, nature_of_business, lbt_category, gross_sales_history")
+    .select(BUSINESS_PROFILE_COLUMNS)
     .eq("lgu_id", lguId)
     .eq("legacy_license_no", licenseNumber)
     .eq("is_legacy_unclaimed", true)
     .maybeSingle();
+  const business = data as unknown as (Record<string, unknown> & { legacy_owner_name: string | null }) | null;
 
   if (!business) {
     return NextResponse.json({ found: false });
   }
 
-  const salesHistory = (business.gross_sales_history as Record<string, number> | null) ?? {};
-  const latestYear = Object.keys(salesHistory).sort().at(-1);
-  const grossSales = latestYear ? salesHistory[latestYear] : null;
-
   return NextResponse.json({
     found: true,
     business: {
-      id: business.id,
-      businessName: business.business_name,
+      ...mapBusinessProfile(business),
       ownerNameMasked: business.legacy_owner_name ? maskName(business.legacy_owner_name) : "Unknown",
-      barangay: business.barangay,
-      natureOfBusiness: business.nature_of_business,
-      lbtCategory: business.lbt_category,
-      grossSales,
     },
   });
 }

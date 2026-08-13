@@ -16,6 +16,13 @@ import { NextResponse } from "next/server";
  * CLAUDE.md section 5), the owner is created from that record's name and
  * the business is claimed atomically. Otherwise a placeholder-named owner
  * is created and the client is told to collect a real name next.
+ *
+ * `needsIdentity` (was `needsName`) now also covers email: the real intake
+ * form (reference/official-application-form/) collects First/Last Name
+ * *and* Email, and owners.email existed as a column but was never
+ * populated before this. Any owner without an email on file -- brand new,
+ * or created before this field existed -- gets routed through the
+ * (expanded) identity screen once; after that it's on file for good.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -36,19 +43,20 @@ export async function POST(request: Request) {
 
   const { data: existingOwner } = await supabase
     .from("owners")
-    .select("id, full_name")
+    .select("id, full_name, email")
     .eq("phone", phone)
     .maybeSingle();
 
   let ownerId: string;
   let ownerName: string;
   let matched: boolean;
-  let needsName = false;
+  let needsIdentity = false;
 
   if (existingOwner) {
     ownerId = existingOwner.id;
     ownerName = existingOwner.full_name;
     matched = true;
+    needsIdentity = !existingOwner.email;
   } else {
     matched = false;
 
@@ -84,7 +92,7 @@ export async function POST(request: Request) {
 
       ownerId = newOwner.id;
       ownerName = newOwner.full_name;
-      needsName = false; // we have a real name from the legacy record
+      needsIdentity = true; // real name from the legacy record, but no email on file yet
     } else {
       const { data: newOwner, error: ownerError } = await supabase
         .from("owners")
@@ -96,7 +104,7 @@ export async function POST(request: Request) {
       }
       ownerId = newOwner.id;
       ownerName = newOwner.full_name;
-      needsName = true; // placeholder name, ask the applicant for their real one
+      needsIdentity = true; // placeholder name, ask the applicant for their real one (+ email)
     }
   }
 
@@ -112,7 +120,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     matched,
     ownerName,
-    needsName,
+    needsIdentity,
     businessCount: businessCount ?? 0,
   });
 }

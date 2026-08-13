@@ -1,4 +1,5 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
+import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createServiceClient } from "@/lib/supabase/service";
 import { NextResponse } from "next/server";
 
@@ -18,7 +19,7 @@ export async function GET() {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("businesses")
-    .select("id, business_name, barangay, nature_of_business, lbt_category, gross_sales_history")
+    .select(BUSINESS_PROFILE_COLUMNS)
     .eq("owner_id", ownerId)
     .eq("is_active", true);
 
@@ -26,18 +27,10 @@ export async function GET() {
     return NextResponse.json({ error: "query_failed" }, { status: 500 });
   }
 
+  // BUSINESS_PROFILE_COLUMNS is a runtime string, not a literal template, so
+  // supabase-js can't infer a real row type here -- cast once at the boundary.
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
   return NextResponse.json({
-    businesses: (data ?? []).map((b) => {
-      const history = (b.gross_sales_history as Record<string, number> | null) ?? {};
-      const latestYear = Object.keys(history).sort().at(-1);
-      return {
-        id: b.id,
-        businessName: b.business_name,
-        barangay: b.barangay,
-        natureOfBusiness: b.nature_of_business,
-        lbtCategory: b.lbt_category,
-        grossSales: latestYear ? history[latestYear] : null,
-      };
-    }),
+    businesses: rows.map(mapBusinessProfile),
   });
 }

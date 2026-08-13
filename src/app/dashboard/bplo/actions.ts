@@ -1,6 +1,7 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
+import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -48,25 +49,7 @@ export async function submitInitialReview(formData: FormData) {
   if (updateError) throw updateError;
 
   if (newStatus === "pending_dept_review") {
-    const { data: round, error: roundError } = await supabase
-      .from("review_rounds")
-      .insert({ application_id: applicationId, round_number: 1 })
-      .select("id")
-      .single();
-    if (roundError || !round) throw roundError ?? new Error("Failed to create review round");
-
-    const { data: departments } = await supabase
-      .from("lgu_departments")
-      .select("name")
-      .eq("lgu_id", staff.lgu_id)
-      .eq("is_active", true);
-
-    if (departments?.length) {
-      const { error: fanOutError } = await supabase.from("department_reviews").insert(
-        departments.map((d) => ({ review_round_id: round.id, department: d.name, decision: "pending" }))
-      );
-      if (fanOutError) throw fanOutError;
-    }
+    await openDepartmentReviewRound(supabase, applicationId, staff.lgu_id);
   }
 
   revalidatePath("/dashboard/bplo");
@@ -149,6 +132,30 @@ export async function submitDepartmentDecisionAsBplo(formData: FormData) {
     staff,
     actedOnBehalf: true,
   });
+
+  revalidatePath("/dashboard/bplo");
+}
+
+/**
+ * Manual LBT-category override -- stopgap now that the applicant form no
+ * longer asks for this (the real intake form never did either; see
+ * reference/official-application-form/README.md). Resolving Nature of
+ * Business -> LBT schedule automatically is build order step 7's job; until
+ * then, someone has to set businesses.lbt_category by hand or it's
+ * permanently null. Uses BPLO's own RLS-scoped session -- migration 0009
+ * added the "bplo can update businesses at their own lgu" policy this
+ * relies on (businesses previously had no staff write policy at all).
+ */
+export async function setLbtCategory(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const businessId = String(formData.get("businessId"));
+  const lbtCategory = String(formData.get("lbtCategory") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("businesses").update({ lbt_category: lbtCategory }).eq("id", businessId);
+  if (error) throw error;
 
   revalidatePath("/dashboard/bplo");
 }
