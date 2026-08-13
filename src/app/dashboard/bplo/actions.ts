@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
+import { notifyApplicantSms } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -36,7 +37,7 @@ export async function submitInitialReview(formData: FormData) {
       ? "pending_dept_review"
       : "returned_to_applicant";
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from("applications")
     .update({
       status: newStatus,
@@ -46,11 +47,23 @@ export async function submitInitialReview(formData: FormData) {
       initial_review_at: new Date().toISOString(),
     })
     .eq("id", applicationId)
-    .eq("status", "pending_bplo_initial");
-  if (updateError) throw updateError;
+    .eq("status", "pending_bplo_initial")
+    .select("reference_number, business:businesses(owner:owners(phone))")
+    .single();
+  if (updateError || !updated) throw updateError ?? new Error("Update failed");
 
   if (newStatus === "pending_dept_review") {
     await openDepartmentReviewRound(supabase, applicationId, staff.lgu_id);
+  } else {
+    const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
+    const phone = business?.owner?.phone;
+    if (phone) {
+      await notifyApplicantSms(
+        applicationId,
+        phone,
+        `MuniServe: your application ${updated.reference_number} was returned during initial review. Please contact the BPLO office for details on what to correct before resubmitting.`
+      );
+    }
   }
 
   revalidatePath("/dashboard/bplo");
@@ -125,7 +138,7 @@ export async function finalizeAssessment(formData: FormData) {
   const { data: application, error: fetchError } = await supabase
     .from("applications")
     .select(
-      `application_type, form_inputs, business:businesses(nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count)`
+      `reference_number, application_type, form_inputs, business:businesses(nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, owner:owners(phone))`
     )
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment")
@@ -146,6 +159,7 @@ export async function finalizeAssessment(formData: FormData) {
     billiard_table_count: number | null;
     guard_post_count: number | null;
     animal_count: number | null;
+    owner: { phone: string | null } | null;
   } | null;
   if (!business) throw new Error("Business record missing");
 
@@ -203,6 +217,20 @@ export async function finalizeAssessment(formData: FormData) {
     .eq("status", "pending_bplo_assessment");
   if (statusError) throw statusError;
 
+  if (business.owner?.phone) {
+    // Use each line's FINAL amount (override if BPLO set one), not
+    // result.total -- that total was computed before overrides, and
+    // the applicant needs to know what they actually owe.
+    const totalDue = lineRows
+      .filter((l) => l.included_in_total)
+      .reduce((sum, l) => sum + (l.overridden_amount ?? l.computed_amount), 0);
+    await notifyApplicantSms(
+      applicationId,
+      business.owner.phone,
+      `MuniServe: your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. Pay at the Treasurer's Office to continue.`
+    );
+  }
+
   revalidatePath("/dashboard/bplo");
   revalidatePath("/dashboard/treasury");
 }
@@ -245,12 +273,23 @@ export async function markReleased(formData: FormData) {
   const applicationId = String(formData.get("applicationId"));
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("applications")
     .update({ status: "released", released_at: new Date().toISOString(), released_by: staff.id })
     .eq("id", applicationId)
-    .eq("status", "pending_release");
-  if (error) throw error;
+    .eq("status", "pending_release")
+    .select("reference_number, business:businesses(owner:owners(phone))")
+    .single();
+  if (error || !updated) throw error ?? new Error("Update failed");
+
+  const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
+  if (business?.owner?.phone) {
+    await notifyApplicantSms(
+      applicationId,
+      business.owner.phone,
+      `MuniServe: your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
+    );
+  }
 
   revalidatePath("/dashboard/bplo");
   revalidatePath("/dashboard/mayor");

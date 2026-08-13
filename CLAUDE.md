@@ -305,6 +305,27 @@ This wasn't just a labeling fix — printing and release are real checkpoints th
 
 ---
 
+## 7j. Notifications (build order step 8, part 1) (2026-08-13, same day)
+
+Picked back up at build order step 8 ("Payments, permit PDF generation, notifications") — payments were already mostly done (Treasury's `recordPayment`, `application_fee_lines`), so this pass covers the notifications half. Permit PDF/QR generation is next, deliberately split out: the project owner confirmed there's no real BPLO permit template to match (unlike everything else in this project so far), so it needs its own design pass rather than being guessed at inside this same change.
+
+**New infrastructure:**
+- `src/lib/resend.ts` — `sendEmail()`, same minimal fetch-based shape as the existing `src/lib/semaphore.ts`. `RESEND_FROM_EMAIL` is a new required env var, deliberately **not** a hardcoded domain — Resend requires the sending address to be on a domain verified in that account's Domains tab, which isn't something to guess at from code. `.env.local` has a placeholder (`notifications@muniserve.ph`) that will make `sendEmail()` fail loudly (never silently) until it's swapped for a real verified address in both `.env.local` and Vercel's project env vars.
+- `src/lib/notifications.ts` — `notifyApplicantSms()` and `notifyStaffEmail()`, the only two entry points every call site uses. Both are best-effort by design: log to `notifications_log` (migration 0001 already had this table + RLS, unused until now) as `sent` or `failed`, but never throw either way. A notification failure (bad number, provider outage) must never block or roll back the workflow action that triggered it — Treasury recording a real payment can't fail because Semaphore is down.
+- `src/app/api/cron/department-reminders/route.ts` + `vercel.json` — the 24-hour department reminder CLAUDE.md section 6 already specified. Runs once daily (`0 1 * * *`, Vercel Cron), authenticated via `CRON_SECRET` (new env var, generated and added to `.env.local`; **must also be added to Vercel's project env vars** for the deployed cron to actually authenticate). Skips the entire run on Saturday/Sunday, computed in Asia/Manila time rather than the server's own UTC day (which can disagree with PH-local weekday depending on time of day). Uses `department_reviews.reminder_sent_at`/`escalated_at` — both columns existed since migration 0001 and were unused until now, so this was clearly anticipated in the original schema design.
+- **Escalation tier deliberately not implemented.** Section 10 already flagged this as unconfirmed pending the LGU's/counsel's read on RA 11032 — hardcoding "3 business days" (CLAUDE.md's own example number) would be exactly the kind of unconfirmed-real-world-fact guess this project's standing rule warns against elsewhere (fee rates, form fields, letterhead text). `escalated_at` stays unused until that number is actually confirmed.
+
+**Applicant-facing SMS**, beyond the one CLAUDE.md explicitly required (department reject/request-info) — added at every point where the ball moves into or out of the applicant's hands, a judgment call flagged here rather than silently assumed:
+- BPLO returns the application during initial review (`bplo/actions.ts`'s `submitInitialReview`)
+- A department rejects or requests more info (`review-workflow.ts`'s `submitDepartmentDecision` — the one explicitly required by section 6; also emails every active BPLO staff_user at the LGU, since there's no single "BPLO inbox" to address instead)
+- Assessment finalized — tells the applicant the actual total due, using each line's *final* amount (override if BPLO set one, not the pre-override `result.total`) (`bplo/actions.ts`'s `finalizeAssessment`)
+- Payment received, permit now printing (`treasury/actions.ts`'s `recordPayment`)
+- Permit released (`bplo/actions.ts`'s `markReleased`)
+
+Deliberately stopped there — "permit printed, sent to Mayor" and "Mayor signed, ready for release" were considered and left out: both sit between two already-notified endpoints (payment received vs. released) and would add SMS volume without giving the applicant anything actionable to do with the information.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

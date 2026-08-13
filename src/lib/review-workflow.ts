@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { notifyApplicantSms, notifyStaffEmail } from "@/lib/notifications";
 import type { CurrentStaff } from "@/lib/staff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -137,16 +138,30 @@ export async function submitDepartmentDecision(params: {
     })
     .eq("id", departmentReviewId)
     .eq("decision", "pending")
-    .select("review_round_id")
+    .select("review_round_id, department")
     .single();
   if (error || !updated) throw error ?? new Error("Decision update failed or was already made");
 
+  const service = createServiceClient();
+
   // Rule #5: a rejection/request-for-info doesn't halt the round -- nothing
-  // to advance, other departments keep going. Only check all-clear on a
-  // positive decision.
+  // to advance, other departments keep going, but the applicant and BPLO
+  // should hear about it immediately rather than waiting for the round to
+  // finish (CLAUDE.md section 6's notification rules).
+  if (decision === "rejected" || decision === "request_more_info") {
+    const { data: round } = await service
+      .from("review_rounds")
+      .select("application_id")
+      .eq("id", updated.review_round_id)
+      .single();
+    if (round) {
+      await notifyDepartmentIssue(service, round.application_id, staff.lgu_id, updated.department, decision, notes);
+    }
+    return;
+  }
+
   if (decision !== "approved" && decision !== "approved_with_condition") return;
 
-  const service = createServiceClient();
   const { data: round } = await service
     .from("review_rounds")
     .select("application_id")
@@ -161,6 +176,62 @@ export async function submitDepartmentDecision(params: {
       .update({ status: "pending_bplo_assessment" })
       .eq("id", round.application_id)
       .eq("status", "pending_dept_review");
+  }
+}
+
+/**
+ * CLAUDE.md section 6: "Immediate notification to both the applicant and
+ * BPLO the moment any department sets decision to rejected or
+ * request_more_info -- don't wait for the other departments." Applicant
+ * gets an SMS (phone is their real identity in this system); BPLO gets
+ * an email to every active bplo staff_user at the LGU, since there's no
+ * single "BPLO inbox" to address instead. Uses the service-role client
+ * throughout -- the acting department's own RLS session has no reason to
+ * be able to read full business/owner/other-staff details, so this
+ * shouldn't lean on it even though the call site already has it.
+ */
+async function notifyDepartmentIssue(
+  service: SupabaseClient,
+  applicationId: string,
+  lguId: string,
+  department: string,
+  decision: "rejected" | "request_more_info",
+  notes: string | null
+) {
+  const { data: application } = await service
+    .from("applications")
+    .select("reference_number, business:businesses(business_name, owner:owners(phone))")
+    .eq("id", applicationId)
+    .single();
+  if (!application) return;
+
+  const business = application.business as unknown as {
+    business_name: string;
+    owner: { phone: string | null } | null;
+  } | null;
+  const verbPast = decision === "rejected" ? "was rejected by" : "needs more information from";
+
+  if (business?.owner?.phone) {
+    await notifyApplicantSms(
+      applicationId,
+      business.owner.phone,
+      `MuniServe: your application ${application.reference_number} ${verbPast} ${department}. Check your application status page for details.`
+    );
+  }
+
+  const { data: bploStaff } = await service
+    .from("staff_users")
+    .select("email")
+    .eq("lgu_id", lguId)
+    .eq("role", "bplo")
+    .eq("is_active", true);
+
+  const subject = `Application ${application.reference_number}: ${department} ${decision === "rejected" ? "rejected" : "requested more info"}`;
+  const html = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) -- ${department} ${
+    decision === "rejected" ? "rejected" : "requested more information"
+  } during department review.</p>${notes ? `<p>Notes: ${notes}</p>` : ""}`;
+  for (const s of bploStaff ?? []) {
+    if (s.email) await notifyStaffEmail(applicationId, s.email, subject, html);
   }
 }
 

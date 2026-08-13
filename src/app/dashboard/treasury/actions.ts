@@ -1,6 +1,7 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
+import { notifyApplicantSms } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -40,12 +41,23 @@ export async function recordPayment(formData: FormData) {
   if (paymentError) throw paymentError;
 
   const service = createServiceClient();
-  const { error: statusError } = await service
+  const { data: updated, error: statusError } = await service
     .from("applications")
     .update({ status: "pending_printing" })
     .eq("id", applicationId)
-    .eq("status", "pending_payment");
-  if (statusError) throw statusError;
+    .eq("status", "pending_payment")
+    .select("reference_number, business:businesses(owner:owners(phone))")
+    .single();
+  if (statusError || !updated) throw statusError ?? new Error("Update failed");
+
+  const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
+  if (business?.owner?.phone) {
+    await notifyApplicantSms(
+      applicationId,
+      business.owner.phone,
+      `MuniServe: we received your payment for application ${updated.reference_number}. Your permit is now being printed.`
+    );
+  }
 
   revalidatePath("/dashboard/treasury");
   revalidatePath("/dashboard/bplo");
