@@ -29,7 +29,9 @@ const APP_STATUS_LABEL: Record<string, string> = {
   returned_to_applicant: "Returned to applicant",
   pending_bplo_assessment: "Pending assessment",
   pending_payment: "Pending payment",
+  pending_printing: "Pending printing",
   pending_mayor: "Pending mayor's signature",
+  pending_release: "Pending release",
   released: "Released",
   rejected: "Rejected",
 };

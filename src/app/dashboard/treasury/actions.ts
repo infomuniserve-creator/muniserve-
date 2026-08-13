@@ -6,14 +6,17 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
 /**
- * Treasury confirms payment (pending_payment -> pending_mayor). Rule #7:
- * Treasury is a read-only checkpoint on the FEE AMOUNT -- they record
- * that payment was received and an OR number, never adjust what's owed.
- * The payments INSERT uses Treasury's own RLS-scoped session (migration
- * 0002's "only treasury can record payments" policy enforces the role
- * check for real); advancing applications.status uses the service role
- * afterward since Treasury has no direct UPDATE rights on applications,
- * same cross-cutting-advancement pattern as the department/BPLO actions.
+ * Treasury confirms payment (pending_payment -> pending_printing, not
+ * straight to pending_mayor -- the permit still needs to be printed
+ * before it's ready for the Mayor's signature, see CLAUDE.md 7i). Rule
+ * #7: Treasury is a read-only checkpoint on the FEE AMOUNT -- they
+ * record that payment was received and an OR number, never adjust
+ * what's owed. The payments INSERT uses Treasury's own RLS-scoped
+ * session (migration 0002's "only treasury can record payments" policy
+ * enforces the role check for real); advancing applications.status uses
+ * the service role afterward since Treasury has no direct UPDATE rights
+ * on applications, same cross-cutting-advancement pattern as the
+ * department/BPLO actions.
  */
 export async function recordPayment(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -39,10 +42,11 @@ export async function recordPayment(formData: FormData) {
   const service = createServiceClient();
   const { error: statusError } = await service
     .from("applications")
-    .update({ status: "pending_mayor" })
+    .update({ status: "pending_printing" })
     .eq("id", applicationId)
     .eq("status", "pending_payment");
   if (statusError) throw statusError;
 
   revalidatePath("/dashboard/treasury");
+  revalidatePath("/dashboard/bplo");
 }

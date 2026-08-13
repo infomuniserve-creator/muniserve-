@@ -22,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div id="dashboard-shell" data-theme={dataTheme} className="min-h-screen bg-bg px-4 py-6 text-ink sm:px-6 sm:py-10">
-      <div className="mx-auto max-w-3xl">{children}</div>
+      <div className="mx-auto max-w-7xl">{children}</div>
     </div>
   );
 }

@@ -3,14 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Card, CheckIcon, ClockIcon, DashboardTopBar, EmptyState, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso } from "../ui";
-import { signAndRelease } from "./actions";
+import { signPermit } from "./actions";
 
 /**
  * Mayor's signature queue -- redesigned per the approved design concept.
- * Read-only besides the sign-and-release action itself. "Revenue
- * released" sums payments.amount for released applications -- the actual
- * amount Treasury recorded as received (rule #7), not the computed
- * assessment.
+ * Read-only besides the signing action itself, which now hands off to
+ * pending_release rather than released -- BPLO handles the actual
+ * hand-off to the applicant as its own checkpoint (CLAUDE.md 7i).
+ * "Revenue released" sums payments.amount for released applications --
+ * the actual amount Treasury recorded as received (rule #7), not the
+ * computed assessment.
  */
 export default async function MayorDashboardPage() {
   const staff = await getCurrentStaff();
@@ -76,9 +78,9 @@ export default async function MayorDashboardPage() {
                 <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName(a)}</p>
                 <p className="mb-3 text-[12.5px] text-ink-soft">Owner: {ownerName(a)} · Paid {peso(totalPaid(a))}</p>
                 <WorkflowStepper status={a.status} />
-                <form action={signAndRelease}>
+                <form action={signPermit}>
                   <input type="hidden" name="applicationId" value={a.id} />
-                  <PrimaryButton type="submit"><CheckIcon />Sign and release</PrimaryButton>
+                  <PrimaryButton type="submit"><CheckIcon />Sign</PrimaryButton>
                 </form>
               </Card>
             ))}

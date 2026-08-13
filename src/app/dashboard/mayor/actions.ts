@@ -21,11 +21,14 @@ const PAY_FREQUENCY_TO_HISTORY: Record<string, string> = {
 };
 
 /**
- * Mayor signs and releases (pending_mayor -> released). Creates the
- * permits row via the Mayor's own RLS-scoped session (migration 0002's
- * "only mayor can issue permits" policy enforces the role check for
- * real); advancing applications.status uses the service role afterward,
- * same pattern as the other role-gated actions.
+ * Mayor signs (pending_mayor -> pending_release, not straight to
+ * released -- the signed permit still has to be physically handed to
+ * the applicant, a separate BPLO checkpoint, see bplo/actions.ts's
+ * markReleased and CLAUDE.md 7i). Creates the permits row via the
+ * Mayor's own RLS-scoped session (migration 0002's "only mayor can
+ * issue permits" policy enforces the role check for real); advancing
+ * applications.status uses the service role afterward, same pattern as
+ * the other role-gated actions.
  *
  * permit_number reuses the application's own reference_number (e.g.
  * MS-2026-00001) rather than a separate counter -- one human-readable
@@ -43,9 +46,12 @@ const PAY_FREQUENCY_TO_HISTORY: Record<string, string> = {
  * real equivalent captured anywhere on a MuniServe application, and
  * guessing one from nature_of_business isn't something to do without
  * confirming the mapping against the real ordinance first (same standing
- * rule as CLAUDE.md 7b/7d for fee rates and form fields).
+ * rule as CLAUDE.md 7b/7d for fee rates and form fields). Recorded here,
+ * at signing, rather than at the later release step -- the permit is
+ * legally issued the moment the Mayor signs it; release is just the
+ * physical hand-off.
  */
-export async function signAndRelease(formData: FormData) {
+export async function signPermit(formData: FormData) {
   const staff = await getCurrentStaff();
   if (!staff || staff.role !== "mayor") throw new Error("Not authorized");
 
@@ -109,12 +115,13 @@ export async function signAndRelease(formData: FormData) {
 
   const { error: statusError } = await service
     .from("applications")
-    .update({ status: "released" })
+    .update({ status: "pending_release" })
     .eq("id", applicationId)
     .eq("status", "pending_mayor");
   if (statusError) throw statusError;
 
   revalidatePath("/dashboard/mayor");
+  revalidatePath("/dashboard/bplo");
   revalidatePath("/dashboard/businesses");
   revalidatePath("/dashboard/businesses/history");
 }

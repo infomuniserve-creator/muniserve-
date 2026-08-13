@@ -422,21 +422,31 @@ export function NotesField(props: React.TextareaHTMLAttributes<HTMLTextAreaEleme
 }
 
 // ============================================================
-// Workflow stepper -- the 7-stage pipeline every application moves
-// through. Terminal exception states (returned / rejected) don't render
-// a linear stepper -- a Badge elsewhere already communicates those.
+// Workflow stepper -- the 8-stage pipeline every application moves
+// through (CLAUDE.md section 6 / 7i). Terminal exception states
+// (returned / rejected) don't render a linear stepper -- a Badge
+// elsewhere already communicates those. "Submitted" isn't its own step
+// here -- submit-application/route.ts creates every application already
+// at pending_bplo_initial, so that status value is effectively never
+// observed on a real row; it's folded into "Initial review" below
+// rather than reserving a step nothing ever visibly occupies.
 // ============================================================
 
-const STEPS = ["Submitted", "BPLO check", "Departments", "Assessment", "Payment", "Mayor's signature", "Released"];
+const STEPS = [
+  "Initial review", "Departments review", "Assessment review", "Treasurer approval",
+  "For printing", "Mayor's signature", "For release", "Released",
+];
 
 const STATUS_STEP_INDEX: Record<string, number> = {
   submitted: 0,
-  pending_bplo_initial: 1,
-  pending_dept_review: 2,
-  pending_bplo_assessment: 3,
-  pending_payment: 4,
+  pending_bplo_initial: 0,
+  pending_dept_review: 1,
+  pending_bplo_assessment: 2,
+  pending_payment: 3,
+  pending_printing: 4,
   pending_mayor: 5,
-  released: 6,
+  pending_release: 6,
+  released: 7,
 };
 
 export function WorkflowStepper({ status }: { status: string }) {

@@ -50,24 +50,20 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
     );
   }
 
-  // Collapse the two payment-related statuses into one visual stage.
+  // One visual stage per real status -- matches the staff-side pipeline
+  // (CLAUDE.md 7i) 1:1 now that printing and release are their own
+  // checkpoints, so no merging/translation layer is needed here anymore.
   const visualStages = [
     { key: "pending_bplo_initial", label: "Initial review" },
     { key: "pending_dept_review", label: "Department review" },
-    { key: "assessment", label: "Assessment and payment" },
+    { key: "pending_bplo_assessment", label: "Assessment" },
+    { key: "pending_payment", label: "Payment" },
+    { key: "pending_printing", label: "Printing your permit" },
     { key: "pending_mayor", label: "Mayor's signature" },
+    { key: "pending_release", label: "Ready for release" },
     { key: "released", label: "Released" },
   ];
-  const statusToVisualKey: Record<string, string> = {
-    pending_bplo_initial: "pending_bplo_initial",
-    pending_dept_review: "pending_dept_review",
-    pending_bplo_assessment: "assessment",
-    pending_payment: "assessment",
-    pending_mayor: "pending_mayor",
-    released: "released",
-  };
-  const currentKey = statusToVisualKey[application.status] ?? null;
-  const currentIdx = currentKey ? visualStages.findIndex((s) => s.key === currentKey) : -1;
+  const currentIdx = visualStages.findIndex((s) => s.key === application.status);
 
   if (application.status === "returned_to_applicant") {
     return (
@@ -115,7 +111,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
           );
         })}
       </div>
-      {currentKey === "pending_dept_review" && <DeptReviewNote applicationId={application.id} />}
+      {application.status === "pending_dept_review" && <DeptReviewNote applicationId={application.id} />}
     </Shell>
   );
 }

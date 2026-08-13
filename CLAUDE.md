@@ -80,9 +80,13 @@ submitted
       → pending_dept_review     (loops here on partial resubmission — only rejecting depts re-notified)
       → pending_bplo_assessment (once ALL active departments approve/approve-with-condition)
         → pending_payment       (BPLO finalizes fee assessment, can override amounts)
-          → pending_mayor       (Treasury confirms payment received, cannot alter fees)
-            → released          (Mayor signs, permit PDF + QR generated)
+          → pending_printing    (Treasury confirms payment received, cannot alter fees)
+            → pending_mayor     (BPLO confirms the physical permit is printed)
+              → pending_release (Mayor signs — permit + permit_history rows created here)
+                → released      (BPLO confirms the signed permit was handed to the applicant)
 ```
+
+See section 7i for why `pending_printing`/`pending_release` exist and who performs each one — this diagram was originally shorter (`pending_payment → pending_mayor → released` directly) before that pass.
 
 Each pass through `pending_dept_review` is one row in `review_rounds`. `department_reviews` rows belong to a round, so round 2 only creates rows for the departments that need to re-review — the ones that already approved in round 1 are not touched.
 
@@ -268,7 +272,32 @@ Second view added to the Businesses section, alongside the card-based Directory 
 
 **Also addressed the same day, from the same screenshots** — the project owner noted "the rest of the uploads only shows when all required fields has been filled up," matching the real form's own progressive disclosure. `apply/page.tsx` now computes `readyForDocuments` (every currently-required, currently-visible, non-document field has a value) and hides the entire Documents-to-submit / Signature / Declaration / Submit block behind it, showing a plain "fill in the required fields above" notice instead. Document fields themselves are excluded from that check (nothing can be uploaded to a section that isn't shown yet), and `declarationAccepted` isn't a prerequisite for showing its own checkbox.
 
-Not yet done, flagged for later rather than guessed: the real form's screenshots show "Business Premises Ownership" *without* a required asterisk, which may conflict with `premisesOwnership` currently being in `REQUIRED_FIELDS` — worth checking against `reference/official-application-form/fields.json` directly before changing it either way. Also out of scope here: the real form's navy header banner, two-column field grid, and Cloudflare bot-protection widget — this pass was about field placement/data-flow correctness, not a pixel-parity visual rebuild (a fair follow-up if wanted, but a separately-scoped one).
+Not yet done, flagged for later rather than guessed: the real form's screenshots show "Business Premises Ownership" *without* a required asterisk, which may conflict with `premisesOwnership` currently being in `REQUIRED_FIELDS` — worth checking against `reference/official-application-form/fields.json` directly before changing it either way. Also out of scope here: the real form's two-column field grid and Cloudflare bot-protection widget — this pass was about field placement/data-flow correctness, not a pixel-parity visual rebuild (a fair follow-up if wanted, but a separately-scoped one).
+
+**Follow-up, same day — the LGU letterhead banner was still missing.** The project owner caught that the real form's header (Republic of Philippines / Province of Bulacan / Municipality of San Miguel Bulacan / Office of the Municipal BPLO, plus "Unified Application Form for Business Permit / Tax Year <year>") hadn't actually been added anywhere. Added as `LguBanner()` in `apply/page.tsx`, rendered once above every screen (not just the form step) rather than per-screen like `Head`. Tax year is `new Date().getFullYear()`, not a hardcoded "2026" — it won't need a manual edit every January. **Flagged, not yet fixed:** "Municipality of San Miguel Bulacan" is hardcoded text in that component. Fine for this single-LGU pilot, but the moment a second LGU onboards, this needs to read from the LGU's own record instead of being baked into the component — noted here so it isn't forgotten, not fixed yet since MuniServe is still single-tenant in practice.
+
+---
+
+## 7i. Two missing pipeline stages: printing and release (2026-08-13, same day)
+
+The project owner flagged two problems with the staff-facing pipeline (`WorkflowStepper` in `dashboard/ui.tsx`, rendered on every application card across BPLO/department/treasury/mayor): the BPLO dashboard's own stat-card row listed "Assessment review" *before* "In dept. review" — wrong order, a bug carried over verbatim from `reference/MuniServe_Interactive_Prototype.html`'s own stat-card ordering (line 145 of that file has the same bug) — and the pipeline was missing two real stages entirely: **printing** the physical permit and **releasing** it to the applicant. The full corrected sequence, as given: Initial Review → Departments Review → Assessment Review → Treasurer Approval → For Printing → Mayor's Signature → For Release → Released.
+
+This wasn't just a labeling fix — printing and release are real checkpoints that didn't exist anywhere in the state machine before this. Previously, Treasury's payment confirmation (`recordPayment`) advanced straight to `pending_mayor`, and the Mayor's own action (`signAndRelease`) both signed *and* released in one step. Split via migration `0013_printing_release_pipeline_stages.sql`, which adds `pending_printing`/`pending_release` to `applications.status`'s check constraint plus `printed_at`/`printed_by`/`released_at`/`released_by` audit columns (same reviewer_id/reviewed_at-style pattern used elsewhere):
+
+- **Treasury's `recordPayment`** now advances `pending_payment → pending_printing` instead of straight to `pending_mayor`.
+- **New: BPLO's `markPrinted`** (`pending_printing → pending_mayor`) — a plain confirmation, no judgment call involved, just "the physical permit is printed and ready to go to the Mayor." Uses BPLO's own RLS-scoped session, same as `submitInitialReview`.
+- **Mayor's action, renamed `signAndRelease` → `signPermit`**, now advances `pending_mayor → pending_release` instead of `→ released`. The `permits` row and the `permit_history` append still happen here, at signing — that's genuinely when the permit is legally issued; release is just the physical hand-off, so there's no reason to move that side effect to the later step.
+- **New: BPLO's `markReleased`** (`pending_release → released`) — the actual final step, confirming the signed permit was handed to the applicant. No new side effects beyond the status flip + audit columns, since `permits`/`permit_history` were already written at signing.
+
+**Who owns printing and release** was a judgment call, not specified by the project owner — decided rather than asked, since both are front-counter mechanics BPLO already owns (they run initial review and assessment; Treasury and the Mayor's roles stay exactly as narrow as before, one action each). Worth revisiting if it turns out Treasury or a records office actually handles printing in practice.
+
+**Everywhere the pipeline is displayed, updated to match:**
+- `dashboard/ui.tsx`'s `WorkflowStepper`: 8 steps now (was 7 — "Submitted" was dropped as its own step, since `submit-application/route.ts` creates every application already at `pending_bplo_initial` and that status value is essentially never observed on a real row).
+- `status/[reference]/page.tsx` (the applicant-facing tracker): also updated to the same 8 real statuses, with plainer applicant-facing wording ("Printing your permit," "Ready for release") instead of the staff dashboard's more literal internal terms ("For Printing," "Treasurer Approval") — these are two different audiences reading the same underlying state, not one pipeline description reused verbatim. This was a required fix, not optional polish: without it, an application sitting in the two new statuses would have shown a blank/stuck progress bar to the applicant (`currentIdx` not found in the old 5-stage list).
+- `dashboard/businesses/page.tsx`'s `APP_STATUS_LABEL` map: added labels for both new statuses (has a raw-status fallback, so this wasn't strictly required, but keeping every status labeled is the existing convention).
+- BPLO's dashboard gained two new sections, "Ready to print" and "Ready to release" — simple confirm-and-advance lists (`Row` + a single button), not full review cards, since neither step involves a decision.
+
+**Also fixed, same request:** the dashboard shell (`dashboard/layout.tsx`) wrapped every staff page in `max-w-3xl` (768px) — the project owner asked to "maximize the width" since review cards (business profile grid, document lists, the now-8-step pipeline) felt constricted. Widened to `max-w-7xl` (1280px).
 
 ---
 

@@ -8,10 +8,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SignOutButton } from "../sign-out-button";
 import {
-  BuildingIcon, BusinessProfileBlock, Card, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList,
-  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso,
+  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList,
+  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso,
 } from "../ui";
-import { finalizeAssessment, getApplicationDocuments, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
+import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 
 /**
  * BPLO dashboard -- redesigned per the approved design concept (card-based
@@ -41,6 +41,8 @@ export default async function BploDashboardPage() {
   const initial = all.filter((a) => a.status === "pending_bplo_initial");
   const assessment = all.filter((a) => a.status === "pending_bplo_assessment");
   const inDeptReview = all.filter((a) => a.status === "pending_dept_review");
+  const printing = all.filter((a) => a.status === "pending_printing");
+  const forRelease = all.filter((a) => a.status === "pending_release");
   const returned = all.filter((a) => a.status === "returned_to_applicant");
   const released = all.filter((a) => a.status === "released");
 
@@ -115,9 +117,11 @@ export default async function BploDashboardPage() {
 
       <StatGrid>
         <StatCard label="Initial review" value={initial.length} icon={<ClockIcon />} tone="warn" />
-        <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />
         <StatCard label="In dept. review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />
-        <StatCard label="Released" value={released.length} icon={<ClockIcon />} tone="good" />
+        <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />
+        <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="warn" />
+        <StatCard label="For release" value={forRelease.length} icon={<ClockIcon />} tone="info" />
+        <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />
       </StatGrid>
 
       <div className="mb-9">
@@ -218,6 +222,46 @@ export default async function BploDashboardPage() {
           </div>
         )}
       </div>
+
+      {printing.length > 0 && (
+        <div className="mb-9">
+          <SectionHead title="Ready to print" sub="Paid — waiting on the physical permit before it goes to the Mayor" />
+          <Card>
+            {printing.map((a) => (
+              <Row key={a.id}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+                </div>
+                <form action={markPrinted}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit">Mark as printed</MiniButton>
+                </form>
+              </Row>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {forRelease.length > 0 && (
+        <div className="mb-9">
+          <SectionHead title="Ready to release" sub="Signed by the Mayor — waiting to be handed to the applicant" />
+          <Card>
+            {forRelease.map((a) => (
+              <Row key={a.id}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+                </div>
+                <form action={markReleased}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit">Mark as released</MiniButton>
+                </form>
+              </Row>
+            ))}
+          </Card>
+        </div>
+      )}
 
       {returned.length > 0 && (
         <div className="mb-9">

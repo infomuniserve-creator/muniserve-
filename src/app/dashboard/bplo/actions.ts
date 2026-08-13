@@ -207,6 +207,56 @@ export async function finalizeAssessment(formData: FormData) {
   revalidatePath("/dashboard/treasury");
 }
 
+/**
+ * BPLO confirms the physical permit has been printed (pending_printing ->
+ * pending_mayor), ready to go to the Mayor for signature. See CLAUDE.md
+ * 7i for why this checkpoint exists at all -- it didn't before, Treasury's
+ * payment confirmation used to jump straight to pending_mayor. Uses
+ * BPLO's own RLS-scoped session, same as submitInitialReview above.
+ */
+export async function markPrinted(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const applicationId = String(formData.get("applicationId"));
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("applications")
+    .update({ status: "pending_mayor", printed_at: new Date().toISOString(), printed_by: staff.id })
+    .eq("id", applicationId)
+    .eq("status", "pending_printing");
+  if (error) throw error;
+
+  revalidatePath("/dashboard/bplo");
+}
+
+/**
+ * BPLO confirms the signed permit has been handed to the applicant
+ * (pending_release -> released) -- the actual final step, separate from
+ * the Mayor's signature itself (CLAUDE.md 7i). The permits/permit_history
+ * rows were already created at signing (mayor/actions.ts's signPermit);
+ * this is just the status flip plus who/when for the audit trail.
+ */
+export async function markReleased(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const applicationId = String(formData.get("applicationId"));
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("applications")
+    .update({ status: "released", released_at: new Date().toISOString(), released_by: staff.id })
+    .eq("id", applicationId)
+    .eq("status", "pending_release");
+  if (error) throw error;
+
+  revalidatePath("/dashboard/bplo");
+  revalidatePath("/dashboard/mayor");
+  revalidatePath("/dashboard/businesses");
+}
+
 /** BPLO can act on any department's behalf (rule #9) -- same shape as a department's own decision, tagged acted_on_behalf. */
 export async function submitDepartmentDecisionAsBplo(formData: FormData) {
   const staff = await getCurrentStaff();
