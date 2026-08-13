@@ -2,12 +2,14 @@ import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { getLbtCategoryOptions } from "@/lib/lbt-categories";
+import { computeApplicationFees, type FeeComputationResult } from "@/lib/fee-engine";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { SignOutButton } from "../sign-out-button";
 import {
   BuildingIcon, BusinessProfileBlock, Card, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList,
-  EmptyState, MiniButton, NotesField, PrimaryButton, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper,
+  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso,
 } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 
@@ -140,20 +142,18 @@ export default async function BploDashboardPage() {
               />
             ))}
             {assessment.map((a) => (
-              <Card key={a.id} className="p-5">
-                <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName(a)}</p>
-                <p className="mb-3 text-[12.5px] text-ink-soft">
-                  Owner: {ownerName(a)} · {a.application_type === "new" ? "New" : "Renewal"}
-                </p>
-                <WorkflowStepper status={a.status} />
-                <div className="mb-4 flex items-start gap-2 rounded-2xl bg-info-bg px-4 py-3 text-[12.5px] font-bold text-info-ink">
-                  Automatic fee computation isn&rsquo;t switched on yet — assess the amount manually with the treasury team, then finalize below.
-                </div>
-                <form action={finalizeAssessment}>
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
-                </form>
-              </Card>
+              <AssessmentCard
+                key={a.id}
+                applicationId={a.id}
+                businessName={businessName(a)}
+                ownerName={ownerName(a)}
+                applicationType={a.application_type}
+                status={a.status}
+                business={biz(a)}
+                formInputs={a.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null}
+                lguId={staff.lgu_id}
+                supabase={supabase}
+              />
             ))}
           </div>
         )}
@@ -236,6 +236,119 @@ export default async function BploDashboardPage() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Fee assessment card -- build order step 7. Computes a live preview
+ * with the fee engine (src/lib/fee-engine.ts) every time this renders;
+ * nothing is written to application_fee_lines until "Finalize
+ * assessment" is submitted (finalizeAssessment re-runs the computation
+ * server-side rather than trusting this preview). A blocked result
+ * (missing LBT category, most commonly) hides the finalize form
+ * entirely and links straight to where BPLO can fix it, instead of
+ * letting the click fail with a thrown error.
+ */
+async function AssessmentCard({
+  applicationId, businessName, ownerName, applicationType, status, business, formInputs, lguId, supabase,
+}: {
+  applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
+  business: (Record<string, unknown> & { id: string }) | null;
+  formInputs: { capital_investment?: number | null; gross_sales?: number | null } | null;
+  lguId: string;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+}) {
+  const result: FeeComputationResult = business
+    ? await computeApplicationFees(supabase, {
+        lguId,
+        applicationType: applicationType as "new" | "renewal",
+        capitalInvestment: formInputs?.capital_investment ?? null,
+        grossSales: formInputs?.gross_sales ?? null,
+        business: {
+          natureOfBusiness: (business.nature_of_business as string | null) ?? null,
+          lbtCategory: (business.lbt_category as string | null) ?? null,
+          organizationType: (business.organization_type as string | null) ?? null,
+          isBranchOffice: (business.is_branch_office as boolean | null) ?? null,
+          isAircon: (business.is_aircon as boolean | null) ?? null,
+          seatingCapacity: (business.seating_capacity as number | null) ?? null,
+          lodgerCount: (business.lodger_count as number | null) ?? null,
+          landAreaHectares: (business.land_area_hectares as number | null) ?? null,
+          warehouseFloorAreaSqm: (business.warehouse_floor_area_sqm as number | null) ?? null,
+          totalFloorAreaSqm: (business.total_floor_area_sqm as string | null) ?? null,
+          billiardTableCount: (business.billiard_table_count as number | null) ?? null,
+          guardPostCount: (business.guard_post_count as number | null) ?? null,
+          animalCount: (business.animal_count as number | null) ?? null,
+        },
+      })
+    : { ok: false, blockedReason: "Business record missing." };
+
+  return (
+    <Card className="p-5">
+      <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName}</p>
+      <p className="mb-3 text-[12.5px] text-ink-soft">
+        Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
+      </p>
+      <WorkflowStepper status={status} />
+
+      {!result.ok ? (
+        <div className="mb-1 flex items-start gap-2 rounded-2xl bg-warn-bg px-4 py-3 text-[12.5px] font-bold text-warn-ink">
+          <InfoIcon className="mt-0.5 size-4 shrink-0" />
+          <span>
+            {result.blockedReason}
+            {business && (
+              <>
+                {" "}
+                <Link href="/dashboard/businesses" className="underline">Open the Business Registry</Link>.
+              </>
+            )}
+          </span>
+        </div>
+      ) : (
+        <form action={finalizeAssessment}>
+          <input type="hidden" name="applicationId" value={applicationId} />
+          <div className="mb-3 divide-y divide-border rounded-2xl border border-border">
+            {result.lines.map((line) => (
+              <div key={line.feeRuleId} className="flex flex-wrap items-center gap-2 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-bold text-ink">{line.feeRuleName}</p>
+                  {!line.includedInTotal && <p className="text-[11px] text-ink-faint">Paid at a physical counter — not part of the online total.</p>}
+                  {line.note && <p className="text-[11px] text-warn-ink">{line.note}</p>}
+                </div>
+                <span className="font-display text-[15px] font-bold tabular-nums text-brand-navy">{peso(line.amount)}</span>
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <input
+                    type="number"
+                    step="0.01"
+                    name={`override_${line.feeRuleId}`}
+                    placeholder="Override (₱)"
+                    className="h-8 w-28 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
+                  />
+                  <input
+                    type="text"
+                    name={`overrideReason_${line.feeRuleId}`}
+                    placeholder="Reason for override"
+                    className="h-8 flex-1 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {result.warnings.length > 0 && (
+            <div className="mb-3 flex flex-col gap-1 rounded-2xl bg-info-bg px-4 py-3 text-[12px] font-bold text-info-ink">
+              {result.warnings.map((w, i) => <span key={i}>{w}</span>)}
+            </div>
+          )}
+
+          <div className="mb-4 flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
+            <span className="text-[12.5px] font-bold text-ink-soft">Total due online</span>
+            <span className="font-display text-[20px] font-bold tabular-nums text-ink">{peso(result.total)}</span>
+          </div>
+
+          <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
+        </form>
+      )}
+    </Card>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
+import { computeApplicationFees } from "@/lib/fee-engine";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -98,9 +99,21 @@ export async function resubmitToDepartments(formData: FormData) {
 
 /**
  * Finalizes the fee assessment (pending_bplo_assessment -> pending_payment).
- * The fee computation engine is build order step 7, not built yet -- this
- * only wires the status transition itself. Nothing here computes or
- * stores fee amounts; application_fee_lines stays empty until step 7 lands.
+ * Build order step 7's fee engine (src/lib/fee-engine.ts) computes the
+ * lines; this action re-runs it server-side rather than trusting anything
+ * the form posts back (the page's own preview -- computeApplicationFees
+ * called again below, not read from hidden fields -- is what BPLO actually
+ * saw, but a client could in principle edit hidden inputs, so only the
+ * override_<feeRuleId>/overrideReason_<feeRuleId> fields, the ones meant
+ * to be edited, are trusted from the request).
+ *
+ * Uses BPLO's own RLS-scoped session to read fee_rules/fee_rule_brackets/
+ * businesses/applications (all already staff-readable); service role only
+ * for the application_fee_lines INSERT, since there's no staff insert
+ * policy on it at all -- computing/recording the assessment is a system
+ * step, not something any role has direct write rights to on their own
+ * (rule #7: only BPLO can *override* a line, via overridden_amount, which
+ * this does write with the acting BPLO's own staff.id).
  */
 export async function finalizeAssessment(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -109,14 +122,89 @@ export async function finalizeAssessment(formData: FormData) {
   const applicationId = String(formData.get("applicationId"));
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const { data: application, error: fetchError } = await supabase
+    .from("applications")
+    .select(
+      `application_type, form_inputs, business:businesses(nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count)`
+    )
+    .eq("id", applicationId)
+    .eq("status", "pending_bplo_assessment")
+    .single();
+  if (fetchError || !application) throw fetchError ?? new Error("Application not found or not awaiting assessment");
+
+  const business = application.business as unknown as {
+    nature_of_business: string | null;
+    lbt_category: string | null;
+    organization_type: string | null;
+    is_branch_office: boolean | null;
+    is_aircon: boolean | null;
+    seating_capacity: number | null;
+    lodger_count: number | null;
+    land_area_hectares: number | null;
+    warehouse_floor_area_sqm: number | null;
+    total_floor_area_sqm: string | null;
+    billiard_table_count: number | null;
+    guard_post_count: number | null;
+    animal_count: number | null;
+  } | null;
+  if (!business) throw new Error("Business record missing");
+
+  const formInputs = application.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null;
+
+  const result = await computeApplicationFees(supabase, {
+    lguId: staff.lgu_id,
+    applicationType: application.application_type as "new" | "renewal",
+    capitalInvestment: formInputs?.capital_investment ?? null,
+    grossSales: formInputs?.gross_sales ?? null,
+    business: {
+      natureOfBusiness: business.nature_of_business,
+      lbtCategory: business.lbt_category,
+      organizationType: business.organization_type,
+      isBranchOffice: business.is_branch_office,
+      isAircon: business.is_aircon,
+      seatingCapacity: business.seating_capacity,
+      lodgerCount: business.lodger_count,
+      landAreaHectares: business.land_area_hectares,
+      warehouseFloorAreaSqm: business.warehouse_floor_area_sqm,
+      totalFloorAreaSqm: business.total_floor_area_sqm,
+      billiardTableCount: business.billiard_table_count,
+      guardPostCount: business.guard_post_count,
+      animalCount: business.animal_count,
+    },
+  });
+  if (!result.ok) throw new Error(result.blockedReason);
+
+  const lineRows = result.lines.map((line) => {
+    const overrideRaw = String(formData.get(`override_${line.feeRuleId}`) ?? "").trim();
+    const overriddenAmount = overrideRaw !== "" ? Number(overrideRaw) : null;
+    const overrideReason = overriddenAmount != null ? String(formData.get(`overrideReason_${line.feeRuleId}`) ?? "").trim() || null : null;
+    return {
+      application_id: applicationId,
+      fee_rule_id: line.feeRuleId,
+      computed_amount: line.amount,
+      overridden_amount: overriddenAmount,
+      override_reason: overrideReason,
+      overridden_by: overriddenAmount != null ? staff.id : null,
+      overridden_at: overriddenAmount != null ? new Date().toISOString() : null,
+      included_in_total: line.includedInTotal,
+    };
+  });
+
+  const service = createServiceClient();
+  if (lineRows.length > 0) {
+    const { error: insertError } = await service.from("application_fee_lines").insert(lineRows);
+    if (insertError) throw insertError;
+  }
+
+  const { error: statusError } = await service
     .from("applications")
     .update({ status: "pending_payment" })
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment");
-  if (error) throw error;
+  if (statusError) throw statusError;
 
   revalidatePath("/dashboard/bplo");
+  revalidatePath("/dashboard/treasury");
 }
 
 /** BPLO can act on any department's behalf (rule #9) -- same shape as a department's own decision, tagged acted_on_behalf. */
