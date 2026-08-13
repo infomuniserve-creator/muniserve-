@@ -112,7 +112,35 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
         })}
       </div>
       {application.status === "pending_dept_review" && <DeptReviewNote applicationId={application.id} />}
+      {application.status === "released" && <ReleasedNote applicationId={application.id} />}
     </Shell>
+  );
+}
+
+/** Matches the prototype's "Permit released -- Download your permit or pick it up at the BPLO counter" copy. pdf_url can still be null if PDF generation failed at signing time (best-effort, see mayor/actions.ts's signPermit) -- falls back to the counter-pickup line rather than a dead link. */
+async function ReleasedNote({ applicationId }: { applicationId: string }) {
+  const supabase = createServiceClient();
+  const { data: permit } = await supabase.from("permits").select("pdf_url").eq("application_id", applicationId).maybeSingle();
+
+  return (
+    <Card>
+      <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Permit released</p>
+      <p style={{ fontSize: 12, color: "#6b7280", marginBottom: permit?.pdf_url ? 10 : 0 }}>
+        {permit?.pdf_url
+          ? "Download your permit below, or pick up a physical copy at the BPLO counter."
+          : "Pick up your permit at the BPLO counter."}
+      </p>
+      {permit?.pdf_url && (
+        <a
+          href={permit.pdf_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: "inline-block", fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#0C447C", color: "#fff", fontWeight: 600, textDecoration: "none" }}
+        >
+          Download permit (PDF)
+        </a>
+      )}
+    </Card>
   );
 }
 

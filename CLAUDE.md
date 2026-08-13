@@ -326,6 +326,26 @@ Deliberately stopped there — "permit printed, sent to Mayor" and "Mayor signed
 
 ---
 
+## 7k. Permit PDF + QR generation (build order step 8, part 2) (2026-08-13, same day)
+
+Finishes build order step 8. No real BPLO permit template exists to match (confirmed with the project owner), unlike everything else built so far — this is a from-scratch design (`src/lib/permit-pdf.ts`), explicitly a reasonable first draft, not a pixel-locked final.
+
+**Libraries**: `pdf-lib` + `qrcode`, both pure-JS with no native dependencies (no Puppeteer/Chromium) — runs in a Vercel serverless function with zero extra configuration, unlike most PDF-from-HTML approaches.
+
+**Layout**: letterhead matching `apply/page.tsx`'s `LguBanner` (same hardcoded-LGU-name limitation flagged in 7h applies here too — not re-fixed twice), permit number, a details table (business name, owner/representative, nature of business, address, application type, dates), certifying body text, a QR code + "Scan to verify," and a Mayor's signature line.
+
+**QR code links to a new public page, `/verify/[reference]`** — deliberately unauthenticated, unlike `/status/[reference]`. The whole point of a QR code on a physically posted permit is that anyone scanning it (an inspector, a customer) can confirm it's real without being signed in as the applicant. Shows only business name, permit number, dates, and a Valid/Expired badge — nothing financial, nothing personally identifying beyond the business's own name (already posted publicly on the permit itself). Uses the service-role client, since there's no owner session to scope a normal RLS-authenticated read to on a public page.
+
+**Storage**: new `permit-pdfs` bucket (migration `0014_permit_pdfs_bucket.sql`), **public** — a deliberate contrast with the private `application-documents` bucket (migration 0007). Once signed, a permit is meant to be freely downloadable/shareable, and the QR verification link only works if the PDF (and QR image) it points at doesn't require auth either. Uploads still only ever happen via service-role server code (`signPermit`) — public means public *read*, not public write.
+
+**Wired into `mayor/actions.ts`'s `signPermit`**, right after the `permits` row insert: generates both assets, uploads them, then updates that same row's `pdf_url`/`qr_code_url`. Wrapped in try/catch, not left to throw — the permit is already legally issued the moment the insert above succeeds, so a PDF renderer or upload bug must never undo or block the actual signature. A failure here just leaves both URLs null (logged via `console.error`) until retried or fixed, rather than rolling back a real signed permit. `/status/[reference]` shows a "Download permit (PDF)" link once `released`, falling back to "pick up at the BPLO counter" if `pdf_url` is still null for any reason.
+
+**A real bug caught before shipping, not after**: the first draft rendered `valid_until` (`2026-12-31`) as "December 30, 2026" on the actual generated PDF — verified by rendering a real test PDF and reading it back, not by inspecting the code and assuming it was right. Root cause: a date-only string parses as UTC midnight, and formatting that instant in a negative-UTC-offset timezone rolls it back a calendar day. Fixed two ways: date-only strings now parse at noon UTC (far enough from midnight that no real-world offset can roll it over), and every display format call now pins an explicit `timeZone: "Asia/Manila"` rather than trusting whatever timezone the process happens to be running in (Vercel's functions run in UTC, but this shouldn't silently depend on that). Applied to both `permit-pdf.ts` and the new `/verify/[reference]` page, which had the same class of issue in its own expiry-instant construction (`new Date("...T23:59:59+08:00")` now, an explicit offset rather than an unqualified local-time string).
+
+**New env vars, needed before this can run against production**: `NEXT_PUBLIC_APP_URL` (the deployed site's own base URL, used server-side to build the QR code's verification link — a server action has no request Host header to derive this from) — generated/placeholder'd in `.env.local`, must also be set in Vercel's project env vars.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
