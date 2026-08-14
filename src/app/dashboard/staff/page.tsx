@@ -1,6 +1,8 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
+import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
+import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Card, DashboardTopBar, EmptyState, MiniButton, PrimaryButton, Row, SectionHead, TonePill } from "../ui";
@@ -63,19 +65,27 @@ export default async function StaffPage() {
 
       {lgu.subdomain && (
         <div className="mb-9">
-          <SectionHead title="Your public application form" sub="Share this link with applicants, or embed/link it from your own website." />
-          <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <a
-              href={`https://${lgu.subdomain}.muniserve.ph/apply`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[13.5px] font-bold text-info-ink underline underline-offset-2"
-            >
-              {lgu.subdomain}.muniserve.ph/apply
-            </a>
-            <span className="text-[12px] text-ink-soft">
-              If this link isn&rsquo;t working yet, your domain is still being set up by MuniServe -- check back soon.
-            </span>
+          <SectionHead title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL." />
+          <Card className="flex flex-col gap-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <a
+                href={`https://${lgu.subdomain}.muniserve.ph/apply`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13.5px] font-bold text-info-ink underline underline-offset-2"
+              >
+                {lgu.subdomain}.muniserve.ph/apply
+              </a>
+              <span className="text-[12px] text-ink-soft">
+                If this link isn&rsquo;t working yet, your domain is still being set up by MuniServe -- check back soon.
+              </span>
+            </div>
+            <div className="border-t border-border pt-4">
+              <p className="mb-2 text-[12px] font-bold text-ink-soft">
+                Embed on your website (iframe) -- applicants see your own domain, not muniserve.ph:
+              </p>
+              <EmbedCodeBox code={buildApplyEmbedSnippet(lgu.subdomain)} />
+            </div>
           </Card>
         </div>
       )}

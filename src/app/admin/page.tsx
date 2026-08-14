@@ -1,5 +1,7 @@
 import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { createClient } from "@/lib/supabase/server";
+import { buildApplyEmbedSnippet } from "@/lib/embed";
+import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../dashboard/sign-out-button";
 import { createLguClient, deleteLguClient, setLguPaused, viewAsLgu } from "./actions";
@@ -168,11 +170,21 @@ export default async function AdminPage() {
                   )}
                 </div>
                 {lgu.subdomain && (
-                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "4px 0 0" }}>
-                    This is the link to give the BPLO — for their own website or to share with applicants directly. Sent to
-                    them automatically in the welcome email, and shown on their own Staff page once signed in. Only works once
-                    this subdomain&rsquo;s DNS/Vercel setup is done (see note below).
-                  </p>
+                  <>
+                    <p style={{ fontSize: 11, color: "#9ca3af", margin: "4px 0 0" }}>
+                      This is the link to give the BPLO — for their own website or to share with applicants directly. Sent to
+                      them automatically in the welcome email, and shown on their own Staff page once signed in. Only works once
+                      this subdomain&rsquo;s DNS/Vercel setup is done (see note below).
+                    </p>
+                    <details style={{ marginTop: 6 }}>
+                      <summary style={{ fontSize: 11.5, color: "#0C447C", fontWeight: 600, cursor: "pointer" }}>
+                        Embed code (iframe, for their website)
+                      </summary>
+                      <div style={{ marginTop: 8, maxWidth: 480 }}>
+                        <EmbedCodeBox code={buildApplyEmbedSnippet(lgu.subdomain)} />
+                      </div>
+                    </details>
+                  </>
                 )}
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>

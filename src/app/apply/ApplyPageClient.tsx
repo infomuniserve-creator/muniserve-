@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   NATURE_OF_BUSINESS_OPTIONS, BARANGAY_OPTIONS, BUSINESS_TAX_PAYMENT_OPTIONS, ORGANIZATION_TYPE_OPTIONS, REGISTRATION_AUTHORITY_OPTIONS,
   TAX_TYPE_OPTIONS, GENDER_OPTIONS, BUSINESS_ACTIVITY_OPTIONS, OPERATION_ADDRESS_OPTIONS, PREMISES_OWNERSHIP_OPTIONS,
@@ -317,6 +317,29 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   const [submittedReference, setSubmittedReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Lets an LGU embed this page as an iframe on their own website without
+   * an awkward fixed-height scrollbar (CLAUDE.md 7o follow-up) -- posts
+   * this page's real content height to whatever embeds it every time it
+   * changes (screen changes, validation errors, conditional fields...),
+   * via a ResizeObserver rather than trying to enumerate every state
+   * change that could affect height. The embed snippet
+   * (src/lib/embed.ts's buildApplyEmbedSnippet) listens for this exact
+   * message shape and resizes its <iframe> to match. Harmless no-op when
+   * this page isn't actually embedded -- window.parent === window, and
+   * nothing listens for this message shape on the page itself.
+   */
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      window.parent.postMessage({ source: "muniserve-apply", height: el.scrollHeight }, "*");
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   function startOver() {
     setScreen("landing");
@@ -713,7 +736,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
+    <div ref={rootRef} style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
       <LguBanner lgu={lgu} />
       {screen !== "landing" && screen !== "submitted" && (
         <button onClick={startOver} style={backBtnStyle}>Start over</button>
