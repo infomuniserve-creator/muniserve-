@@ -35,6 +35,15 @@ const VIEW_AS_ROLES = new Set(["bplo", "treasury", "mayor"]);
  * welcome email is created at all -- add the real one later from
  * /dashboard/staff (reachable via "View as BPLO" for this LGU) once it's
  * known, exactly the same self-service flow as adding anyone else.
+ *
+ * Barangays are also optional, same reasoning (CLAUDE.md 7o follow-up,
+ * migration 0021) -- comma-separated like departments, written into the
+ * new lgu_form_options table. Left blank, this client's /apply page
+ * degrades the barangay field to free text rather than showing an empty
+ * or (worse) San Miguel's own barangay names -- see lgu-form-options.ts.
+ * Nature-of-business options aren't collected here at all: that list is
+ * ~220 entries, impractical for a comma-separated input, and already has
+ * a sensible generic default (same file) that works out of the box.
  */
 export async function createLguClient(formData: FormData) {
   const admin = await getCurrentPlatformAdmin();
@@ -48,6 +57,10 @@ export async function createLguClient(formData: FormData) {
   const departments = String(formData.get("departments") ?? "")
     .split(",")
     .map((d) => d.trim())
+    .filter(Boolean);
+  const barangays = String(formData.get("barangays") ?? "")
+    .split(",")
+    .map((b) => b.trim())
     .filter(Boolean);
   const bploName = String(formData.get("bploName") ?? "").trim();
   const bploEmail = String(formData.get("bploEmail") ?? "").trim().toLowerCase();
@@ -71,6 +84,13 @@ export async function createLguClient(formData: FormData) {
       .from("lgu_departments")
       .insert(departments.map((d) => ({ lgu_id: lgu.id, name: d, display_name: d })));
     if (deptError) throw deptError;
+  }
+
+  if (barangays.length > 0) {
+    const { error: barangayError } = await supabase
+      .from("lgu_form_options")
+      .insert(barangays.map((value, i) => ({ lgu_id: lgu.id, option_type: "barangay", value, sort_order: i })));
+    if (barangayError) throw barangayError;
   }
 
   if (bploEmail) {

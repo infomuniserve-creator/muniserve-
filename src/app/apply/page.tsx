@@ -1,4 +1,6 @@
 import { resolveLguDisplay } from "@/lib/lgu";
+import { getLguFormOptions } from "@/lib/lgu-form-options";
+import { createServiceClient } from "@/lib/supabase/service";
 import { headers } from "next/headers";
 import { ApplyPageClient } from "./ApplyPageClient";
 import { ApplyPausedNotice } from "./paused-notice";
@@ -28,6 +30,11 @@ import { ApplyPausedNotice } from "./paused-notice";
  * is the one place that needs to branch; submit-application/route.ts
  * still rejects a submission outright too, in case a tab was already open
  * before the LGU got paused.
+ *
+ * Also fetches this LGU's own barangay/nature-of-business picklists
+ * (CLAUDE.md 7o follow-up, migration 0021) via the service-role client --
+ * pre-auth like everything else on this page -- so a second client's
+ * applicants see their own municipality's barangays, not San Miguel's.
  */
 export const dynamic = "force-dynamic";
 
@@ -35,5 +42,8 @@ export default async function ApplyPage() {
   const host = (await headers()).get("host");
   const lgu = await resolveLguDisplay(host);
   if (lgu.isPaused) return <ApplyPausedNotice lgu={lgu} />;
-  return <ApplyPageClient lgu={lgu} />;
+
+  const supabase = createServiceClient();
+  const formOptions = await getLguFormOptions(supabase, lgu.id);
+  return <ApplyPageClient lgu={lgu} formOptions={formOptions} />;
 }

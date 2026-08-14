@@ -71,10 +71,13 @@ export default async function AdminPage() {
       <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", marginBottom: 24 }}>
         <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>Add a new client</p>
         <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>
-          Creates the LGU record and its own subdomain. Departments and the first BPLO account are both optional and can be
-          added later — leave the BPLO email blank if you don&rsquo;t have it yet, or want to test-drive the account first via
-          &ldquo;View as&rdquo; below. <strong>Fee rules aren&rsquo;t created here</strong> — those need the LGU&rsquo;s actual
-          ordinance and are set up as a separate, dedicated step, never guessed.
+          Creates the LGU record and its own subdomain. Departments, barangays, and the first BPLO account are all optional and
+          can be added later — leave the BPLO email blank if you don&rsquo;t have it yet, or want to test-drive the account
+          first via &ldquo;View as&rdquo; below. Without a barangay list, their public application form shows a free-text
+          field instead of a dropdown until one is set. Nature-of-business options aren&rsquo;t collected here — every new
+          client starts with a sensible generic list, editable later if they need their own. <strong>Fee rules aren&rsquo;t
+          created here</strong> — those need the LGU&rsquo;s actual ordinance and are set up as a separate, dedicated step,
+          never guessed.
         </p>
         <form action={createLguClient} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", gap: 10 }}>
@@ -99,6 +102,9 @@ export default async function AdminPage() {
           </Field>
           <Field label="Departments (comma-separated, optional)">
             <input name="departments" type="text" placeholder="Zoning, Fire, MENRO, Engineering" style={inputStyle} />
+          </Field>
+          <Field label="Barangays (comma-separated, optional) — leave blank to use free text until set">
+            <input name="barangays" type="text" placeholder="Barangay 1, Barangay 2, Poblacion, ..." style={inputStyle} />
           </Field>
 
           <div style={{ borderTop: "0.5px solid #e5e7eb", margin: "6px 0", paddingTop: 12 }}>

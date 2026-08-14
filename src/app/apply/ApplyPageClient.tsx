@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   NATURE_OF_BUSINESS_OPTIONS, BARANGAY_OPTIONS, BUSINESS_TAX_PAYMENT_OPTIONS, ORGANIZATION_TYPE_OPTIONS, REGISTRATION_AUTHORITY_OPTIONS,
   TAX_TYPE_OPTIONS, GENDER_OPTIONS, BUSINESS_ACTIVITY_OPTIONS, OPERATION_ADDRESS_OPTIONS, PREMISES_OWNERSHIP_OPTIONS,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/san-miguel-form-options";
 import { isFieldVisible, REQUIRED_FIELDS, type FieldKey } from "@/lib/application-form-logic";
 import type { LguDisplay } from "@/lib/lgu";
+import type { LguFormOptions } from "@/lib/lgu-form-options";
 
 /**
  * Applicant flow -- new business / renewal, phone OTP, legacy-claim, and
@@ -244,6 +245,26 @@ const BUSINESS_OPERATION_FIELDS: FieldDescriptor[] = [
   { key: "animalCount", label: "Number of animals", kind: "number" },
 ];
 
+/**
+ * Swaps in this LGU's own options for whichever fields have a per-LGU
+ * override (CLAUDE.md 7o follow-up, migration 0021) -- BUSINESS_INFO_FIELDS
+ * and ADDRESS_FIELDS above stay as the static shape/label source (fieldLabel()
+ * still reads from them directly, since a label never varies by LGU), while
+ * the actual rendered field list is built per-render from this LGU's
+ * formOptions instead. barangay gets no options fallback -- see
+ * lgu-form-options.ts for why an empty barangay list degrades this one
+ * field to free text rather than showing an empty or wrong dropdown.
+ */
+function withDynamicOptions(fields: FieldDescriptor[], overrides: Partial<Record<FieldKey, readonly string[]>>): FieldDescriptor[] {
+  return fields.map((f) => {
+    if (f.kind !== "select" && f.kind !== "checkboxgroup") return f;
+    const override = overrides[f.key];
+    if (!override) return f;
+    if (override.length === 0) return { key: f.key, label: f.label, kind: "text" as const };
+    return { ...f, options: override };
+  });
+}
+
 /** Turns a raw FieldKey (what the server's missing_required_fields error returns) into the same label shown on the form, instead of the camelCase key itself. */
 function fieldLabel(key: string): string {
   const found =
@@ -267,7 +288,7 @@ function declarationText(lgu: LguDisplay): string {
   );
 }
 
-export function ApplyPageClient({ lgu }: { lgu: LguDisplay }) {
+export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOptions: LguFormOptions }) {
   const [screen, setScreen] = useState<Screen>("landing");
   const [path, setPath] = useState<"new" | "renewal" | null>(null);
   const [phoneSigninMode, setPhoneSigninMode] = useState(false);
@@ -609,6 +630,17 @@ export function ApplyPageClient({ lgu }: { lgu: LguDisplay }) {
 
   const formValues = buildVisibleValues();
 
+  // This LGU's own picklists (CLAUDE.md 7o follow-up) swapped into the
+  // otherwise-static field descriptors -- see withDynamicOptions() above.
+  const businessInfoFieldsForRender = useMemo(
+    () => withDynamicOptions(BUSINESS_INFO_FIELDS, { natureOfBusiness: formOptions.natureOfBusinessOptions }),
+    [formOptions.natureOfBusinessOptions]
+  );
+  const addressFieldsForRender = useMemo(
+    () => withDynamicOptions(ADDRESS_FIELDS, { barangay: formOptions.barangayOptions }),
+    [formOptions.barangayOptions]
+  );
+
   /**
    * Matches the real form's own behavior: document uploads, signature, and
    * the declaration/submit step only appear once every other currently-
@@ -801,10 +833,10 @@ export function ApplyPageClient({ lgu }: { lgu: LguDisplay }) {
           )}
 
           <SectionHeading>Business information & registration</SectionHeading>
-          {BUSINESS_INFO_FIELDS.map(renderField)}
+          {businessInfoFieldsForRender.map(renderField)}
 
           <SectionHeading>Main office address</SectionHeading>
-          {ADDRESS_FIELDS.map(renderField)}
+          {addressFieldsForRender.map(renderField)}
 
           <SectionHeading>Owner / representative info</SectionHeading>
           <p style={{ fontSize: 11, color: "#6b7280", marginTop: -6, marginBottom: 12 }}>
