@@ -167,3 +167,35 @@ export async function viewAsLgu(formData: FormData) {
 
   redirect("/dashboard");
 }
+
+/**
+ * Deactivates (never deletes -- same soft-delete convention as everywhere
+ * else) the platform admin's own "view as" proxy row. Needed for real:
+ * getCurrentStaff() (src/lib/staff.ts) now prefers an *active* admin-proxy
+ * row over a real staff account on the same Google login, so a platform
+ * admin who also happens to be genuine client staff somewhere (hit in
+ * production with info.muniserve@gmail.com, already a real San Miguel
+ * BPLO account from earlier testing) needs an explicit way back to their
+ * own account rather than staying stuck "viewing as" whatever they last
+ * picked.
+ */
+export async function exitViewAs() {
+  const admin = await getCurrentPlatformAdmin();
+  if (!admin) throw new Error("Not authorized");
+
+  const supabase = await createClient();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) throw new Error("Not authorized");
+
+  const { error } = await supabase
+    .from("staff_users")
+    .update({ is_active: false })
+    .eq("auth_user_id", authData.user.id)
+    .eq("is_admin_proxy", true);
+  if (error) throw error;
+
+  // Not /admin unconditionally -- if this admin also has their own real
+  // staff account, this sends them there normally; if not,
+  // dashboard/page.tsx's own fallback lands them on /admin anyway.
+  redirect("/dashboard");
+}

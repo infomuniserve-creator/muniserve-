@@ -1,6 +1,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { createClient } from "@/lib/supabase/server";
+import { exitViewAs } from "../admin/actions";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -49,9 +50,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           🛡️ Platform Admin — viewing {lgu.name}
           {lgu.province ? `, ${lgu.province}` : ""} as {roleLabel}
         </span>
-        <Link href="/admin" className="underline underline-offset-2">
-          Back to admin
-        </Link>
+        <div className="flex items-center gap-3">
+          <form action={exitViewAs}>
+            <button type="submit" className="underline underline-offset-2">
+              Exit view-as
+            </button>
+          </form>
+          <Link href="/admin" className="underline underline-offset-2">
+            Back to admin
+          </Link>
+        </div>
       </div>
     );
   }
