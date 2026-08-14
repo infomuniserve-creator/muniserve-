@@ -4,6 +4,7 @@ import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { normalizePhone } from "@/lib/phone";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
+import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -53,6 +54,15 @@ export async function startWalkInApplication(formData: FormData) {
     .eq("id", businessId)
     .single();
   if (fetchError || !business) throw fetchError ?? new Error("Business not found");
+
+  // Same gate as submitInitialReview (2026-08-14 follow-up) -- a walk-in
+  // filing skips the initial-review card entirely (see this function's own
+  // doc comment above), so without this check it was the *only* way an
+  // application could reach department review with no LBT category set at
+  // all, no dropdown ever shown anywhere along the way. Checked before any
+  // side effect (owner creation, reference number, application insert)
+  // rather than after, so a blocked attempt leaves nothing half-created.
+  await requireLbtCategorySet(supabase, businessId);
 
   const businessUpdate: Record<string, unknown> = {};
 
@@ -132,6 +142,34 @@ export async function startWalkInApplication(formData: FormData) {
     summary: `Walk-in ${applicationType} application filed at the counter for ${business.business_name ?? "(business record missing)"} -- ${referenceNumber}`,
     details: { applicationType, amount },
   });
+
+  revalidatePath("/dashboard/businesses");
+  revalidatePath("/dashboard/bplo");
+}
+
+/**
+ * LBT-category control on the Business Registry itself (2026-08-14
+ * follow-up), not just `bplo/actions.ts`'s copy on the initial-review
+ * card. That card is unreachable for any application already past
+ * initial review (in department review, or -- the bug that surfaced this
+ * -- stuck at Assessment) and for walk-in filings (which never show that
+ * card at all, see `startWalkInApplication`'s own comment). The Business
+ * Registry is the one page every stuck-for-this-reason application's
+ * `fee-engine.ts` blocked message already points BPLO to
+ * ("Set it in the Business Registry...") -- this is what makes that link
+ * actually true, and it's also the natural place to set it proactively
+ * before either flow starts at all, not just to unstick one after the
+ * fact.
+ */
+export async function setLbtCategory(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const businessId = String(formData.get("businessId"));
+  const lbtCategory = String(formData.get("lbtCategory") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  await setBusinessLbtCategory(supabase, businessId, lbtCategory);
 
   revalidatePath("/dashboard/businesses");
   revalidatePath("/dashboard/bplo");

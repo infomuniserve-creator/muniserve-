@@ -411,7 +411,7 @@ export function DashboardTopBar({
 // a department's behalf) looks and behaves identically.
 // ============================================================
 
-const btnBase = "inline-flex items-center gap-1.5 rounded-full text-[13px] font-bold transition-transform active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
+const btnBase = "inline-flex items-center gap-1.5 rounded-full text-[13px] font-bold transition-transform active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-40 disabled:active:scale-100";
 
 export function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const { className = "", children, ...rest } = props;
@@ -449,7 +449,7 @@ export function MiniButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> 
     neutral: "border-border-strong text-ink-soft hover:bg-surface-2",
   };
   return (
-    <button {...rest} className={`rounded-full border bg-surface px-3.5 py-1.5 text-[12px] font-bold transition-colors ${toneClasses[tone]} ${className}`}>
+    <button {...rest} className={`rounded-full border bg-surface px-3.5 py-1.5 text-[12px] font-bold transition-colors disabled:pointer-events-none disabled:opacity-40 ${toneClasses[tone]} ${className}`}>
       {children}
     </button>
   );
@@ -469,13 +469,22 @@ export function GhostButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>
  * review, BPLO assessment isn't decision-based, department's own review,
  * BPLO acting on a department's behalf). `compact` renders MiniButtons
  * without icons for the "act on behalf" inline row.
+ *
+ * `disableApprove` (2026-08-14 follow-up): only `InitialReviewCard`
+ * passes this, when the business has no LBT category set yet -- greys
+ * out just the two decisions that would advance the application into
+ * department review, while leaving Request info/Reject clickable (those
+ * don't need it). This is the primary guard against the LBT-category
+ * dead end; `submitInitialReview`'s own server-side check
+ * (`requireLbtCategorySet`) is the backstop for a stale form submitting
+ * anyway, not the first line of defense.
  */
-export function DecisionButtons({ compact }: { compact?: boolean }) {
+export function DecisionButtons({ compact, disableApprove }: { compact?: boolean; disableApprove?: boolean }) {
   if (compact) {
     return (
       <div className="flex flex-wrap gap-1.5">
-        <MiniButton type="submit" name="decision" value="approved" tone="good">Approve</MiniButton>
-        <MiniButton type="submit" name="decision" value="approved_with_condition" tone="good">Approve w/ condition</MiniButton>
+        <MiniButton type="submit" name="decision" value="approved" tone="good" disabled={disableApprove}>Approve</MiniButton>
+        <MiniButton type="submit" name="decision" value="approved_with_condition" tone="good" disabled={disableApprove}>Approve w/ condition</MiniButton>
         <MiniButton type="submit" name="decision" value="request_more_info" tone="info">Request info</MiniButton>
         <MiniButton type="submit" name="decision" value="rejected" tone="bad">Reject</MiniButton>
       </div>
@@ -483,8 +492,8 @@ export function DecisionButtons({ compact }: { compact?: boolean }) {
   }
   return (
     <div className="flex flex-wrap gap-2">
-      <PrimaryButton type="submit" name="decision" value="approved"><CheckIcon />Approve</PrimaryButton>
-      <OutlineButton type="submit" name="decision" value="approved_with_condition" tone="cond"><InfoIcon />Approve with condition</OutlineButton>
+      <PrimaryButton type="submit" name="decision" value="approved" disabled={disableApprove}><CheckIcon />Approve</PrimaryButton>
+      <OutlineButton type="submit" name="decision" value="approved_with_condition" tone="cond" disabled={disableApprove}><InfoIcon />Approve with condition</OutlineButton>
       <OutlineButton type="submit" name="decision" value="request_more_info" tone="info"><InfoIcon />Request more info</OutlineButton>
       <OutlineButton type="submit" name="decision" value="rejected" tone="bad"><XIcon />Reject</OutlineButton>
     </div>

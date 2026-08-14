@@ -496,6 +496,22 @@ New `/dashboard/settings` (BPLO-only, same guard as `/dashboard/staff`) now owns
 
 ---
 
+## 7p. LBT-category dead end, closed at the source (2026-08-14)
+
+Caught by the project owner live-testing a walk-in filing ("Mags Poultry Farm"): all 5 departments approved, the application correctly advanced to Assessment review — and immediately hit `fee-engine.ts`'s "no LBT category set" block, with the message's own "Open the Business Registry" link leading to a Directory expand-row that had nothing editable in it. A genuine dead end, not just a rough edge: once an application passed initial review, there was **no UI path anywhere** to set `businesses.lbt_category`, because the only control for it (`bplo/actions.ts`'s `setLbtCategory`, on `InitialReviewCard`) only renders while an application is still at `pending_bplo_initial` — and the walk-in flow (7e) skips that stage entirely, so a walk-in filing could never reach that control even once. The project owner's own diagnosis was exactly right: "before the application moves to the department review, the LBT should be selected already and should not move if not."
+
+**Root cause was structural, not a validation gap** — there are exactly two places in the codebase that can put an application into `pending_dept_review` (`submitInitialReview` and `startWalkInApplication`, confirmed by grepping every write of that status string), and neither one checked for an LBT category before doing so.
+
+**Fixed at the shared model layer first** (`src/lib/lbt-categories.ts`, already the one module owning "what LBT categories exist" — extended rather than duplicated elsewhere, matching the SOLID-principles instruction given this same day): `setBusinessLbtCategory()` is now the one function that writes `businesses.lbt_category` (both `bplo/actions.ts`'s and the new `businesses/actions.ts`'s controls call it, instead of each running its own `.update()`), and `requireLbtCategorySet()` is the shared gate, called from both `submitInitialReview` and `startWalkInApplication` right before either can advance to `pending_dept_review` — the walk-in path checks it before any side effect (owner creation, reference number, application insert), not after.
+
+**Every call site gets a real, disableable UI, not just a server throw**: the gate functions throw (mirroring `finalizeAssessment`'s existing `if (!result.ok) throw new Error(...)` pattern) as a defense-in-depth backstop, but the primary guard is the button itself going inert. `DecisionButtons` (`ui.tsx`) gained a `disableApprove` prop — `InitialReviewCard` passes it whenever `!profile?.lbtCategory`, greying out only Approve/Approve-with-condition (Request info/Reject stay clickable, since neither needs a category) alongside a warning banner explaining why. The walk-in form's own submit button in the Business Registry gets the identical treatment. `btnBase`/`MiniButton` needed a `disabled:` variant added to their Tailwind classes — neither had one before, since nothing in this app disabled a button conditionally until now.
+
+**Closed the actual dead end, not just its cause going forward**: the Business Registry (`businesses/page.tsx`) gets its own LBT-category editor (a new `setLbtCategory` action in `businesses/actions.ts`, reusing the shared writer) — always visible to BPLO regardless of a business's status, including `in_progress`, specifically because that's the one status the walk-in form itself hides behind a "see the Applications tab" note. This is also what makes `fee-engine.ts`'s existing "Open the Business Registry" message actually true for the first time — that link pointed nowhere fixable before this. Unblocking the already-stuck "Mags Poultry Farm" test case needs no data migration: `AssessmentCard` already computes live on every render, so setting the category via this new control is enough on its own.
+
+Verified with `tsc`/a full build plus a temporary unauthenticated fixture route exercising the real exported `ui.tsx` components (`DecisionButtons`, `PrimaryButton`) with the same props the real pages now pass — confirmed via computed styles (`opacity`, `pointer-events`, the `disabled` DOM property) that Approve/Approve-with-condition go inert while Request info/Reject/Save stay clickable, and that the normal (category-set) case is fully unaffected — deleted immediately after.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

@@ -437,7 +437,7 @@ async function InitialReviewCard({
       <BusinessProfileBlock legacyAddress={legacyAddress} profile={profile} applicationType={applicationType} basisAmount={basisAmount} />
 
       {businessId && (
-        <form action={setLbtCategory} className="mb-4 flex flex-wrap items-center gap-2">
+        <form action={setLbtCategory} className="mb-2 flex flex-wrap items-center gap-2">
           <label className="text-[11.5px] font-bold text-ink-soft">LBT category:</label>
           <input type="hidden" name="businessId" value={businessId} />
           <select
@@ -454,12 +454,19 @@ async function InitialReviewCard({
         </form>
       )}
 
+      {!profile?.lbtCategory && (
+        <div className="mb-4 flex items-start gap-2 rounded-2xl bg-warn-bg px-4 py-3 text-[12.5px] font-bold text-warn-ink">
+          <InfoIcon className="mt-0.5 size-4 shrink-0" />
+          <span>Set the LBT category above before approving — an application can&rsquo;t enter department review without one, or it&rsquo;ll dead-end at Assessment with no way back.</span>
+        </div>
+      )}
+
       <DocumentList documents={documents} signedUrls={signedUrls} />
 
       <form action={submitInitialReview}>
         <input type="hidden" name="applicationId" value={applicationId} />
         <NotesField name="notes" placeholder="Notes (required if requesting info or rejecting)" />
-        <DecisionButtons />
+        <DecisionButtons disableApprove={!profile?.lbtCategory} />
       </form>
     </Card>
   );

@@ -2,6 +2,7 @@ import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { classifyBusinessStatus, BUSINESS_STATUS_LABEL, BUSINESS_STATUS_TONE, type BusinessStatus } from "@/lib/business-status";
+import { getLbtCategoryOptions, type LbtCategoryOption } from "@/lib/lbt-categories";
 import { fetchAllRows } from "@/lib/db-pagination";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -9,10 +10,10 @@ import Link from "next/link";
 import { SignOutButton } from "../sign-out-button";
 import {
   BuildingIcon, ChevronRightIcon, ClockIcon, DashboardTopBar, EmptyState, InfoIcon, BusinessProfileBlock,
-  PrimaryButton, SearchIcon, StatCard, StatGrid, TonePill, XIcon,
+  MiniButton, PrimaryButton, SearchIcon, StatCard, StatGrid, TonePill, XIcon,
 } from "../ui";
 import { BusinessesSubNav } from "./sub-nav";
-import { startWalkInApplication } from "./actions";
+import { setLbtCategory, startWalkInApplication } from "./actions";
 
 const STATUS_FILTERS: { value: "all" | BusinessStatus; label: string }[] = [
   { value: "all", label: "All" },
@@ -70,6 +71,7 @@ export default async function BusinessesPage({
   const office = officeIdentity(staff);
   const supabase = await createClient();
   const lgu = await getLguDisplay(supabase, staff.lgu_id);
+  const lbtCategoryOptions = staff.role === "bplo" ? await getLbtCategoryOptions(staff.lgu_id) : [];
 
   // San Miguel alone already has 1,177 businesses -- more than PostgREST's
   // silent 1,000-row default cap, which under-populated this exact page
@@ -235,6 +237,7 @@ export default async function BusinessesPage({
               apps={apps}
               validUntil={latestPermitByBusiness.get(b.id) ?? null}
               canWalkIn={staff.role === "bplo"}
+              lbtCategoryOptions={lbtCategoryOptions}
             />
           ))}
         </div>
@@ -288,8 +291,11 @@ function formatDate(iso: string | null): string {
 }
 
 function RegistryRow({
-  business: b, status, apps, validUntil, canWalkIn,
-}: { business: BizRowType; status: BusinessStatus; apps: AppRowType[]; validUntil: string | null; canWalkIn: boolean }) {
+  business: b, status, apps, validUntil, canWalkIn, lbtCategoryOptions,
+}: {
+  business: BizRowType; status: BusinessStatus; apps: AppRowType[]; validUntil: string | null; canWalkIn: boolean;
+  lbtCategoryOptions: LbtCategoryOption[];
+}) {
   const profile = mapBusinessProfile(b);
   const dateLabel =
     status === "legacy"
@@ -335,6 +341,29 @@ function RegistryRow({
 
         <BusinessProfileBlock legacyAddress={b.address} profile={profile} applicationType="renewal" basisAmount={profile.grossSales} />
 
+        {canWalkIn && (
+          <form action={setLbtCategory} className="mb-3.5 flex flex-wrap items-center gap-2">
+            <label className="text-[11.5px] font-bold text-ink-soft">LBT category:</label>
+            <input type="hidden" name="businessId" value={b.id} />
+            <select
+              name="lbtCategory"
+              defaultValue={profile.lbtCategory ?? ""}
+              className="rounded-xl border border-border-strong bg-surface px-2.5 py-1.5 text-[12.5px] text-ink"
+            >
+              <option value="">— not set —</option>
+              {lbtCategoryOptions.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+            <MiniButton type="submit">Save</MiniButton>
+            {!profile.lbtCategory && (
+              <span className="text-[11.5px] font-bold text-warn-ink">
+                Required before this business's application can enter department review or be assessed.
+              </span>
+            )}
+          </form>
+        )}
+
         {b.legacy_license_no && (
           <p className="mb-3 text-[12.5px] text-ink-soft">
             <span className="font-bold text-ink-faint">License no.</span> {b.legacy_license_no}
@@ -379,7 +408,9 @@ function RegistryRow({
                 <input name="phone" type="tel" placeholder="09XX XXX XXXX" className="h-9 w-40 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
               </div>
             )}
-            <PrimaryButton type="submit">{buttonLabel}</PrimaryButton>
+            <PrimaryButton type="submit" disabled={!profile.lbtCategory} title={!profile.lbtCategory ? "Set the LBT category above first" : undefined}>
+              {buttonLabel}
+            </PrimaryButton>
           </form>
         )}
       </div>

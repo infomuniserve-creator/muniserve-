@@ -5,6 +5,7 @@ import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { notifyApplicantSms } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
+import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -37,6 +38,17 @@ export async function submitInitialReview(formData: FormData) {
     decision === "approved" || decision === "approved_with_condition"
       ? "pending_dept_review"
       : "returned_to_applicant";
+
+  // Gate, not just at Assessment three stages later (2026-08-14 follow-up,
+  // after live testing hit exactly that dead end) -- an application can't
+  // enter department review at all without an LBT category on file. The
+  // real guard is the "Approve" button being disabled client-side
+  // (bplo/page.tsx's InitialReviewCard); this is the defense-in-depth
+  // backstop against a stale form submitting anyway.
+  if (newStatus === "pending_dept_review") {
+    const { data: app } = await supabase.from("applications").select("business_id").eq("id", applicationId).single();
+    if (app?.business_id) await requireLbtCategorySet(supabase, app.business_id);
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from("applications")
@@ -380,8 +392,7 @@ export async function setLbtCategory(formData: FormData) {
   const lbtCategory = String(formData.get("lbtCategory") ?? "").trim() || null;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("businesses").update({ lbt_category: lbtCategory }).eq("id", businessId);
-  if (error) throw error;
+  await setBusinessLbtCategory(supabase, businessId, lbtCategory);
 
   revalidatePath("/dashboard/bplo");
 }
