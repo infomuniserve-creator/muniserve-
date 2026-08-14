@@ -346,6 +346,34 @@ Finishes build order step 8. No real BPLO permit template exists to match (confi
 
 ---
 
+## 7l. Custom domain: portal.muniserve.ph (2026-08-13, same day)
+
+The project owner already owns `muniserve.ph`, with a subdomain (`links.muniserve.ph`) pointing at their existing GoHighLevel account — the real production intake form section 7d/8 reference. Rather than buy a second, unrelated-sounding domain, added `portal.muniserve.ph` as a new subdomain pointing at this app's Vercel deployment (CNAME to `cname.vercel-dns.com`), leaving GHL's own records on the domain untouched — DNS records are per-hostname, not per-domain, so this doesn't conflict with anything already there.
+
+**A real gotcha hit and fixed**: staff Google sign-in worked, but always landed back on `muniserve.vercel.app` regardless of which domain the flow started from. Not an app bug — `login/page.tsx` and `auth/callback/route.ts` both already build their redirect dynamically from the actual request origin, no hardcoded domain anywhere. The cause was Supabase Auth's own **Redirect URLs allowlist** (Authentication → URL Configuration): only `muniserve.vercel.app` was on it, so Supabase silently fell back to its configured default Site URL instead of honoring the dynamic `redirectTo`. Fixed by adding `https://portal.muniserve.ph/**` to Redirect URLs and updating Site URL to match — a config change, not a code change. Worth remembering if a third domain ever gets added: this allowlist, not the app, is what needs updating.
+
+`NEXT_PUBLIC_APP_URL` (7k) should be kept in sync with whichever domain is primary going forward.
+
+---
+
+## 7m. Staff account management UI (2026-08-13, same day)
+
+Closes a real operational gap, not a bug: migration 0002's own comment on `staff_users` said outright *"nobody edits this from the client (provisioning is an admin/service-role task)"* — a deliberate original decision that meant onboarding a new department reviewer, treasury clerk, or mayor account required direct database access. The project owner asked for this over two other candidates (permit renewal reminders, multi-LGU fixes) specifically because it was the one blocking normal operation without me.
+
+**Who administers staff was a judgment call, not specified — decided rather than asked**, same reasoning as 7i's printing/release ownership: BPLO already runs the most administrative surface of this whole system (walk-in filings, LBT overrides, acting on any department's behalf), so it's the natural fit. Revisit if that turns out wrong in practice.
+
+**Self-service claim by email, not a manual auth_user_id lookup.** A brand-new staff member has no Supabase `auth.users` row (and thus no `auth_user_id`) until they've signed in with Google at least once — so BPLO can't provision a fully-linked account up front, only an email-keyed placeholder. `addStaffMember` (`staff/actions.ts`) inserts a `staff_users` row with `auth_user_id = null`; `/auth/callback/route.ts` now claims it automatically on that person's first real sign-in, matching by email (case-insensitive `ilike`, since Google's returned casing doesn't have to match whatever BPLO typed). This is the standard "invite by email, they claim it by signing in" pattern, not something invented for this project.
+
+**Migration `0015_staff_management.sql`**: reverses migration 0002's original stance for BPLO specifically — new INSERT/UPDATE policies scoped to `lgu_id = current_staff()`'s own LGU and `role = 'bplo'`. Also adds `unique (email)` on `staff_users` (checked production first: zero duplicates existed, only one staff row total) so the claim-by-email lookup is unambiguous. RLS bounds which *rows* BPLO can reach, not which *columns* — `setStaffActive` only ever writes `is_active`, never touching role/lgu_id/email itself, even though the UPDATE policy's `WITH CHECK` alone wouldn't stop that.
+
+**Guard against locking out staff management entirely**: `setStaffActive` refuses to deactivate a `bplo`-role account if it's the last *active* one at that LGU — otherwise deactivating the wrong account would mean nobody left with a UI path to reactivate anyone, right back to needing direct database access. RLS has no way to express "not the last one," so this is checked in application code.
+
+Never a hard delete — `is_active` toggle only, matching the rest of this schema's soft-delete convention (`businesses.is_active`, `lgu_departments.is_active`).
+
+Scoped down deliberately: adding a staff member and activating/deactivating them, not full profile editing (role/department reassignment after creation) — reassigning a department mid-flight risks orphaning in-progress `department_reviews` rows tied to the old department name, not something to allow casually from a simple admin form.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

@@ -160,6 +160,7 @@ export default async function BusinessesPage({
         initials={office.initials}
         active="businesses"
         applicationsHref={office.homeHref}
+        staffHref={staff.role === "bplo" ? "/dashboard/staff" : undefined}
         rightSlot={<SignOutButton />}
       />
       <BusinessesSubNav active="directory" />

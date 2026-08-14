@@ -48,6 +48,7 @@ export default async function PermitHistoryPage() {
         initials={office.initials}
         active="businesses"
         applicationsHref={office.homeHref}
+        staffHref={staff.role === "bplo" ? "/dashboard/staff" : undefined}
         rightSlot={<SignOutButton />}
       />
       <BusinessesSubNav active="history" />

@@ -287,13 +287,16 @@ export function DashboardTopBar({
   initials,
   active,
   applicationsHref,
+  staffHref,
   rightSlot,
 }: {
   officeLabel: string;
   officeSub: string;
   initials: string;
-  active: "applications" | "businesses";
+  active: "applications" | "businesses" | "staff";
   applicationsHref: string;
+  /** Only BPLO can manage staff (src/app/dashboard/staff) -- pass this in only from bplo/page.tsx so the tab doesn't render for anyone else. */
+  staffHref?: string;
   rightSlot?: React.ReactNode;
 }) {
   return (
@@ -329,6 +332,16 @@ export function DashboardTopBar({
         >
           Businesses
         </Link>
+        {staffHref && (
+          <Link
+            href={staffHref}
+            className={`rounded-full px-4.5 py-2 font-display text-[13px] font-bold transition-colors ${
+              active === "staff" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            Staff
+          </Link>
+        )}
       </nav>
 
       <div className="flex items-center gap-2.5">
