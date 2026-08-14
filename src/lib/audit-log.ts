@@ -30,7 +30,11 @@ export type AuditAction =
   | "staff_deactivated"
   | "lgu_client_created"
   | "lgu_paused"
-  | "lgu_resumed";
+  | "lgu_resumed"
+  | "automated_assessment_disabled"
+  | "automated_assessment_enabled"
+  | "regulatory_fee_added"
+  | "regulatory_fee_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
+import { getLguDisplay } from "@/lib/lgu";
 import { notifyApplicantSms } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
@@ -146,13 +147,27 @@ export async function resubmitToDepartments(formData: FormData) {
  * override_<feeRuleId>/overrideReason_<feeRuleId> fields, the ones meant
  * to be edited, are trusted from the request).
  *
+ * Automated Assessment (2026-08-14 follow-up, lgus.automated_assessment_
+ * enabled, migration 0026) -- the project owner's own "safe place to go if
+ * whatever we design fails": when off, every line the engine flagged
+ * `isManualEligible` (Local Business Tax, Mayor's Permit Fee, and any
+ * `regulatory` line computed from a non-flat shape) is read from a
+ * manual_<feeCategory>/manual_regulatory_<feeRuleId> form field instead of
+ * the engine's own computed amount -- required, since the whole point is a
+ * human confirming the number, not an empty field silently landing as
+ * zero. Everything else (flat regulatory fees, CEDULA, the discount) stays
+ * computed exactly as before regardless of the toggle -- nothing about
+ * those shapes can be wrong the way a bracket/matrix lookup can.
+ *
  * Uses BPLO's own RLS-scoped session to read fee_rules/fee_rule_brackets/
- * businesses/applications (all already staff-readable); service role only
- * for the application_fee_lines INSERT, since there's no staff insert
+ * businesses/applications/lgus (all already staff-readable); service role
+ * only for the application_fee_lines INSERT, since there's no staff insert
  * policy on it at all -- computing/recording the assessment is a system
  * step, not something any role has direct write rights to on their own
  * (rule #7: only BPLO can *override* a line, via overridden_amount, which
- * this does write with the acting BPLO's own staff.id).
+ * this does write with the acting BPLO's own staff.id -- a separate
+ * mechanism from manual entry, and only offered on lines that stayed
+ * computed).
  */
 export async function finalizeAssessment(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -160,11 +175,12 @@ export async function finalizeAssessment(formData: FormData) {
 
   const applicationId = String(formData.get("applicationId"));
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: application, error: fetchError } = await supabase
     .from("applications")
     .select(
-      `reference_number, application_type, form_inputs, business:businesses(nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, owner:owners(phone))`
+      `reference_number, application_type, form_inputs, business:businesses(nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, owner:owners(phone))`
     )
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment")
@@ -185,6 +201,8 @@ export async function finalizeAssessment(formData: FormData) {
     billiard_table_count: number | null;
     guard_post_count: number | null;
     animal_count: number | null;
+    male_employee_count: number | null;
+    female_employee_count: number | null;
     owner: { phone: string | null } | null;
   } | null;
   if (!business) throw new Error("Business record missing");
@@ -210,17 +228,73 @@ export async function finalizeAssessment(formData: FormData) {
       billiardTableCount: business.billiard_table_count,
       guardPostCount: business.guard_post_count,
       animalCount: business.animal_count,
+      maleEmployeeCount: business.male_employee_count,
+      femaleEmployeeCount: business.female_employee_count,
     },
   });
-  if (!result.ok) throw new Error(result.blockedReason);
+  // A blocked result is only ever recoverable through manual entry -- with
+  // Automated Assessment on, there's nothing else to fall back to.
+  if (!result.ok && lgu.automatedAssessmentEnabled) throw new Error(result.blockedReason);
+  const computedLines = result.ok ? result.lines : [];
 
-  const lineRows = result.lines.map((line) => {
-    const overrideRaw = String(formData.get(`override_${line.feeRuleId}`) ?? "").trim();
-    const overriddenAmount = overrideRaw !== "" ? Number(overrideRaw) : null;
-    const overrideReason = overriddenAmount != null ? String(formData.get(`overrideReason_${line.feeRuleId}`) ?? "").trim() || null : null;
+  type FinalLine = {
+    feeRuleId: string | null;
+    feeCategory: string;
+    displayLabel: string;
+    amount: number;
+    includedInTotal: boolean;
+    isManual: boolean;
+  };
+
+  function readManualAmount(key: string, label: string): number {
+    const raw = String(formData.get(key) ?? "").trim();
+    if (raw === "" || Number.isNaN(Number(raw))) {
+      throw new Error(`"${label}" needs a manually entered amount — Automated Assessment is off for this LGU.`);
+    }
+    return Number(raw);
+  }
+
+  const finalLines: FinalLine[] = [];
+  const seenManualCategories = new Set<string>();
+
+  for (const line of computedLines) {
+    if (lgu.automatedAssessmentEnabled || !line.isManualEligible) {
+      finalLines.push({ feeRuleId: line.feeRuleId, feeCategory: line.feeCategory, displayLabel: line.displayLabel, amount: line.amount, includedInTotal: line.includedInTotal, isManual: false });
+      continue;
+    }
+    const key = line.feeCategory === "regulatory" ? `manual_regulatory_${line.feeRuleId}` : `manual_${line.feeCategory}`;
+    if (line.feeCategory === "lbt" || line.feeCategory === "mayors_permit") seenManualCategories.add(line.feeCategory);
+    finalLines.push({ feeRuleId: null, feeCategory: line.feeCategory, displayLabel: line.displayLabel, amount: readManualAmount(key, line.displayLabel), includedInTotal: true, isManual: true });
+  }
+
+  // Local Business Tax and Mayor's Permit Fee are mandatory manual entries
+  // whenever Automated Assessment is off -- even if the engine found no
+  // matching rule at all to compute a starting value from (a blocked
+  // result, or no schedule/category matched), BPLO still needs a way
+  // through, which is the entire point of this toggle.
+  if (!lgu.automatedAssessmentEnabled) {
+    for (const [category, label] of [["lbt", "Local Business Tax"], ["mayors_permit", "Mayor's Permit Fee"]] as const) {
+      if (seenManualCategories.has(category)) continue;
+      finalLines.push({ feeRuleId: null, feeCategory: category, displayLabel: label, amount: readManualAmount(`manual_${category}`, label), includedInTotal: true, isManual: true });
+    }
+  }
+
+  const lineRows = finalLines.map((line) => {
+    let overriddenAmount: number | null = null;
+    let overrideReason: string | null = null;
+    // Manual entries have nothing to "override" -- the manual amount
+    // already is the final figure BPLO chose to charge.
+    if (!line.isManual && line.feeRuleId) {
+      const overrideRaw = String(formData.get(`override_${line.feeRuleId}`) ?? "").trim();
+      overriddenAmount = overrideRaw !== "" ? Number(overrideRaw) : null;
+      overrideReason = overriddenAmount != null ? String(formData.get(`overrideReason_${line.feeRuleId}`) ?? "").trim() || null : null;
+    }
     return {
       application_id: applicationId,
       fee_rule_id: line.feeRuleId,
+      fee_category: line.feeCategory,
+      display_label: line.displayLabel,
+      is_manual: line.isManual,
       computed_amount: line.amount,
       overridden_amount: overriddenAmount,
       override_reason: overrideReason,
@@ -262,14 +336,18 @@ export async function finalizeAssessment(formData: FormData) {
     );
   }
 
+  const manualCount = lineRows.filter((l) => l.is_manual).length;
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,
     applicationId,
     actorRole: staff.role,
     actorLabel: actorLabelFor(staff),
     action: "assessment_finalized",
-    summary: `Assessment finalized for ${application.reference_number} -- total due ₱${totalDue.toLocaleString()}`,
-    details: { totalDue, lineCount: lineRows.length, overrideCount: lineRows.filter((l) => l.overridden_amount != null).length },
+    summary:
+      manualCount > 0
+        ? `Assessment finalized for ${application.reference_number} -- total due ₱${totalDue.toLocaleString()} (${manualCount} line${manualCount === 1 ? "" : "s"} manually entered, Automated Assessment off)`
+        : `Assessment finalized for ${application.reference_number} -- total due ₱${totalDue.toLocaleString()}`,
+    details: { totalDue, lineCount: lineRows.length, overrideCount: lineRows.filter((l) => l.overridden_amount != null).length, manualCount },
   });
 
   revalidatePath("/dashboard/bplo");

@@ -30,7 +30,7 @@ export default async function TreasuryDashboardPage() {
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      "id, application_type, status, business:businesses(business_name, legacy_owner_name, owner:owners(full_name)), fee_lines:application_fee_lines(computed_amount, overridden_amount, included_in_total, fee_rule:fee_rules(name))"
+      "id, application_type, status, business:businesses(business_name, legacy_owner_name, owner:owners(full_name)), fee_lines:application_fee_lines(display_label, computed_amount, overridden_amount, included_in_total, is_manual)"
     )
     .eq("lgu_id", staff.lgu_id)
     .eq("status", "pending_payment")
@@ -46,7 +46,12 @@ export default async function TreasuryDashboardPage() {
     const biz = a.business as unknown as { business_name: string } | null;
     return biz?.business_name ?? "(business record missing)";
   }
-  type FeeLine = { computed_amount: number; overridden_amount: number | null; included_in_total: boolean; fee_rule: { name: string } | null };
+  // display_label (migration 0026), not a fee_rules join -- a manually
+  // entered line (Automated Assessment off, bplo/actions.ts) has no
+  // fee_rule_id at all, and this is also what shows the fixed "Mayor's
+  // Permit Fee"/"Local Business Tax" labels instead of whichever specific
+  // schedule row happened to compute the amount.
+  type FeeLine = { display_label: string; computed_amount: number; overridden_amount: number | null; included_in_total: boolean; is_manual: boolean };
   function feeLines(a: (typeof rows)[number]): FeeLine[] {
     return (a.fee_lines as unknown as FeeLine[]) ?? [];
   }
@@ -94,8 +99,9 @@ export default async function TreasuryDashboardPage() {
                     {lines.map((l, i) => (
                       <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[12.5px]">
                         <span className={l.included_in_total ? "text-ink" : "text-ink-faint"}>
-                          {l.fee_rule?.name ?? "Fee"}
+                          {l.display_label}
                           {!l.included_in_total && " (paid at counter)"}
+                          {l.is_manual && " (entered manually)"}
                         </span>
                         <span className="font-bold tabular-nums">{peso(l.overridden_amount ?? l.computed_amount)}</span>
                       </div>

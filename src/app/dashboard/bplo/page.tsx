@@ -3,7 +3,7 @@ import { getLguDisplay } from "@/lib/lgu";
 import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { getLbtCategoryOptions } from "@/lib/lbt-categories";
-import { computeApplicationFees, type FeeComputationResult } from "@/lib/fee-engine";
+import { computeApplicationFees, type FeeComputationResult, type FeeLineResult } from "@/lib/fee-engine";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +13,9 @@ import {
   EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper, peso,
 } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
+import { AssessmentManualSection, type ManualFieldSpec } from "./assessment-manual-fields";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * BPLO dashboard -- redesigned per the approved design concept (card-based
@@ -180,6 +183,7 @@ export default async function BploDashboardPage() {
                 formInputs={a.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null}
                 lguId={staff.lgu_id}
                 supabase={supabase}
+                automatedAssessmentEnabled={lgu.automatedAssessmentEnabled}
               />
             ))}
           </div>
@@ -306,24 +310,43 @@ export default async function BploDashboardPage() {
   );
 }
 
+// Fixed display order (2026-08-14 follow-up, project owner's explicit
+// ask): Mayor's Permit Fee first, Local Business Tax second, then
+// whatever regulatory fees are active, CEDULA last (it's reference_only,
+// paid at the counter, so it reads naturally as a trailing note rather
+// than part of the online total above it). Discount sits right under LBT
+// since it's a straight reduction of that line, not its own concept.
+const CATEGORY_ORDER: Record<FeeLineResult["feeCategory"], number> = {
+  mayors_permit: 0,
+  lbt: 1,
+  discount: 2,
+  regulatory: 3,
+  cedula: 4,
+};
+
 /**
- * Fee assessment card -- build order step 7. Computes a live preview
- * with the fee engine (src/lib/fee-engine.ts) every time this renders;
- * nothing is written to application_fee_lines until "Finalize
+ * Fee assessment card -- build order step 7, generalized 2026-08-14 to a
+ * shape-aware engine (fee-engine.ts) plus the Automated Assessment
+ * manual-override toggle. Computes a live preview every time this
+ * renders; nothing is written to application_fee_lines until "Finalize
  * assessment" is submitted (finalizeAssessment re-runs the computation
- * server-side rather than trusting this preview). A blocked result
- * (missing LBT category, most commonly) hides the finalize form
- * entirely and links straight to where BPLO can fix it, instead of
- * letting the click fail with a thrown error.
+ * server-side rather than trusting this preview).
+ *
+ * A blocked result only still hides the form entirely when Automated
+ * Assessment is ON -- off, the blocked reason becomes a warning and the
+ * manual-entry section (AssessmentManualSection) renders anyway, since
+ * the whole point of that toggle is a way through even when the engine
+ * can't compute something.
  */
 async function AssessmentCard({
-  applicationId, businessName, ownerName, applicationType, status, business, formInputs, lguId, supabase,
+  applicationId, businessName, ownerName, applicationType, status, business, formInputs, lguId, supabase, automatedAssessmentEnabled,
 }: {
   applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
   business: (Record<string, unknown> & { id: string }) | null;
   formInputs: { capital_investment?: number | null; gross_sales?: number | null } | null;
   lguId: string;
   supabase: Awaited<ReturnType<typeof createClient>>;
+  automatedAssessmentEnabled: boolean;
 }) {
   const result: FeeComputationResult = business
     ? await computeApplicationFees(supabase, {
@@ -345,19 +368,22 @@ async function AssessmentCard({
           billiardTableCount: (business.billiard_table_count as number | null) ?? null,
           guardPostCount: (business.guard_post_count as number | null) ?? null,
           animalCount: (business.animal_count as number | null) ?? null,
+          maleEmployeeCount: (business.male_employee_count as number | null) ?? null,
+          femaleEmployeeCount: (business.female_employee_count as number | null) ?? null,
         },
       })
     : { ok: false, blockedReason: "Business record missing." };
 
-  return (
-    <Card className="p-5">
-      <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName}</p>
-      <p className="mb-3 text-[12.5px] text-ink-soft">
-        Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
-      </p>
-      <WorkflowStepper status={status} />
-
-      {!result.ok ? (
+  // Blocked and Automated Assessment is on: nothing to do here but send
+  // BPLO to fix the underlying data, exactly as before.
+  if (!result.ok && automatedAssessmentEnabled) {
+    return (
+      <Card className="p-5">
+        <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName}</p>
+        <p className="mb-3 text-[12.5px] text-ink-soft">
+          Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
+        </p>
+        <WorkflowStepper status={status} />
         <div className="mb-1 flex items-start gap-2 rounded-2xl bg-warn-bg px-4 py-3 text-[12.5px] font-bold text-warn-ink">
           <InfoIcon className="mt-0.5 size-4 shrink-0" />
           <span>
@@ -370,18 +396,52 @@ async function AssessmentCard({
             )}
           </span>
         </div>
-      ) : (
-        <form action={finalizeAssessment}>
-          <input type="hidden" name="applicationId" value={applicationId} />
-          <div className="mb-3 divide-y divide-border rounded-2xl border border-border">
-            {result.lines.map((line) => (
-              <div key={line.feeRuleId} className="flex flex-wrap items-center gap-2 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12.5px] font-bold text-ink">{line.feeRuleName}</p>
-                  {!line.includedInTotal && <p className="text-[11px] text-ink-faint">Paid at a physical counter — not part of the online total.</p>}
-                  {line.note && <p className="text-[11px] text-warn-ink">{line.note}</p>}
-                </div>
-                <span className="font-display text-[15px] font-bold tabular-nums text-brand-navy">{peso(line.amount)}</span>
+      </Card>
+    );
+  }
+
+  const lines = result.ok ? [...result.lines].sort((a, b) => CATEGORY_ORDER[a.feeCategory] - CATEGORY_ORDER[b.feeCategory]) : [];
+  const warnings = result.ok ? result.warnings : [result.blockedReason];
+
+  const computedLines = lines.filter((l) => automatedAssessmentEnabled || !l.isManualEligible);
+  const computedTotal = round2(computedLines.filter((l) => l.includedInTotal).reduce((sum, l) => sum + l.amount, 0));
+
+  const manualFields: ManualFieldSpec[] = [];
+  if (!automatedAssessmentEnabled) {
+    for (const category of ["mayors_permit", "lbt"] as const) {
+      const line = lines.find((l) => l.feeCategory === category);
+      manualFields.push({
+        key: `manual_${category}`,
+        label: category === "mayors_permit" ? "Mayor's Permit Fee" : "Local Business Tax",
+        initial: line?.amount ?? null,
+        note: line?.note,
+      });
+    }
+    for (const line of lines.filter((l) => l.feeCategory === "regulatory" && l.isManualEligible)) {
+      manualFields.push({ key: `manual_regulatory_${line.feeRuleId}`, label: line.displayLabel, initial: line.amount, note: line.note });
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <p className="mb-1 font-display text-[15px] font-bold text-ink">{businessName}</p>
+      <p className="mb-3 text-[12.5px] text-ink-soft">
+        Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
+      </p>
+      <WorkflowStepper status={status} />
+
+      <form action={finalizeAssessment}>
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <div className="mb-3 divide-y divide-border rounded-2xl border border-border">
+          {computedLines.map((line) => (
+            <div key={line.feeRuleId ?? line.feeCategory} className="flex flex-wrap items-center gap-2 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-bold text-ink">{line.displayLabel}</p>
+                {!line.includedInTotal && <p className="text-[11px] text-ink-faint">Paid at a physical counter — not part of the online total.</p>}
+                {line.note && <p className="text-[11px] text-warn-ink">{line.note}</p>}
+              </div>
+              <span className="font-display text-[15px] font-bold tabular-nums text-brand-navy">{peso(line.amount)}</span>
+              {line.feeRuleId && (
                 <div className="flex w-full items-center gap-2 sm:w-auto">
                   <input
                     type="number"
@@ -397,24 +457,28 @@ async function AssessmentCard({
                     className="h-8 flex-1 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
                   />
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {result.warnings.length > 0 && (
-            <div className="mb-3 flex flex-col gap-1 rounded-2xl bg-info-bg px-4 py-3 text-[12px] font-bold text-info-ink">
-              {result.warnings.map((w, i) => <span key={i}>{w}</span>)}
+              )}
             </div>
-          )}
+          ))}
+        </div>
 
+        {warnings.length > 0 && (
+          <div className="mb-3 flex flex-col gap-1 rounded-2xl bg-info-bg px-4 py-3 text-[12px] font-bold text-info-ink">
+            {warnings.map((w, i) => <span key={i}>{w}</span>)}
+          </div>
+        )}
+
+        {automatedAssessmentEnabled ? (
           <div className="mb-4 flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
             <span className="text-[12.5px] font-bold text-ink-soft">Total due online</span>
-            <span className="font-display text-[20px] font-bold tabular-nums text-ink">{peso(result.total)}</span>
+            <span className="font-display text-[20px] font-bold tabular-nums text-ink">{peso(computedTotal)}</span>
           </div>
+        ) : (
+          <AssessmentManualSection computedTotal={computedTotal} manualFields={manualFields} />
+        )}
 
-          <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
-        </form>
-      )}
+        <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
+      </form>
     </Card>
   );
 }
