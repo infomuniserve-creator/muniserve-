@@ -1,9 +1,18 @@
 import { getCurrentStaff } from "@/lib/staff";
+import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "./sign-out-button";
 
-/** Landing spot after login. Routes each role to its dashboard per CLAUDE.md section 9's build order. */
+/**
+ * Landing spot after login. Checks platform admin first (CLAUDE.md 7o) --
+ * that role sits above LGU-scoped staff and isn't a staff_users row at
+ * all, so getCurrentStaff() alone would never find it. Falls through to
+ * the existing per-role staff routing (build order step 9) otherwise.
+ */
 export default async function DashboardRouterPage() {
+  const platformAdmin = await getCurrentPlatformAdmin();
+  if (platformAdmin) redirect("/admin");
+
   const staff = await getCurrentStaff();
 
   if (!staff) {

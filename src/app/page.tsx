@@ -1,12 +1,15 @@
-import { getPilotLguDisplay } from "@/lib/lgu";
+import { resolveLguDisplay } from "@/lib/lgu";
+import { headers } from "next/headers";
 import Link from "next/link";
 
 // force-dynamic: same reasoning as apply/page.tsx -- was static (no
 // server data) before this page read from the DB.
 export const dynamic = "force-dynamic";
 
+/** Resolves from the request's own subdomain (CLAUDE.md 7o) -- portal.muniserve.ph/root shows San Miguel (the pilot fallback), a new client's own subdomain shows theirs. */
 export default async function RootPage() {
-  const lgu = await getPilotLguDisplay();
+  const host = (await headers()).get("host");
+  const lgu = await resolveLguDisplay(host);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#f4f6fb" }}>

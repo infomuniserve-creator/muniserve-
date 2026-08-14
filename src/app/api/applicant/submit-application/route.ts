@@ -1,5 +1,5 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
-import { getPilotLguId } from "@/lib/lgu";
+import { resolveLguId } from "@/lib/lgu";
 import { createServiceClient } from "@/lib/supabase/service";
 import { REQUIRED_FIELDS, isFieldCurrentlyRequired, type FieldKey } from "@/lib/application-form-logic";
 import { NextResponse } from "next/server";
@@ -200,7 +200,11 @@ export async function POST(request: Request) {
   if (ownerUpdateError) {
     return NextResponse.json({ error: "owner_update_failed" }, { status: 500 });
   }
-  const lguId = await getPilotLguId();
+  // Resolved from the request's own Host header (CLAUDE.md 7o), not
+  // blindly the pilot LGU -- a new client's applicants reach this route
+  // from their own subdomain, and their application has to land under
+  // their own lgu_id, not get silently filed under San Miguel's.
+  const lguId = await resolveLguId(request.headers.get("host"));
   const year = new Date().getFullYear();
 
   const businessColumns = {

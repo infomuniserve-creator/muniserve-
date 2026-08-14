@@ -1,4 +1,4 @@
-import { getPilotLguId } from "@/lib/lgu";
+import { resolveLguId } from "@/lib/lgu";
 import { maskName } from "@/lib/mask";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -20,7 +20,11 @@ export async function POST(request: Request) {
   }
 
   const supabase = createServiceClient();
-  const lguId = await getPilotLguId();
+  // Resolved from the request's Host header (CLAUDE.md 7o) -- a new
+  // client's legacy business roster lives under their own lgu_id, not
+  // San Miguel's, so a license lookup from their subdomain must search
+  // the right one.
+  const lguId = await resolveLguId(request.headers.get("host"));
 
   // BUSINESS_PROFILE_COLUMNS is a runtime string, not a literal template, so
   // supabase-js can't infer a real row type here -- cast once at the
