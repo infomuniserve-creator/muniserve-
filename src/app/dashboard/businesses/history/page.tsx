@@ -1,4 +1,5 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { fetchAllRows } from "@/lib/db-pagination";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -13,6 +14,7 @@ export default async function PermitHistoryPage() {
 
   const office = officeIdentity(staff);
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
   const raw = await fetchAllRows<Record<string, unknown>>((offset, limit) =>
     supabase
       .from("permit_history")
@@ -44,7 +46,7 @@ export default async function PermitHistoryPage() {
     <>
       <DashboardTopBar
         officeLabel={office.label}
-        officeSub="San Miguel, Bulacan"
+        officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
         active="businesses"
         applicationsHref={office.homeHref}

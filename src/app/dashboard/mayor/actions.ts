@@ -1,6 +1,7 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -141,6 +142,7 @@ export async function signPermit(formData: FormData) {
   const verifyUrl = `${appUrl}/verify/${application.reference_number}`;
 
   try {
+    const lgu = await getLguDisplay(supabase, staff.lgu_id);
     const { pdf, qrPng } = await generatePermitAssets({
       referenceNumber: application.reference_number,
       businessName: business?.business_name ?? "(business record missing)",
@@ -151,6 +153,7 @@ export async function signPermit(formData: FormData) {
       issuedAt,
       validUntil,
       verifyUrl,
+      lgu,
     });
 
     const pdfPath = `${applicationId}/permit.pdf`;

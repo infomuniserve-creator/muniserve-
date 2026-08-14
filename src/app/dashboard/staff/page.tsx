@@ -1,4 +1,5 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
@@ -28,6 +29,7 @@ export default async function StaffPage() {
 
   const office = officeIdentity(staff);
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: staffList } = await supabase
     .from("staff_users")
@@ -47,7 +49,7 @@ export default async function StaffPage() {
     <>
       <DashboardTopBar
         officeLabel={office.label}
-        officeSub="San Miguel, Bulacan"
+        officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
         active="staff"
         applicationsHref={office.homeHref}
@@ -88,7 +90,7 @@ export default async function StaffPage() {
       </div>
 
       <div>
-        <SectionHead title="All staff at San Miguel, Bulacan" />
+        <SectionHead title={`All staff at ${lgu.name}, ${lgu.province}`} />
         {(staffList ?? []).length === 0 ? (
           <EmptyState>No staff accounts yet.</EmptyState>
         ) : (

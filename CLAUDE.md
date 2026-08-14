@@ -376,6 +376,27 @@ Scoped down deliberately: adding a staff member and activating/deactivating them
 
 ---
 
+## 7n. Multi-LGU display fixes (2026-08-14)
+
+The LGU name/letterhead being hardcoded had been flagged twice already (7h, 7k) without being fixed. This pass makes the **display text** data-driven — it deliberately does **not** solve two bigger, separate problems, stated up front rather than silently left implied:
+- **Which LGU a given request belongs to** is still resolved via `getPilotLguId()`/`staff.lgu_id` exactly as before — there's still no URL-based LGU routing (subdomain, path segment, whatever), and building that is a materially bigger feature than this pass.
+- **`san-miguel-form-options.ts`** (barangay lists, nature-of-business options) is genuinely San-Miguel-specific *reference data*, not just text — a barangay list is a real, different list per municipality. Making that multi-LGU needs a per-LGU data model, not a string swap. Untouched here.
+
+**New in `src/lib/lgu.ts`**: `LguDisplay` type + `getLguDisplay(supabase, lguId)` (takes the caller's own client — staff's RLS-scoped session where one exists, service-role for pre-auth pages) + `getPilotLguDisplay()` (the pre-auth placeholder, same caveat as `getPilotLguId()`). Migration `0017_lgu_display_fields.sql` adds `lgus.display_name` (e.g. "Municipality of San Miguel Bulacan") and `lgus.bplo_office_name` (e.g. "Office of the Municipal Business Permit and Licensing Officer") — explicit overridable text, not derived from `name`/`province` by formula, since the exact wording genuinely varies by LGU type (Municipality vs. City) in ways not safe to guess. Both fall back to a Municipality-shaped default in code if left null, so forgetting to fill them in during a future LGU's onboarding doesn't silently break letterheads.
+
+**Every hardcoded occurrence found and fixed**, each using whichever LGU-resolution is actually correct for that page rather than blindly using the pilot placeholder everywhere:
+- 7 dashboard pages' `officeSub="San Miguel, Bulacan"` (bplo/mayor/treasury/department/businesses/businesses-history/staff) + staff page's "All staff at..." heading + the staff invite email body — all resolved via `staff.lgu_id`, since a staff session already has one.
+- `permit-pdf.ts`'s letterhead + certifying paragraph + "Municipal Mayor" signature title (now `/\bcity\b/i` on `bploOfficeName` decides "City Mayor" vs "Municipal Mayor" — one word's worth of variance not worth its own column) — resolved via the signing Mayor's own `staff.lgu_id` in `mayor/actions.ts`'s `signPermit`.
+- `/verify/[reference]`'s subtitle and footer — resolved via **the permit's own `application.lgu_id`**, not the pilot placeholder, since this page already has a real per-record LGU to key off of and there's no reason to fall back to a single-tenant assumption when it does.
+- `apply/page.tsx`'s `LguBanner`, `Head` subtitles, and the declaration text's "BPLO San Miguel Bulacan" mention; `login/page.tsx`'s subtitle; the root landing page's subtitle — all pre-auth, so these use `getPilotLguDisplay()`, same placeholder-until-real-routing caveat as `getPilotLguId()`.
+- `layout.tsx`'s `<meta>` description — deliberately **left LGU-agnostic** rather than fetched, on purpose: it's a static `export const metadata`, and making it dynamic would opt the *entire app* out of static rendering just for SEO text nobody sees in the UI. Not every hardcoded string was worth chasing to a data source.
+
+**Structural work this required, not just string swaps**: `apply/page.tsx` and `login/page.tsx` were both fully `"use client"` with no server data-fetching boundary — split each into a thin async Server Component `page.tsx` (fetches the LGU display) + a client component (`ApplyPageClient`, `GoogleSignInButton`) for the actual interactivity. `DECLARATION_TEXT` (a module-level constant, can't reference props) became `declarationText(lgu)`, a function called at render time.
+
+**A real gotcha caught by the build itself, not by reasoning about it in advance**: `apply/page.tsx`, `login/page.tsx`, and the root landing page used to be fully static (no server data at all) and were prerendered at build time. The moment they read from the DB, `next build` failed outright — a transient DB hiccup during the build now had the power to fail the *entire deployment*, and worse, any build-time LGU edit wouldn't show up until the next redeploy anyway. Fixed by marking all three `export const dynamic = "force-dynamic"`, so they render per-request like the rest of the DB-backed pages instead of getting frozen into a build-time snapshot. Verified by re-running the full build (failed once exactly as described, succeeded clean after the fix) rather than assuming the fix was sufficient.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { getLguDisplay } from "@/lib/lgu";
 import { notFound } from "next/navigation";
 
 /**
@@ -13,6 +14,11 @@ import { notFound } from "next/navigation";
  *
  * Uses the service-role client since this is intentionally public --
  * there's no owner session to scope an RLS-authenticated read to here.
+ *
+ * Resolves the LGU from the permit's own application.lgu_id (CLAUDE.md
+ * 7n), not the pilot-LGU placeholder -- unlike the pre-auth pages, this
+ * one already has a real per-record LGU to key off of, so there's no
+ * reason to fall back to a single-tenant assumption here.
  */
 export default async function VerifyPermitPage({ params }: { params: Promise<{ reference: string }> }) {
   const { reference } = await params;
@@ -22,7 +28,7 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
     .from("permits")
     .select(
       `permit_number, issued_at, valid_until,
-       application:applications(application_type, business:businesses(business_name, nature_of_business))`
+       application:applications(application_type, lgu_id, business:businesses(business_name, nature_of_business))`
     )
     .eq("permit_number", reference)
     .maybeSingle();
@@ -31,8 +37,11 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
 
   const application = permit.application as unknown as {
     application_type: string;
+    lgu_id: string;
     business: { business_name: string; nature_of_business: string | null } | null;
   } | null;
+
+  const lgu = application ? await getLguDisplay(supabase, application.lgu_id) : null;
 
   // Explicit +08:00 (Asia/Manila, fixed offset, no DST) rather than a
   // bare local-time string -- Vercel's functions run in UTC, so an
@@ -45,7 +54,7 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
   return (
     <div style={{ maxWidth: 480, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
       <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
-        MuniServe · San Miguel, Bulacan
+        MuniServe{lgu ? ` · ${lgu.name}, ${lgu.province}` : ""}
       </p>
       <p style={{ fontWeight: 600, fontSize: 18, margin: "0 0 16px" }}>Permit verification</p>
 
@@ -72,7 +81,7 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
       <Row label="Valid until" value={validUntil.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" })} />
 
       <p style={{ fontSize: 11, color: "#6b7280", marginTop: 20 }}>
-        This page confirms a permit&rsquo;s validity only. For any other concern, contact the BPLO office of San Miguel, Bulacan.
+        This page confirms a permit&rsquo;s validity only. For any other concern, contact the BPLO office{lgu ? ` of ${lgu.name}, ${lgu.province}` : ""}.
       </p>
     </div>
   );

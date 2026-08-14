@@ -1,4 +1,5 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +20,7 @@ export default async function DepartmentDashboardPage() {
 
   const office = officeIdentity(staff);
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: pending } = await supabase
     .from("department_reviews")
@@ -51,7 +53,7 @@ export default async function DepartmentDashboardPage() {
     <>
       <DashboardTopBar
         officeLabel={office.label}
-        officeSub="San Miguel, Bulacan"
+        officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
         active="applications"
         applicationsHref={office.homeHref}

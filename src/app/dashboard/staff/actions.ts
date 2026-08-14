@@ -1,6 +1,7 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { notifyStaffEmail } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -56,6 +57,7 @@ export async function addStaffMember(formData: FormData) {
     throw error.code === "23505" ? new Error("A staff account with that email already exists") : error;
   }
 
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const loginUrl = `${appUrl}/login`;
   const roleLabel = role === "department" ? `${department} Department` : ROLE_LABEL[role];
@@ -65,7 +67,7 @@ export async function addStaffMember(formData: FormData) {
     email,
     "You've been added to MuniServe",
     `<p>${greeting}</p>
-     <p>You've been added as <strong>${roleLabel}</strong> staff on MuniServe, San Miguel Bulacan's business permit system.</p>
+     <p>You've been added as <strong>${roleLabel}</strong> staff on MuniServe, ${lgu.displayName}'s business permit system.</p>
      <p>Sign in here using your Google account at this email address (<strong>${email}</strong>) -- no password needed:</p>
      <p><a href="${loginUrl}">${loginUrl}</a></p>`
   );

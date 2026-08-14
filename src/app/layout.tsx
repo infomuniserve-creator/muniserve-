@@ -21,9 +21,13 @@ const quicksand = Quicksand({
   weight: ["500", "600", "700"],
 });
 
+// Deliberately LGU-agnostic (CLAUDE.md 7n) -- this is a static export, and
+// making it dynamic (generateMetadata()) to pull a real LGU name in would
+// opt the entire app out of static rendering just for a <meta> description
+// tag, not a trade worth making for SEO text nobody sees in the UI itself.
 export const metadata: Metadata = {
   title: "MuniServe",
-  description: "Electronic Business Permit and Licensing System — San Miguel, Bulacan",
+  description: "Electronic Business Permit and Licensing System for Philippine LGUs",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

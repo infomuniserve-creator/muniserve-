@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import QRCode from "qrcode";
+import type { LguDisplay } from "@/lib/lgu";
 
 /**
  * Generates the permit certificate PDF + its QR code image, at signing
@@ -13,6 +14,11 @@ import QRCode from "qrcode";
  * Pure-JS (pdf-lib + qrcode, no native deps like Puppeteer/Chromium) so
  * this runs fine in a Vercel serverless function without extra
  * configuration.
+ *
+ * Letterhead comes from the caller's LguDisplay (CLAUDE.md 7n), not a
+ * hardcoded "San Miguel" string -- only "Republic of the Philippines" is
+ * a true constant here, since every LGU this app serves is Philippine by
+ * definition.
  */
 
 const PAGE_WIDTH = 612; // Letter, points (8.5in x 72)
@@ -32,6 +38,7 @@ export type PermitPdfInput = {
   issuedAt: Date;
   validUntil: string; // YYYY-MM-DD
   verifyUrl: string;
+  lgu: LguDisplay;
 };
 
 /**
@@ -67,11 +74,13 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
   let y = PAGE_HEIGHT - 30;
   centerText(page, "Republic of the Philippines", y, font, 11, rgb(1, 1, 1));
   y -= 15;
-  centerText(page, "Province of Bulacan", y, font, 11, rgb(1, 1, 1));
-  y -= 15;
-  centerText(page, "Municipality of San Miguel Bulacan", y, font, 11, rgb(1, 1, 1));
+  if (input.lgu.province) {
+    centerText(page, `Province of ${input.lgu.province}`, y, font, 11, rgb(1, 1, 1));
+    y -= 15;
+  }
+  centerText(page, input.lgu.displayName, y, font, 11, rgb(1, 1, 1));
   y -= 16;
-  centerText(page, "OFFICE OF THE MUNICIPAL BUSINESS PERMIT AND LICENSING OFFICER", y, bold, 10, rgb(1, 1, 1));
+  centerText(page, input.lgu.bploOfficeName.toUpperCase(), y, bold, 10, rgb(1, 1, 1));
   y -= 26;
   centerText(page, "BUSINESS PERMIT", y, bold, 20, rgb(1, 1, 1));
 
@@ -99,7 +108,7 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
   // --- Body text ---
   y -= 14;
   const bodyLines = wrapText(
-    `This is to certify that the business named above has been granted permission to operate within the Municipality of San Miguel, Bulacan, subject to existing municipal ordinances and national laws. This permit must be posted in a conspicuous place at the business premises and is valid only for the period stated above.`,
+    `This is to certify that the business named above has been granted permission to operate within the ${input.lgu.displayName}, subject to existing local ordinances and national laws. This permit must be posted in a conspicuous place at the business premises and is valid only for the period stated above.`,
     font,
     10,
     PAGE_WIDTH - MARGIN * 2
@@ -110,9 +119,13 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
   }
 
   // --- Signature line ---
+  // "City Mayor" vs "Municipal Mayor" derived from the office name rather
+  // than a separate stored field -- one word's worth of variance isn't
+  // worth its own lgus column when bplo_office_name already says which.
+  const mayorTitle = /\bcity\b/i.test(input.lgu.bploOfficeName) ? "City Mayor" : "Municipal Mayor";
   const sigY = 150;
   page.drawLine({ start: { x: PAGE_WIDTH - MARGIN - 200, y: sigY }, end: { x: PAGE_WIDTH - MARGIN, y: sigY }, thickness: 1, color: INK });
-  page.drawText("Municipal Mayor", { x: PAGE_WIDTH - MARGIN - 200, y: sigY - 14, font: bold, size: 10, color: INK });
+  page.drawText(mayorTitle, { x: PAGE_WIDTH - MARGIN - 200, y: sigY - 14, font: bold, size: 10, color: INK });
 
   // --- QR code + verification note ---
   const qrSize = 90;

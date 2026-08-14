@@ -1,4 +1,5 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { getLbtCategoryOptions } from "@/lib/lbt-categories";
@@ -26,6 +27,7 @@ export default async function BploDashboardPage() {
 
   const office = officeIdentity(staff);
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: apps } = await supabase
     .from("applications")
@@ -110,7 +112,7 @@ export default async function BploDashboardPage() {
     <>
       <DashboardTopBar
         officeLabel={office.label}
-        officeSub="San Miguel, Bulacan"
+        officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
         active="applications"
         applicationsHref={office.homeHref}

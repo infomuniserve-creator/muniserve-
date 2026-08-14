@@ -1,4 +1,5 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
@@ -21,6 +22,7 @@ export default async function MayorDashboardPage() {
 
   const office = officeIdentity(staff);
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: apps } = await supabase
     .from("applications")
@@ -54,7 +56,7 @@ export default async function MayorDashboardPage() {
     <>
       <DashboardTopBar
         officeLabel={office.label}
-        officeSub="San Miguel, Bulacan"
+        officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
         active="applications"
         applicationsHref={office.homeHref}

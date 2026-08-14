@@ -1,4 +1,5 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getLguDisplay } from "@/lib/lgu";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { classifyBusinessStatus, BUSINESS_STATUS_LABEL, BUSINESS_STATUS_TONE, type BusinessStatus } from "@/lib/business-status";
 import { fetchAllRows } from "@/lib/db-pagination";
@@ -68,6 +69,7 @@ export default async function BusinessesPage({
 
   const office = officeIdentity(staff);
   const supabase = await createClient();
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   // San Miguel alone already has 1,177 businesses -- more than PostgREST's
   // silent 1,000-row default cap, which under-populated this exact page
@@ -156,7 +158,7 @@ export default async function BusinessesPage({
     <>
       <DashboardTopBar
         officeLabel={office.label}
-        officeSub="San Miguel, Bulacan"
+        officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
         active="businesses"
         applicationsHref={office.homeHref}
