@@ -1,10 +1,18 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
+import { notifyStaffEmail } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const VALID_ROLES = new Set(["bplo", "treasury", "mayor", "department"]);
+
+const ROLE_LABEL: Record<string, string> = {
+  bplo: "BPLO",
+  treasury: "Treasury",
+  mayor: "Mayor's Office",
+  department: "Department",
+};
 
 /**
  * BPLO provisions a new staff account by email (CLAUDE.md section 7l).
@@ -14,6 +22,13 @@ const VALID_ROLES = new Set(["bplo", "treasury", "mayor", "department"]);
  * real sign-in, matched by email. Uses BPLO's own RLS-scoped session
  * (migration 0015's insert policy enforces the role/lgu_id check for
  * real, not just this action's own staff.role check).
+ *
+ * Emails the new hire a sign-in link right after (CLAUDE.md section 7m
+ * follow-up) -- without it, BPLO would have to separately message every
+ * new hire themselves just to tell them the URL and that they don't need
+ * a password. Best-effort via notifyStaffEmail (never throws, logs to
+ * notifications_log) -- a Resend hiccup shouldn't undo a staff account
+ * that was actually created.
  */
 export async function addStaffMember(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -40,6 +55,20 @@ export async function addStaffMember(formData: FormData) {
     // Postgres unique_violation on staff_users_email_key (migration 0015)
     throw error.code === "23505" ? new Error("A staff account with that email already exists") : error;
   }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const loginUrl = `${appUrl}/login`;
+  const roleLabel = role === "department" ? `${department} Department` : ROLE_LABEL[role];
+  const greeting = fullName ? `Hi ${fullName},` : "Hi,";
+  await notifyStaffEmail(
+    null,
+    email,
+    "You've been added to MuniServe",
+    `<p>${greeting}</p>
+     <p>You've been added as <strong>${roleLabel}</strong> staff on MuniServe, San Miguel Bulacan's business permit system.</p>
+     <p>Sign in here using your Google account at this email address (<strong>${email}</strong>) -- no password needed:</p>
+     <p><a href="${loginUrl}">${loginUrl}</a></p>`
+  );
 
   revalidatePath("/dashboard/staff");
 }

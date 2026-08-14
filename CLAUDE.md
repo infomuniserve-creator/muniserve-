@@ -372,6 +372,8 @@ Never a hard delete — `is_active` toggle only, matching the rest of this schem
 
 Scoped down deliberately: adding a staff member and activating/deactivating them, not full profile editing (role/department reassignment after creation) — reassigning a department mid-flight risks orphaning in-progress `department_reviews` rows tied to the old department name, not something to allow casually from a simple admin form.
 
+**Follow-up, same day — invite email.** `addStaffMember` now emails the new hire a sign-in link right after creating their row (`notifyStaffEmail`, best-effort like every other notification — a Resend hiccup shouldn't undo a staff account that was actually created), instead of leaving BPLO to separately message every new hire the URL themselves. Points at `${NEXT_PUBLIC_APP_URL}/login` and explicitly says to sign in with Google using that exact email address, since the claim-by-email match above depends on it.
+
 ---
 
 ## 8. UI reference
