@@ -59,6 +59,8 @@ export default async function StaffPage() {
         applicationsHref={office.homeHref}
         staffHref="/dashboard/staff"
         settingsHref="/dashboard/settings"
+        auditHref="/dashboard/audit"
+        statsHref="/dashboard/stats"
         rightSlot={<SignOutButton />}
       />
 

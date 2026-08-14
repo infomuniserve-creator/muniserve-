@@ -118,6 +118,8 @@ export default async function BploDashboardPage() {
         applicationsHref={office.homeHref}
         staffHref="/dashboard/staff"
         settingsHref="/dashboard/settings"
+        auditHref="/dashboard/audit"
+        statsHref="/dashboard/stats"
         rightSlot={<SignOutButton />}
       />
 

@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { notifyStaffEmail } from "@/lib/notifications";
+import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -72,6 +73,15 @@ export async function addStaffMember(formData: FormData) {
      <p><a href="${loginUrl}">${loginUrl}</a></p>`
   );
 
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "staff_added",
+    summary: `Staff account added: ${fullName || email} (${roleLabel})`,
+    details: { email, role, department },
+  });
+
   revalidatePath("/dashboard/staff");
 }
 
@@ -94,8 +104,9 @@ export async function setStaffActive(formData: FormData) {
 
   const supabase = await createClient();
 
+  const { data: target } = await supabase.from("staff_users").select("role, full_name, email").eq("id", staffId).single();
+
   if (!isActive) {
-    const { data: target } = await supabase.from("staff_users").select("role").eq("id", staffId).single();
     if (target?.role === "bplo") {
       const { count } = await supabase
         .from("staff_users")
@@ -117,6 +128,14 @@ export async function setStaffActive(formData: FormData) {
 
   const { error } = await supabase.from("staff_users").update({ is_active: isActive }).eq("id", staffId).eq("lgu_id", staff.lgu_id);
   if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: isActive ? "staff_activated" : "staff_deactivated",
+    summary: `Staff account ${isActive ? "activated" : "deactivated"}: ${target?.full_name || target?.email || staffId}`,
+  });
 
   revalidatePath("/dashboard/staff");
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyApplicantSms, notifyStaffEmail } from "@/lib/notifications";
+import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import type { CurrentStaff } from "@/lib/staff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -143,6 +144,29 @@ export async function submitDepartmentDecision(params: {
   if (error || !updated) throw error ?? new Error("Decision update failed or was already made");
 
   const service = createServiceClient();
+
+  // Logged once here regardless of decision outcome (CLAUDE.md 7o
+  // follow-up) -- every department decision matters for the audit trail,
+  // not just rejections. actorLabel reflects who's actually acting: the
+  // department reviewer themselves, or BPLO tagged as acting on their
+  // behalf (rule #9).
+  const { data: roundForLog } = await service
+    .from("review_rounds")
+    .select("application_id")
+    .eq("id", updated.review_round_id)
+    .single();
+  if (roundForLog) {
+    const { data: app } = await service.from("applications").select("reference_number").eq("id", roundForLog.application_id).single();
+    await logAuditEvent(supabase, {
+      lguId: staff.lgu_id,
+      applicationId: roundForLog.application_id,
+      actorRole: staff.role,
+      actorLabel: actedOnBehalf ? `${actorLabelFor(staff)} on behalf of ${updated.department}` : actorLabelFor(staff),
+      action: "department_decision",
+      summary: `${updated.department}: ${decision.replace(/_/g, " ")} for ${app?.reference_number ?? roundForLog.application_id}`,
+      details: { department: updated.department, decision, notes, actedOnBehalf },
+    });
+  }
 
   // Rule #5: a rejection/request-for-info doesn't halt the round -- nothing
   // to advance, other departments keep going, but the applicant and BPLO

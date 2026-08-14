@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
+import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -182,6 +183,16 @@ export async function signPermit(formData: FormData) {
     .eq("id", applicationId)
     .eq("status", "pending_mayor");
   if (statusError) throw statusError;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "permit_signed",
+    summary: `Permit signed for ${application.reference_number} -- valid until ${validUntil}`,
+    details: { permitNumber: application.reference_number, validUntil, amountPaid },
+  });
 
   revalidatePath("/dashboard/mayor");
   revalidatePath("/dashboard/bplo");

@@ -2,6 +2,7 @@
 
 import { getCurrentStaff } from "@/lib/staff";
 import { notifyApplicantSms } from "@/lib/notifications";
+import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -58,6 +59,16 @@ export async function recordPayment(formData: FormData) {
       `MuniServe: we received your payment for application ${updated.reference_number}. Your permit is now being printed.`
     );
   }
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "payment_recorded",
+    summary: `Payment of ₱${amount.toLocaleString()} recorded for ${updated.reference_number}`,
+    details: { amount, method, orNumber },
+  });
 
   revalidatePath("/dashboard/treasury");
   revalidatePath("/dashboard/bplo");

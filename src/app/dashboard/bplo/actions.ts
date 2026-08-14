@@ -4,6 +4,7 @@ import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { notifyApplicantSms } from "@/lib/notifications";
+import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -65,6 +66,19 @@ export async function submitInitialReview(formData: FormData) {
       );
     }
   }
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: newStatus === "pending_dept_review" ? "initial_review_approved" : "initial_review_returned",
+    summary:
+      newStatus === "pending_dept_review"
+        ? `Initial review approved (${decision}) for ${updated.reference_number}`
+        : `Application ${updated.reference_number} returned to applicant during initial review`,
+    details: { decision, notes },
+  });
 
   revalidatePath("/dashboard/bplo");
 }
@@ -212,24 +226,39 @@ export async function finalizeAssessment(formData: FormData) {
 
   const { error: statusError } = await service
     .from("applications")
-    .update({ status: "pending_payment" })
+    // assessment_finalized_at (migration 0022) closes the one gap in an
+    // otherwise-complete stage-timestamp timeline -- Performance Stats
+    // needs this moment to measure "how long did BPLO take to assess"
+    // separately from "how long did the applicant take to pay after."
+    .update({ status: "pending_payment", assessment_finalized_at: new Date().toISOString() })
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment");
   if (statusError) throw statusError;
+
+  const totalDue = lineRows
+    .filter((l) => l.included_in_total)
+    .reduce((sum, l) => sum + (l.overridden_amount ?? l.computed_amount), 0);
 
   if (business.owner?.phone) {
     // Use each line's FINAL amount (override if BPLO set one), not
     // result.total -- that total was computed before overrides, and
     // the applicant needs to know what they actually owe.
-    const totalDue = lineRows
-      .filter((l) => l.included_in_total)
-      .reduce((sum, l) => sum + (l.overridden_amount ?? l.computed_amount), 0);
     await notifyApplicantSms(
       applicationId,
       business.owner.phone,
       `MuniServe: your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. Pay at the Treasurer's Office to continue.`
     );
   }
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "assessment_finalized",
+    summary: `Assessment finalized for ${application.reference_number} -- total due ₱${totalDue.toLocaleString()}`,
+    details: { totalDue, lineCount: lineRows.length, overrideCount: lineRows.filter((l) => l.overridden_amount != null).length },
+  });
 
   revalidatePath("/dashboard/bplo");
   revalidatePath("/dashboard/treasury");
@@ -249,12 +278,23 @@ export async function markPrinted(formData: FormData) {
   const applicationId = String(formData.get("applicationId"));
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("applications")
     .update({ status: "pending_mayor", printed_at: new Date().toISOString(), printed_by: staff.id })
     .eq("id", applicationId)
-    .eq("status", "pending_printing");
-  if (error) throw error;
+    .eq("status", "pending_printing")
+    .select("reference_number")
+    .single();
+  if (error || !updated) throw error ?? new Error("Update failed");
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "permit_printed",
+    summary: `Permit printed for ${updated.reference_number}, sent to Mayor for signature`,
+  });
 
   revalidatePath("/dashboard/bplo");
 }
@@ -290,6 +330,15 @@ export async function markReleased(formData: FormData) {
       `MuniServe: your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
     );
   }
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "permit_released",
+    summary: `Permit released to applicant for ${updated.reference_number}`,
+  });
 
   revalidatePath("/dashboard/bplo");
   revalidatePath("/dashboard/mayor");

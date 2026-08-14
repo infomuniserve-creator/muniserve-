@@ -297,17 +297,23 @@ export function DashboardTopBar({
   applicationsHref,
   staffHref,
   settingsHref,
+  auditHref,
+  statsHref,
   rightSlot,
 }: {
   officeLabel: string;
   officeSub: string;
   initials: string;
-  active: "applications" | "businesses" | "staff" | "settings";
+  active: "applications" | "businesses" | "staff" | "settings" | "audit" | "stats";
   applicationsHref: string;
   /** Only BPLO can manage staff (src/app/dashboard/staff) -- pass this in only from bplo/page.tsx so the tab doesn't render for anyone else. */
   staffHref?: string;
   /** Only BPLO has settings (src/app/dashboard/settings) -- same gating as staffHref, passed from the same call sites. Rendered as an icon button, not a nav pill, since it's a shortcut rather than a primary section. */
   settingsHref?: string;
+  /** BPLO and Mayor both see the Audit Trail (CLAUDE.md 7o follow-up, the project owner asked for Mayor explicitly) -- a real nav pill, not an icon, since it's a primary reporting section rather than an occasional admin task like Settings. */
+  auditHref?: string;
+  /** Same gating as auditHref -- Performance Stats, also BPLO + Mayor. */
+  statsHref?: string;
   rightSlot?: React.ReactNode;
 }) {
   return (
@@ -351,6 +357,26 @@ export function DashboardTopBar({
             }`}
           >
             Staff
+          </Link>
+        )}
+        {auditHref && (
+          <Link
+            href={auditHref}
+            className={`rounded-full px-4.5 py-2 font-display text-[13px] font-bold transition-colors ${
+              active === "audit" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            Audit Trail
+          </Link>
+        )}
+        {statsHref && (
+          <Link
+            href={statsHref}
+            className={`rounded-full px-4.5 py-2 font-display text-[13px] font-bold transition-colors ${
+              active === "stats" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            Performance Stats
           </Link>
         )}
       </nav>

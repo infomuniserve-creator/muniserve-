@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { normalizePhone } from "@/lib/phone";
+import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -48,7 +49,7 @@ export async function startWalkInApplication(formData: FormData) {
 
   const { data: business, error: fetchError } = await supabase
     .from("businesses")
-    .select("gross_sales_history, is_legacy_unclaimed, owner_id, legacy_owner_name")
+    .select("business_name, gross_sales_history, is_legacy_unclaimed, owner_id, legacy_owner_name")
     .eq("id", businessId)
     .single();
   if (fetchError || !business) throw fetchError ?? new Error("Business not found");
@@ -121,6 +122,16 @@ export async function startWalkInApplication(formData: FormData) {
   if (appError || !application) throw appError ?? new Error("Application create failed");
 
   await openDepartmentReviewRound(supabase, application.id, staff.lgu_id);
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId: application.id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "walkin_application_started",
+    summary: `Walk-in ${applicationType} application filed at the counter for ${business.business_name ?? "(business record missing)"} -- ${referenceNumber}`,
+    details: { applicationType, amount },
+  });
 
   revalidatePath("/dashboard/businesses");
   revalidatePath("/dashboard/bplo");

@@ -1,5 +1,6 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { isLguPaused, resolveLguId } from "@/lib/lgu";
+import { logAuditEvent } from "@/lib/audit-log";
 import { createServiceClient } from "@/lib/supabase/service";
 import { REQUIRED_FIELDS, isFieldCurrentlyRequired, type FieldKey } from "@/lib/application-form-logic";
 import { NextResponse } from "next/server";
@@ -350,6 +351,17 @@ export async function POST(request: Request) {
       .is("application_id", null)
       .like("file_url", `${ownerId}/%`);
   }
+
+  const applicantName = [body.firstName, body.lastName].filter(Boolean).join(" ") || "Applicant";
+  await logAuditEvent(supabase, {
+    lguId,
+    applicationId: application.id,
+    actorRole: null,
+    actorLabel: `${applicantName} (Applicant)`,
+    action: "application_submitted",
+    summary: `${body.applicationType === "renewal" ? "Renewal" : "New"} application submitted -- ${body.businessName} (${application.reference_number})`,
+    details: { applicationType: body.applicationType, businessName: body.businessName },
+  });
 
   return NextResponse.json({ referenceNumber: application.reference_number });
 }

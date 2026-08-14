@@ -37,6 +37,8 @@ export default async function SettingsPage() {
         applicationsHref={office.homeHref}
         staffHref="/dashboard/staff"
         settingsHref="/dashboard/settings"
+        auditHref="/dashboard/audit"
+        statsHref="/dashboard/stats"
         rightSlot={<SignOutButton />}
       />
 

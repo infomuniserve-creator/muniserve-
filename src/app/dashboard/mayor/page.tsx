@@ -60,6 +60,8 @@ export default async function MayorDashboardPage() {
         initials={office.initials}
         active="applications"
         applicationsHref={office.homeHref}
+        auditHref="/dashboard/audit"
+        statsHref="/dashboard/stats"
         rightSlot={<SignOutButton />}
       />
 

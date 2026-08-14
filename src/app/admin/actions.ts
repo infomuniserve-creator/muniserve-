@@ -2,6 +2,7 @@
 
 import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { notifyStaffEmail } from "@/lib/notifications";
+import { logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -92,6 +93,15 @@ export async function createLguClient(formData: FormData) {
       .insert(barangays.map((value, i) => ({ lgu_id: lgu.id, option_type: "barangay", value, sort_order: i })));
     if (barangayError) throw barangayError;
   }
+
+  await logAuditEvent(supabase, {
+    lguId: lgu.id,
+    actorRole: "platform_admin",
+    actorLabel: `${admin.full_name ?? admin.email} (Platform Admin)`,
+    action: "lgu_client_created",
+    summary: `Client onboarded: ${name}${province ? `, ${province}` : ""}`,
+    details: { subdomain, departmentCount: departments.length, barangayCount: barangays.length, bploProvisioned: Boolean(bploEmail) },
+  });
 
   if (bploEmail) {
     const { error: bploError } = await supabase.from("staff_users").insert({
@@ -256,11 +266,21 @@ export async function setLguPaused(formData: FormData) {
   if (!lguId) throw new Error("Invalid request");
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("lgus")
     .update({ is_paused: paused, paused_at: paused ? new Date().toISOString() : null })
-    .eq("id", lguId);
+    .eq("id", lguId)
+    .select("name")
+    .single();
   if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId,
+    actorRole: "platform_admin",
+    actorLabel: `${admin.full_name ?? admin.email} (Platform Admin)`,
+    action: paused ? "lgu_paused" : "lgu_resumed",
+    summary: `Client ${paused ? "paused" : "resumed"}: ${updated?.name ?? lguId}`,
+  });
 
   revalidatePath("/admin");
 }
