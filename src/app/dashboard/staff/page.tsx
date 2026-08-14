@@ -61,6 +61,25 @@ export default async function StaffPage() {
         rightSlot={<SignOutButton />}
       />
 
+      {lgu.subdomain && (
+        <div className="mb-9">
+          <SectionHead title="Your public application form" sub="Share this link with applicants, or embed/link it from your own website." />
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <a
+              href={`https://${lgu.subdomain}.muniserve.ph/apply`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[13.5px] font-bold text-info-ink underline underline-offset-2"
+            >
+              {lgu.subdomain}.muniserve.ph/apply
+            </a>
+            <span className="text-[12px] text-ink-soft">
+              If this link isn&rsquo;t working yet, your domain is still being set up by MuniServe -- check back soon.
+            </span>
+          </Card>
+        </div>
+      )}
+
       <div className="mb-9">
         <SectionHead title="Add a staff account" sub="They'll be able to sign in with Google once you add them here -- no password to set up." />
         <Card className="p-5">

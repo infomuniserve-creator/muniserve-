@@ -154,10 +154,26 @@ export default async function AdminPage() {
                     </p>
                     <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{lgu.name}{lgu.province ? `, ${lgu.province}` : ""}</p>
                   </div>
-                  <span style={{ fontSize: 12, color: "#0C447C", fontWeight: 600 }}>
-                    {lgu.subdomain ? `${lgu.subdomain}.muniserve.ph` : "no subdomain set"}
-                  </span>
+                  {lgu.subdomain ? (
+                    <a
+                      href={`https://${lgu.subdomain}.muniserve.ph/apply`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12, color: "#0C447C", fontWeight: 600 }}
+                    >
+                      {lgu.subdomain}.muniserve.ph/apply ↗
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>no subdomain set</span>
+                  )}
                 </div>
+                {lgu.subdomain && (
+                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "4px 0 0" }}>
+                    This is the link to give the BPLO — for their own website or to share with applicants directly. Sent to
+                    them automatically in the welcome email, and shown on their own Staff page once signed in. Only works once
+                    this subdomain&rsquo;s DNS/Vercel setup is done (see note below).
+                  </p>
+                )}
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>
                   <form action={viewAsLgu} style={{ display: "flex", gap: 8 }}>

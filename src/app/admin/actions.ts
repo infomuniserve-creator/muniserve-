@@ -110,6 +110,11 @@ export async function createLguClient(formData: FormData) {
     // they signed in from, so there's no need to wait on the subdomain's
     // own DNS/Vercel setup before this person can start working.
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    // Unlike /login above, this link genuinely needs the subdomain's own
+    // DNS + Vercel domain to be set up (CLAUDE.md 7l/7o) before it
+    // resolves at all -- flagged directly in the email itself, not left
+    // for the BPLO to discover as a broken link with no explanation.
+    const applyUrl = `https://${subdomain}.muniserve.ph/apply`;
     const greeting = bploName ? `Hi ${bploName},` : "Hi,";
     await notifyStaffEmail(
       null,
@@ -119,7 +124,10 @@ export async function createLguClient(formData: FormData) {
        <p>A MuniServe account for <strong>${name}</strong> has been set up, and you've been added as its first BPLO administrator.</p>
        <p>Sign in here using your Google account at this email address (<strong>${bploEmail}</strong>) -- no password needed:</p>
        <p><a href="${appUrl}/login">${appUrl}/login</a></p>
-       <p>Once signed in, you can add the rest of your team from the Staff page.</p>`
+       <p>Once signed in, you can add the rest of your team from the Staff page.</p>
+       <p>Your own public application form -- share this link with applicants, or embed/link it from your website -- is:</p>
+       <p><a href="${applyUrl}">${applyUrl}</a></p>
+       <p>If that link isn't working yet, your domain is still being set up -- it'll be ready shortly. You can also always find this link on your Staff page once you're signed in.</p>`
     );
   }
 
