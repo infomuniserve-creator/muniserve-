@@ -1,0 +1,30 @@
+-- Security-advisor follow-up (2026-08-14, same day as 0023): current_staff()
+-- and generate_application_reference() are both SECURITY DEFINER functions
+-- exposed to `anon` over PostgREST's /rest/v1/rpc/ endpoint -- callable by
+-- anyone on the internet with zero authentication, no different from a
+-- public API.
+--
+-- Traced every real caller in the codebase before touching this: both
+-- functions are only ever invoked server-side, via service-role
+-- (submit-application/route.ts) or an authenticated staff session
+-- (businesses/actions.ts's walk-in flow) -- never via the anon key, and no
+-- browser code calls .rpc() at all (grepped for it). So revoking anon's
+-- EXECUTE costs the app nothing.
+--
+-- Left `authenticated`'s grant untouched deliberately -- current_staff()
+-- is called from inside RLS USING clauses across nearly every policy in
+-- this schema, which execute as the querying (authenticated) role; revoking
+-- there would break every staff-facing query, not just close an API
+-- surface.
+--
+-- Most concrete risk this closes: generate_application_reference(), called
+-- anonymously with any lgu_id/year, would happily burn through that LGU's
+-- real reference-number sequence (application_reference_counters) with no
+-- actual application ever created behind it -- a free way to create gaps
+-- or run a client's numbering far ahead of real usage.
+--
+-- Turned out insufficient on its own -- see 0025's comment for why, and
+-- don't skip straight to that file thinking this one was wasted motion:
+-- both are kept as they were actually applied, in order.
+revoke execute on function public.current_staff() from anon;
+revoke execute on function public.generate_application_reference(uuid, integer) from anon;
