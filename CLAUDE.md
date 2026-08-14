@@ -512,6 +512,24 @@ Verified with `tsc`/a full build plus a temporary unauthenticated fixture route 
 
 ---
 
+## 7q. `owners` had RLS enabled with zero policies -- a real gap since migration 0002 (2026-08-14)
+
+Traced from the same "Mags Poultry Farm" test as 7p: after the LBT-category fix, the application correctly reached and passed Assessment -- but the project owner then asked why it showed "Owner: Unknown applicant" when the applicant (Benj Maglente) had submitted through the real online form with a complete profile.
+
+**Confirmed directly against production** (read-only queries first, via the newly-connected Supabase MCP): the data was completely correct -- `businesses.owner_id` pointed at a real `owners` row with `full_name`/`phone` both populated, and the application's `initial_review_notes` was null (not the walk-in flow's synthetic note), confirming this went through the real applicant-facing form, not a walk-in filing. The identical embedded query BPLO's dashboard runs returned the owner correctly under the service-role key, but not under a normal staff session.
+
+**Root cause**: `owners` has had RLS enabled since migration 0001/0002, alongside every other staff-visible table -- but unlike `businesses`, `applications`, `payments`, `permits`, etc., it was never actually given a policy. Postgres denies by default with RLS on and no policy, and PostgREST's embedded joins (`owner:owners(...)`) return `null` for a blocked row rather than erroring the whole query -- which is exactly why this went unnoticed for so long. It degrades silently to a plausible-looking fallback ("Unknown applicant"/"Unknown owner") instead of a visible crash.
+
+**Not just a display bug** -- the same missing policy affects every staff-scoped embedded `owner:owners(...)` join in the codebase: owner names across every dashboard (BPLO/Businesses/Department/Mayor/Treasury), applicant SMS phone lookups fired from staff actions (`bplo/actions.ts`, `treasury/actions.ts`), the owner/representative name printed on generated permit PDFs (`mayor/actions.ts`'s `signPermit`), and BPLO's walk-in claim-by-phone flow (`businesses/actions.ts`) -- both finding an existing owner by phone and creating a new one were silently broken by the identical gap.
+
+**Fixed** (migration `0023_owners_rls_policy.sql`): a SELECT policy scoped the same "own LGU" way as every other table lacking its own `lgu_id` column (`application_fee_lines`/`review_rounds`/`payments`/`permits`/`documents`/`notifications_log`'s existing pattern from migration 0002) -- staff can see an owner only if that owner has at least one business at their own LGU, via `exists (select 1 from businesses b where b.owner_id = owners.id and b.lgu_id = ...)`. Plus an INSERT policy for BPLO's walk-in owner-claim, gated on role alone since `owners` has no `lgu_id` column to check in `WITH CHECK` (owners can genuinely span LGUs by phone, per section 5's identity model -- this is deliberate, not an oversight).
+
+**One known, narrow, unfixed edge case, flagged rather than guessed at**: if a walk-in's phone number belongs to an owner who only has businesses at a *different* LGU, the SELECT policy still won't surface them to this LGU's staff, so the insert will hit `owners.phone`'s unique constraint and throw -- a loud, visible error for BPLO to notice and escalate, not silent duplication, so left as-is rather than widening owner visibility across LGU boundaries for a rare case.
+
+**Applied directly against production** via the newly-connected Supabase MCP server (`apply_migration`), not just written and handed off -- verified by re-running the exact query BPLO's dashboard runs, inside a transaction with `set local role authenticated` + `request.jwt.claims` set to the real staff member's `auth_user_id`, confirming it now returns the owner correctly under RLS rather than under the service-role bypass used for the initial diagnosis. `get_advisors` (security) also re-run afterward: `owners` no longer appears in the "RLS enabled, no policy" findings.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
