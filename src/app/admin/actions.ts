@@ -4,8 +4,10 @@ import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { notifyStaffEmail } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 const SUBDOMAIN_RE = /^[a-z0-9-]+$/;
+const VIEW_AS_ROLES = new Set(["bplo", "treasury", "mayor"]);
 
 /**
  * Platform admin onboards a new client LGU (CLAUDE.md section 7o) --
@@ -90,4 +92,78 @@ export async function createLguClient(formData: FormData) {
   );
 
   revalidatePath("/admin");
+}
+
+/**
+ * "View as" a chosen role at a chosen client LGU -- lets a platform admin
+ * troubleshoot any client's real dashboard (applications, businesses,
+ * payments, permits, department queues) without ever being added to that
+ * LGU's own staff roster, now or in the future (CLAUDE.md 7o follow-up).
+ *
+ * Upserts a single reusable staff_users "proxy" row for this platform
+ * admin (migration 0019) rather than inserting a new one per LGU/role --
+ * getCurrentStaff() expects at most one row per auth_user_id. The row is
+ * a real staff_users row with the admin's own real auth_user_id, so every
+ * existing staff-scoped RLS policy (applications/businesses/payments/
+ * permits/department_reviews/...) already grants it exactly the access a
+ * genuine staff member at that LGU would have -- no new policies needed
+ * on any of those tables.
+ *
+ * `viewAs` is either a plain role ("bplo"/"treasury"/"mayor") or
+ * "department:<name>" -- encodes the department picker into one <select>
+ * so this plain-forms page (no client JS) doesn't need a second,
+ * conditionally-shown dropdown.
+ */
+export async function viewAsLgu(formData: FormData) {
+  const admin = await getCurrentPlatformAdmin();
+  if (!admin) throw new Error("Not authorized");
+
+  const lguId = String(formData.get("lguId") ?? "");
+  const viewAs = String(formData.get("viewAs") ?? "");
+  if (!lguId || !viewAs) throw new Error("Invalid request");
+
+  let role: string;
+  let department: string | null = null;
+  if (viewAs.startsWith("department:")) {
+    role = "department";
+    department = viewAs.slice("department:".length);
+    if (!department) throw new Error("Invalid department");
+  } else {
+    role = viewAs;
+    if (!VIEW_AS_ROLES.has(role)) throw new Error("Invalid role");
+  }
+
+  const supabase = await createClient();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) throw new Error("Not authorized");
+
+  const { data: existing } = await supabase
+    .from("staff_users")
+    .select("id")
+    .eq("auth_user_id", authData.user.id)
+    .eq("is_admin_proxy", true)
+    .maybeSingle();
+
+  const proxyFields = {
+    lgu_id: lguId,
+    role,
+    department,
+    full_name: admin.full_name ? `${admin.full_name} (Platform Admin)` : "Platform Admin Support",
+    // A synthetic, never-mailed address -- staff_users.email is unique,
+    // and this is the same reused row every time, so it only needs to be
+    // set once. Kept out of the department-rejection BPLO email fan-out
+    // via is_admin_proxy (review-workflow.ts), so nothing ever tries to
+    // actually send to it.
+    email: `admin-proxy+${admin.id}@internal.muniserve.ph`,
+    is_active: true,
+    is_admin_proxy: true,
+    auth_user_id: authData.user.id,
+  };
+
+  const { error } = existing
+    ? await supabase.from("staff_users").update(proxyFields).eq("id", existing.id)
+    : await supabase.from("staff_users").insert(proxyFields);
+  if (error) throw error;
+
+  redirect("/dashboard");
 }

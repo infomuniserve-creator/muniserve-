@@ -1,0 +1,28 @@
+-- Lets a platform admin view AND act inside any client LGU as a given
+-- staff role, for troubleshooting -- without ever creating a per-client
+-- staff account by hand, now or in the future (CLAUDE.md 7o follow-up,
+-- 2026-08-14; the project owner's explicit choice over a read-only-only
+-- option was "full access, acts like BPLO everywhere").
+--
+-- Mechanism: one reusable "proxy" staff_users row per platform admin.
+-- Switching "view as" target (src/app/admin/actions.ts's viewAsLgu)
+-- UPDATEs this same row's lgu_id/role/department rather than inserting a
+-- new one each time, so getCurrentStaff()'s
+-- .eq("auth_user_id", ...).maybeSingle() (src/lib/staff.ts) stays
+-- unambiguous -- exactly one staff_users row per platform admin, ever.
+--
+-- No new RLS policies needed on businesses/applications/payments/permits/
+-- department_reviews/etc: this row carries the platform admin's own real
+-- auth_user_id and a real lgu_id, so every existing staff-scoped policy
+-- (migration 0002 and everywhere since) already grants it exactly the
+-- same access a genuine staff member at that LGU would have. That's the
+-- whole point of reusing a real staff_users row instead of inventing a
+-- parallel access path that would need auditing against every one of
+-- those policies separately.
+--
+-- is_admin_proxy exists so this synthetic row can be told apart from
+-- real client staff everywhere staff_users is listed or counted:
+-- /dashboard/staff's roster, the "last active BPLO" deactivation guard
+-- (staff/actions.ts), and the department-rejection BPLO email fan-out
+-- (review-workflow.ts) all filter it out.
+alter table staff_users add column is_admin_proxy boolean not null default false;

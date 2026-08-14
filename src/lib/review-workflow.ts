@@ -224,7 +224,11 @@ async function notifyDepartmentIssue(
     .select("email")
     .eq("lgu_id", lguId)
     .eq("role", "bplo")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    // Excludes a platform admin's "view as BPLO" proxy row (CLAUDE.md 7o
+    // follow-up) -- its email is a synthetic, unreachable placeholder, so
+    // this would otherwise just be a guaranteed-failing send attempt.
+    .eq("is_admin_proxy", false);
 
   const subject = `Application ${application.reference_number}: ${department} ${decision === "rejected" ? "rejected" : "requested more info"}`;
   const html = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) -- ${department} ${

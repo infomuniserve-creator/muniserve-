@@ -102,7 +102,13 @@ export async function setStaffActive(formData: FormData) {
         .select("id", { count: "exact", head: true })
         .eq("lgu_id", staff.lgu_id)
         .eq("role", "bplo")
-        .eq("is_active", true);
+        .eq("is_active", true)
+        // A platform admin's "view as BPLO" proxy row (CLAUDE.md 7o
+        // follow-up) must never count as real BPLO coverage here -- it
+        // isn't staffed by anyone on the client's own team, and could
+        // otherwise let the last real BPLO be deactivated while an admin
+        // just happens to be viewing that LGU.
+        .eq("is_admin_proxy", false);
       if ((count ?? 0) <= 1) {
         throw new Error("Can't deactivate the last active BPLO account -- activate another BPLO account first");
       }

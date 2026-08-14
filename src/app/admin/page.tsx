@@ -2,7 +2,7 @@ import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../dashboard/sign-out-button";
-import { createLguClient } from "./actions";
+import { createLguClient, viewAsLgu } from "./actions";
 
 /**
  * Platform-admin dashboard (CLAUDE.md section 7o) -- the "agency owner"
@@ -27,6 +27,20 @@ export default async function AdminPage() {
     .from("lgus")
     .select("id, name, province, subdomain, display_name, created_at")
     .order("created_at", { ascending: false });
+
+  // Powers the per-LGU "View as" department options below -- fetched once
+  // for every client rather than per-row, then grouped in JS.
+  const { data: allDepartments } = await supabase
+    .from("lgu_departments")
+    .select("lgu_id, name, display_name")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  const departmentsByLgu = new Map<string, { name: string; display_name: string | null }[]>();
+  for (const d of allDepartments ?? []) {
+    const list = departmentsByLgu.get(d.lgu_id) ?? [];
+    list.push({ name: d.name, display_name: d.display_name });
+    departmentsByLgu.set(d.lgu_id, list);
+  }
 
   return (
     <div style={{ maxWidth: 760, margin: "32px auto", padding: "0 16px", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
@@ -89,19 +103,42 @@ export default async function AdminPage() {
       </div>
 
       <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb" }}>
-        <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 12 }}>Clients ({(lgus ?? []).length})</p>
+        <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>Clients ({(lgus ?? []).length})</p>
+        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+          &ldquo;View as&rdquo; lets you open a client&rsquo;s real dashboard for troubleshooting — you don&rsquo;t need a
+          staff account of your own at their LGU, now or later. Every action you take there is attributed to
+          &ldquo;{admin.full_name ?? "Platform Admin"} (Platform Admin)&rdquo;, not silently as that client&rsquo;s own staff.
+        </p>
         {(lgus ?? []).length === 0 ? (
           <p style={{ fontSize: 13, color: "#6b7280" }}>No clients yet.</p>
         ) : (
           (lgus ?? []).map((lgu) => (
-            <div key={lgu.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "0.5px solid #e5e7eb" }}>
-              <div>
-                <p style={{ fontSize: 13.5, fontWeight: 500, margin: 0 }}>{lgu.display_name ?? lgu.name}</p>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{lgu.name}{lgu.province ? `, ${lgu.province}` : ""}</p>
+            <div key={lgu.id} style={{ padding: "12px 0", borderBottom: "0.5px solid #e5e7eb" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <p style={{ fontSize: 13.5, fontWeight: 500, margin: 0 }}>{lgu.display_name ?? lgu.name}</p>
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{lgu.name}{lgu.province ? `, ${lgu.province}` : ""}</p>
+                </div>
+                <span style={{ fontSize: 12, color: "#0C447C", fontWeight: 600 }}>
+                  {lgu.subdomain ? `${lgu.subdomain}.muniserve.ph` : "no subdomain set"}
+                </span>
               </div>
-              <span style={{ fontSize: 12, color: "#0C447C", fontWeight: 600 }}>
-                {lgu.subdomain ? `${lgu.subdomain}.muniserve.ph` : "no subdomain set"}
-              </span>
+              <form action={viewAsLgu} style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <input type="hidden" name="lguId" value={lgu.id} />
+                <select name="viewAs" style={{ ...inputStyle, height: 32, width: 240 }}>
+                  <option value="bplo">View as BPLO</option>
+                  <option value="treasury">View as Treasury</option>
+                  <option value="mayor">View as Mayor&rsquo;s Office</option>
+                  {(departmentsByLgu.get(lgu.id) ?? []).map((d) => (
+                    <option key={d.name} value={`department:${d.name}`}>
+                      View as {d.display_name ?? d.name} (Dept.)
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" style={{ ...submitBtnStyle, padding: "6px 14px", fontSize: 12 }}>
+                  Go →
+                </button>
+              </form>
             </div>
           ))
         )}

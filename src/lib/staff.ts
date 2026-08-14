@@ -10,6 +10,10 @@ export type CurrentStaff = {
   role: StaffRole;
   department: string | null;
   is_active: boolean;
+  // true only for a platform admin's "view as" proxy row (CLAUDE.md 7o
+  // follow-up, migration 0019) -- lets dashboard/layout.tsx show a banner
+  // and lets staff-facing lists/guards exclude it from real client staff.
+  is_admin_proxy: boolean;
 };
 
 /**
@@ -25,7 +29,7 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
 
   const { data, error } = await supabase
     .from("staff_users")
-    .select("id, lgu_id, full_name, email, role, department, is_active")
+    .select("id, lgu_id, full_name, email, role, department, is_active, is_admin_proxy")
     .eq("auth_user_id", authData.user.id)
     .maybeSingle();
 

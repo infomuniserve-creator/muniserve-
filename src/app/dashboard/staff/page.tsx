@@ -35,6 +35,10 @@ export default async function StaffPage() {
     .from("staff_users")
     .select("id, full_name, email, role, department, is_active, auth_user_id")
     .eq("lgu_id", staff.lgu_id)
+    // Excludes a platform admin's "view as" proxy row (CLAUDE.md 7o
+    // follow-up) -- it isn't real client staff and shouldn't clutter this
+    // roster or be deactivatable from here.
+    .eq("is_admin_proxy", false)
     .order("role", { ascending: true })
     .order("full_name", { ascending: true });
 
