@@ -590,7 +590,12 @@ export function ApplyPageClient({ lgu }: { lgu: LguDisplay }) {
             ? `Please fill in: ${(data.fields ?? []).map(fieldLabel).join(", ")}`
             : data.error === "declaration_not_accepted"
               ? "Please accept the declaration before submitting."
-              : "Something went wrong submitting your application. Please try again."
+              // Rare: the LGU was paused after this tab was already open
+              // (CLAUDE.md 7o follow-up) -- apply/page.tsx normally
+              // catches this on load, this is just the stale-tab case.
+              : data.error === "lgu_paused"
+                ? "Online applications for this LGU are temporarily unavailable. Please refresh this page for details."
+                : "Something went wrong submitting your application. Please try again."
         );
         return;
       }

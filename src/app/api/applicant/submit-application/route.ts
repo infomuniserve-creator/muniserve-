@@ -1,5 +1,5 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
-import { resolveLguId } from "@/lib/lgu";
+import { isLguPaused, resolveLguId } from "@/lib/lgu";
 import { createServiceClient } from "@/lib/supabase/service";
 import { REQUIRED_FIELDS, isFieldCurrentlyRequired, type FieldKey } from "@/lib/application-form-logic";
 import { NextResponse } from "next/server";
@@ -205,6 +205,15 @@ export async function POST(request: Request) {
   // from their own subdomain, and their application has to land under
   // their own lgu_id, not get silently filed under San Miguel's.
   const lguId = await resolveLguId(request.headers.get("host"));
+
+  // Defense in depth (CLAUDE.md 7o follow-up, migration 0020): apply/
+  // page.tsx already hides the whole wizard when paused, but a tab
+  // opened before the pause, or a direct call to this route, must not be
+  // able to slip a real application through anyway.
+  if (await isLguPaused(lguId)) {
+    return NextResponse.json({ error: "lgu_paused" }, { status: 403 });
+  }
+
   const year = new Date().getFullYear();
 
   const businessColumns = {

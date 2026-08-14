@@ -118,3 +118,16 @@ export async function resolveLguDisplay(host: string | null): Promise<LguDisplay
   const supabase = createServiceClient();
   return getLguDisplay(supabase, lguId);
 }
+
+/**
+ * A lightweight is_paused-only check for routes that already have an
+ * lguId from resolveLguId() and don't need the rest of LguDisplay (CLAUDE.md
+ * 7o follow-up) -- e.g. submit-application/route.ts, which rejects a
+ * submission outright when the LGU is paused. apply/page.tsx doesn't need
+ * this separately since resolveLguDisplay() already includes isPaused.
+ */
+export async function isLguPaused(lguId: string): Promise<boolean> {
+  const supabase = createServiceClient();
+  const { data } = await supabase.from("lgus").select("is_paused").eq("id", lguId).maybeSingle();
+  return data?.is_paused ?? false;
+}
