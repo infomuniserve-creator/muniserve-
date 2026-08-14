@@ -2,7 +2,7 @@ import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../dashboard/sign-out-button";
-import { createLguClient, viewAsLgu } from "./actions";
+import { createLguClient, deleteLguClient, setLguPaused, viewAsLgu } from "./actions";
 
 /**
  * Platform-admin dashboard (CLAUDE.md section 7o) -- the "agency owner"
@@ -25,8 +25,9 @@ export default async function AdminPage() {
   const supabase = await createClient();
   const { data: lgus } = await supabase
     .from("lgus")
-    .select("id, name, province, subdomain, display_name, created_at")
+    .select("id, name, province, subdomain, display_name, is_paused, created_at")
     .order("created_at", { ascending: false });
+  const lguList = lgus ?? [];
 
   // Powers the per-LGU "View as" department options below -- fetched once
   // for every client rather than per-row, then grouped in JS.
@@ -41,6 +42,21 @@ export default async function AdminPage() {
     list.push({ name: d.name, display_name: d.display_name });
     departmentsByLgu.set(d.lgu_id, list);
   }
+
+  // Tells each row whether Delete is actually possible -- deleteLguClient
+  // enforces this same zero-applications-and-zero-businesses rule
+  // server-side, this is just so the UI can explain why the button isn't
+  // there instead of the admin only finding out after typing the name in.
+  const recordCounts = await Promise.all(
+    lguList.map(async (lgu) => {
+      const [{ count: appCount }, { count: bizCount }] = await Promise.all([
+        supabase.from("applications").select("id", { count: "exact", head: true }).eq("lgu_id", lgu.id),
+        supabase.from("businesses").select("id", { count: "exact", head: true }).eq("lgu_id", lgu.id),
+      ]);
+      return { lguId: lgu.id, appCount: appCount ?? 0, bizCount: bizCount ?? 0 };
+    })
+  );
+  const countsByLgu = new Map(recordCounts.map((c) => [c.lguId, c]));
 
   return (
     <div style={{ maxWidth: 760, margin: "32px auto", padding: "0 16px", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
@@ -104,44 +120,99 @@ export default async function AdminPage() {
       </div>
 
       <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb" }}>
-        <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>Clients ({(lgus ?? []).length})</p>
+        <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>Clients ({lguList.length})</p>
         <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
           &ldquo;View as&rdquo; lets you open a client&rsquo;s real dashboard for troubleshooting — you don&rsquo;t need a
           staff account of your own at their LGU, now or later. Every action you take there is attributed to
           &ldquo;{admin.full_name ?? "Platform Admin"} (Platform Admin)&rdquo;, not silently as that client&rsquo;s own staff.
+          <strong> Pause</strong> blocks that client&rsquo;s own staff from signing in (e.g. non-payment) without touching any
+          of their data — you can still &ldquo;View as&rdquo; a paused client yourself.
         </p>
-        {(lgus ?? []).length === 0 ? (
+        {lguList.length === 0 ? (
           <p style={{ fontSize: 13, color: "#6b7280" }}>No clients yet.</p>
         ) : (
-          (lgus ?? []).map((lgu) => (
-            <div key={lgu.id} style={{ padding: "12px 0", borderBottom: "0.5px solid #e5e7eb" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <p style={{ fontSize: 13.5, fontWeight: 500, margin: 0 }}>{lgu.display_name ?? lgu.name}</p>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{lgu.name}{lgu.province ? `, ${lgu.province}` : ""}</p>
+          lguList.map((lgu) => {
+            const counts = countsByLgu.get(lgu.id) ?? { appCount: 0, bizCount: 0 };
+            const canDelete = counts.appCount === 0 && counts.bizCount === 0;
+            return (
+              <div key={lgu.id} style={{ padding: "14px 0", borderBottom: "0.5px solid #e5e7eb" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <p style={{ fontSize: 13.5, fontWeight: 500, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      {lgu.display_name ?? lgu.name}
+                      {lgu.is_paused && (
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400e", background: "#fef3c7", borderRadius: 999, padding: "2px 8px" }}>
+                          ⏸ PAUSED
+                        </span>
+                      )}
+                    </p>
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{lgu.name}{lgu.province ? `, ${lgu.province}` : ""}</p>
+                  </div>
+                  <span style={{ fontSize: 12, color: "#0C447C", fontWeight: 600 }}>
+                    {lgu.subdomain ? `${lgu.subdomain}.muniserve.ph` : "no subdomain set"}
+                  </span>
                 </div>
-                <span style={{ fontSize: 12, color: "#0C447C", fontWeight: 600 }}>
-                  {lgu.subdomain ? `${lgu.subdomain}.muniserve.ph` : "no subdomain set"}
-                </span>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>
+                  <form action={viewAsLgu} style={{ display: "flex", gap: 8 }}>
+                    <input type="hidden" name="lguId" value={lgu.id} />
+                    <select name="viewAs" style={{ ...inputStyle, height: 32, width: 220 }}>
+                      <option value="bplo">View as BPLO</option>
+                      <option value="treasury">View as Treasury</option>
+                      <option value="mayor">View as Mayor&rsquo;s Office</option>
+                      {(departmentsByLgu.get(lgu.id) ?? []).map((d) => (
+                        <option key={d.name} value={`department:${d.name}`}>
+                          View as {d.display_name ?? d.name} (Dept.)
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" style={{ ...submitBtnStyle, padding: "6px 14px", fontSize: 12 }}>
+                      Go →
+                    </button>
+                  </form>
+
+                  <form action={setLguPaused}>
+                    <input type="hidden" name="lguId" value={lgu.id} />
+                    <input type="hidden" name="paused" value={String(!lgu.is_paused)} />
+                    <button
+                      type="submit"
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        border: lgu.is_paused ? "1px solid #15803d" : "1px solid #b45309",
+                        background: "#fff",
+                        color: lgu.is_paused ? "#15803d" : "#b45309",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {lgu.is_paused ? "Resume" : "Pause"}
+                    </button>
+                  </form>
+                </div>
+
+                <div style={{ marginTop: 10, borderTop: "0.5px dashed #e5e7eb", paddingTop: 10 }}>
+                  {canDelete ? (
+                    <form action={deleteLguClient} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                      <input type="hidden" name="lguId" value={lgu.id} />
+                      <span style={{ fontSize: 11, color: "#6b7280" }}>
+                        No applications or businesses on file — safe to delete. Type <strong>{lgu.name}</strong> to confirm:
+                      </span>
+                      <input name="confirmName" type="text" placeholder={lgu.name} style={{ ...inputStyle, height: 28, width: 160, fontSize: 12 }} />
+                      <button type="submit" style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 12px", borderRadius: 8, border: "1px solid #b91c1c", background: "#fff", color: "#b91c1c", cursor: "pointer" }}>
+                        Delete permanently
+                      </button>
+                    </form>
+                  ) : (
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                      Can&rsquo;t delete — {counts.appCount} application(s) and {counts.bizCount} business(es) on file. Use Pause instead.
+                    </span>
+                  )}
+                </div>
               </div>
-              <form action={viewAsLgu} style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <input type="hidden" name="lguId" value={lgu.id} />
-                <select name="viewAs" style={{ ...inputStyle, height: 32, width: 240 }}>
-                  <option value="bplo">View as BPLO</option>
-                  <option value="treasury">View as Treasury</option>
-                  <option value="mayor">View as Mayor&rsquo;s Office</option>
-                  {(departmentsByLgu.get(lgu.id) ?? []).map((d) => (
-                    <option key={d.name} value={`department:${d.name}`}>
-                      View as {d.display_name ?? d.name} (Dept.)
-                    </option>
-                  ))}
-                </select>
-                <button type="submit" style={{ ...submitBtnStyle, padding: "6px 14px", fontSize: 12 }}>
-                  Go →
-                </button>
-              </form>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

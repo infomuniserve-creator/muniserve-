@@ -211,3 +211,74 @@ export async function exitViewAs() {
   // dashboard/page.tsx's own fallback lands them on /admin anyway.
   redirect("/dashboard");
 }
+
+/**
+ * Pauses or resumes a client -- e.g. hasn't paid yet (CLAUDE.md 7o
+ * follow-up, migration 0020). Doesn't touch any of the client's data;
+ * dashboard/layout.tsx is what actually blocks a paused client's real
+ * staff (not a platform admin's "view as" proxy) from reaching any
+ * dashboard page while `is_paused` is true.
+ */
+export async function setLguPaused(formData: FormData) {
+  const admin = await getCurrentPlatformAdmin();
+  if (!admin) throw new Error("Not authorized");
+
+  const lguId = String(formData.get("lguId") ?? "");
+  const paused = formData.get("paused") === "true";
+  if (!lguId) throw new Error("Invalid request");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lgus")
+    .update({ is_paused: paused, paused_at: paused ? new Date().toISOString() : null })
+    .eq("id", lguId);
+  if (error) throw error;
+
+  revalidatePath("/admin");
+}
+
+/**
+ * Permanently deletes a client -- only when it has zero applications and
+ * zero businesses on file (CLAUDE.md 7o follow-up, migration 0020). This
+ * is a real, deliberate limit, not a bug: applications/payments/permits/
+ * documents/notifications_log all key off `applications.id`, and only
+ * application_fee_lines/review_rounds (and everything under those) cascade
+ * on delete -- payments/permits/documents/notifications_log do NOT, so a
+ * `lgus` row with any real application history would fail this delete
+ * with a foreign-key violation anyway (or, if forced by adding cascades
+ * later, would silently destroy real permits/payment records, which this
+ * schema's whole soft-delete convention exists to prevent -- see CLAUDE.md
+ * 7m). A client with real data should be paused instead, never deleted.
+ *
+ * Requires typing the LGU's exact name to confirm -- this page has no
+ * client JS for a real confirm() dialog, and deleting a client is
+ * significant enough to want deliberate friction, not just one click.
+ */
+export async function deleteLguClient(formData: FormData) {
+  const admin = await getCurrentPlatformAdmin();
+  if (!admin) throw new Error("Not authorized");
+
+  const lguId = String(formData.get("lguId") ?? "");
+  const confirmName = String(formData.get("confirmName") ?? "").trim();
+  if (!lguId) throw new Error("Invalid request");
+
+  const supabase = await createClient();
+  const { data: lgu } = await supabase.from("lgus").select("name").eq("id", lguId).single();
+  if (!lgu) throw new Error("Client not found");
+  if (confirmName !== lgu.name) throw new Error(`Typed name didn't match "${lgu.name}" -- nothing was deleted`);
+
+  const [{ count: appCount }, { count: bizCount }] = await Promise.all([
+    supabase.from("applications").select("id", { count: "exact", head: true }).eq("lgu_id", lguId),
+    supabase.from("businesses").select("id", { count: "exact", head: true }).eq("lgu_id", lguId),
+  ]);
+  if ((appCount ?? 0) > 0 || (bizCount ?? 0) > 0) {
+    throw new Error(
+      `${lgu.name} has ${appCount ?? 0} application(s) and ${bizCount ?? 0} business(es) on file -- deleting would destroy real records. Pause it instead.`
+    );
+  }
+
+  const { error } = await supabase.from("lgus").delete().eq("id", lguId);
+  if (error) throw error;
+
+  revalidatePath("/admin");
+}

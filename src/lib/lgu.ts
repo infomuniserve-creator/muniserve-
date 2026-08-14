@@ -35,10 +35,11 @@ export type LguDisplay = {
   subdomain: string | null; // e.g. "sanmiguel" (migration 0018) -- lets a caller tell "this really is their own subdomain" apart from the pilot-LGU fallback
   displayName: string; // e.g. "Municipality of San Miguel Bulacan" -- letterhead line
   bploOfficeName: string; // e.g. "Office of the Municipal Business Permit and Licensing Officer"
+  isPaused: boolean; // migration 0020 -- dashboard/layout.tsx blocks real staff (not a platform-admin proxy) when true
 };
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
-function withFallback(row: { id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null }): LguDisplay {
+function withFallback(row: { id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null; is_paused: boolean }): LguDisplay {
   return {
     id: row.id,
     name: row.name,
@@ -46,6 +47,7 @@ function withFallback(row: { id: string; name: string; province: string | null; 
     subdomain: row.subdomain,
     displayName: row.display_name ?? `Municipality of ${row.name}${row.province ? ` ${row.province}` : ""}`,
     bploOfficeName: row.bplo_office_name ?? "Office of the Municipal Business Permit and Licensing Officer",
+    isPaused: row.is_paused,
   };
 }
 
@@ -53,7 +55,7 @@ function withFallback(row: { id: string; name: string; province: string | null; 
 export async function getLguDisplay(supabase: SupabaseClient, lguId: string): Promise<LguDisplay> {
   const { data, error } = await supabase
     .from("lgus")
-    .select("id, name, province, subdomain, display_name, bplo_office_name")
+    .select("id, name, province, subdomain, display_name, bplo_office_name, is_paused")
     .eq("id", lguId)
     .single();
   if (error || !data) throw new Error("LGU not found");
@@ -65,7 +67,7 @@ export async function getPilotLguDisplay(): Promise<LguDisplay> {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("lgus")
-    .select("id, name, province, subdomain, display_name, bplo_office_name")
+    .select("id, name, province, subdomain, display_name, bplo_office_name, is_paused")
     .eq("name", "San Miguel")
     .single();
   if (error || !data) throw new Error("Pilot LGU (San Miguel) not found");
