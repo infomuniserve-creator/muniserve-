@@ -120,6 +120,14 @@ export function ArrowLeftIcon({ className }: IconProps) {
     </svg>
   );
 }
+export function SettingsIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
 
 // ============================================================
 // Status → color mapping. Literal Tailwind class strings throughout
@@ -288,15 +296,18 @@ export function DashboardTopBar({
   active,
   applicationsHref,
   staffHref,
+  settingsHref,
   rightSlot,
 }: {
   officeLabel: string;
   officeSub: string;
   initials: string;
-  active: "applications" | "businesses" | "staff";
+  active: "applications" | "businesses" | "staff" | "settings";
   applicationsHref: string;
   /** Only BPLO can manage staff (src/app/dashboard/staff) -- pass this in only from bplo/page.tsx so the tab doesn't render for anyone else. */
   staffHref?: string;
+  /** Only BPLO has settings (src/app/dashboard/settings) -- same gating as staffHref, passed from the same call sites. Rendered as an icon button, not a nav pill, since it's a shortcut rather than a primary section. */
+  settingsHref?: string;
   rightSlot?: React.ReactNode;
 }) {
   return (
@@ -345,6 +356,19 @@ export function DashboardTopBar({
       </nav>
 
       <div className="flex items-center gap-2.5">
+        {settingsHref && (
+          <Link
+            href={settingsHref}
+            title="Settings"
+            className={`flex size-8.5 items-center justify-center rounded-full border transition-colors ${
+              active === "settings"
+                ? "border-brand-navy/20 bg-surface text-brand-navy shadow-sm"
+                : "border-border-strong text-ink-soft hover:text-ink"
+            }`}
+          >
+            <SettingsIcon className="size-4" />
+          </Link>
+        )}
         <ThemeToggle />
         {rightSlot}
         <div className="flex size-8.5 items-center justify-center rounded-full border border-border-strong bg-surface-3 font-display text-[12.5px] font-bold text-brand-navy">
