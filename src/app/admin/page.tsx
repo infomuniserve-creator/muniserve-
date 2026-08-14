@@ -55,9 +55,10 @@ export default async function AdminPage() {
       <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", marginBottom: 24 }}>
         <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>Add a new client</p>
         <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>
-          Creates the LGU record, its own subdomain, and a first BPLO account (they&rsquo;ll get an email with a sign-in link).
-          Departments are optional and can be added later. <strong>Fee rules aren&rsquo;t created here</strong> — those need the
-          LGU&rsquo;s actual ordinance and are set up as a separate, dedicated step, never guessed.
+          Creates the LGU record and its own subdomain. Departments and the first BPLO account are both optional and can be
+          added later — leave the BPLO email blank if you don&rsquo;t have it yet, or want to test-drive the account first via
+          &ldquo;View as&rdquo; below. <strong>Fee rules aren&rsquo;t created here</strong> — those need the LGU&rsquo;s actual
+          ordinance and are set up as a separate, dedicated step, never guessed.
         </p>
         <form action={createLguClient} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", gap: 10 }}>
@@ -86,14 +87,14 @@ export default async function AdminPage() {
 
           <div style={{ borderTop: "0.5px solid #e5e7eb", margin: "6px 0", paddingTop: 12 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>
-              First BPLO account
+              First BPLO account (optional)
             </p>
             <div style={{ display: "flex", gap: 10 }}>
               <Field label="Name">
                 <input name="bploName" type="text" placeholder="Juan Dela Cruz" style={inputStyle} />
               </Field>
-              <Field label="Email *">
-                <input name="bploEmail" type="email" required placeholder="bplo@malolos.gov.ph" style={inputStyle} />
+              <Field label="Email — leave blank to add later">
+                <input name="bploEmail" type="email" placeholder="bplo@malolos.gov.ph" style={inputStyle} />
               </Field>
             </div>
           </div>

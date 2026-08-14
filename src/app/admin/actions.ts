@@ -25,6 +25,16 @@ const VIEW_AS_ROLES = new Set(["bplo", "treasury", "mayor"]);
  * ordinance (CLAUDE.md 7a/7b's whole point: never guess a real peso
  * amount), which isn't something a generic form can safely collect.
  * That stays a separate, bespoke step per client.
+ *
+ * The first BPLO account is optional (CLAUDE.md 7o follow-up) -- the
+ * project owner often creates and wants to test-drive a client's account
+ * (via "View as", below) before they have that client's actual BPLO
+ * email in hand, sometimes not until they're physically at that office.
+ * Requiring it up front would block onboarding on a detail that isn't
+ * always available yet. When it's left blank, no staff_users row or
+ * welcome email is created at all -- add the real one later from
+ * /dashboard/staff (reachable via "View as BPLO" for this LGU) once it's
+ * known, exactly the same self-service flow as adding anyone else.
  */
 export async function createLguClient(formData: FormData) {
   const admin = await getCurrentPlatformAdmin();
@@ -42,7 +52,7 @@ export async function createLguClient(formData: FormData) {
   const bploName = String(formData.get("bploName") ?? "").trim();
   const bploEmail = String(formData.get("bploEmail") ?? "").trim().toLowerCase();
 
-  if (!name || !subdomain || !bploEmail) throw new Error("Name, subdomain, and an initial BPLO email are all required");
+  if (!name || !subdomain) throw new Error("Name and subdomain are required");
   if (!SUBDOMAIN_RE.test(subdomain)) throw new Error("Subdomain can only contain lowercase letters, numbers, and hyphens");
 
   const supabase = await createClient();
@@ -63,33 +73,35 @@ export async function createLguClient(formData: FormData) {
     if (deptError) throw deptError;
   }
 
-  const { error: bploError } = await supabase.from("staff_users").insert({
-    lgu_id: lgu.id,
-    full_name: bploName || null,
-    email: bploEmail,
-    role: "bplo",
-    is_active: true,
-  });
-  if (bploError) {
-    throw bploError.code === "23505" ? new Error("That BPLO email is already registered as staff somewhere") : bploError;
-  }
+  if (bploEmail) {
+    const { error: bploError } = await supabase.from("staff_users").insert({
+      lgu_id: lgu.id,
+      full_name: bploName || null,
+      email: bploEmail,
+      role: "bplo",
+      is_active: true,
+    });
+    if (bploError) {
+      throw bploError.code === "23505" ? new Error("That BPLO email is already registered as staff somewhere") : bploError;
+    }
 
-  // Points at the shared /login, not the new subdomain -- staff routing
-  // is entirely based on their own staff_users.lgu_id, not which domain
-  // they signed in from, so there's no need to wait on the subdomain's
-  // own DNS/Vercel setup before this person can start working.
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const greeting = bploName ? `Hi ${bploName},` : "Hi,";
-  await notifyStaffEmail(
-    null,
-    bploEmail,
-    "Welcome to MuniServe",
-    `<p>${greeting}</p>
-     <p>A MuniServe account for <strong>${name}</strong> has been set up, and you've been added as its first BPLO administrator.</p>
-     <p>Sign in here using your Google account at this email address (<strong>${bploEmail}</strong>) -- no password needed:</p>
-     <p><a href="${appUrl}/login">${appUrl}/login</a></p>
-     <p>Once signed in, you can add the rest of your team from the Staff page.</p>`
-  );
+    // Points at the shared /login, not the new subdomain -- staff routing
+    // is entirely based on their own staff_users.lgu_id, not which domain
+    // they signed in from, so there's no need to wait on the subdomain's
+    // own DNS/Vercel setup before this person can start working.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const greeting = bploName ? `Hi ${bploName},` : "Hi,";
+    await notifyStaffEmail(
+      null,
+      bploEmail,
+      "Welcome to MuniServe",
+      `<p>${greeting}</p>
+       <p>A MuniServe account for <strong>${name}</strong> has been set up, and you've been added as its first BPLO administrator.</p>
+       <p>Sign in here using your Google account at this email address (<strong>${bploEmail}</strong>) -- no password needed:</p>
+       <p><a href="${appUrl}/login">${appUrl}/login</a></p>
+       <p>Once signed in, you can add the rest of your team from the Staff page.</p>`
+    );
+  }
 
   revalidatePath("/admin");
 }
