@@ -13,16 +13,31 @@ import { revalidatePath } from "next/cache";
  * before it's ready for the Mayor's signature, see CLAUDE.md 7i). Rule
  * #7: Treasury is a read-only checkpoint on the FEE AMOUNT -- they
  * record that payment was received and an OR number, never adjust
- * what's owed. The payments INSERT uses Treasury's own RLS-scoped
+ * what's owed. The payments INSERT uses the caller's own RLS-scoped
  * session (migration 0002's "only treasury can record payments" policy
  * enforces the role check for real); advancing applications.status uses
- * the service role afterward since Treasury has no direct UPDATE rights
+ * the service role afterward since neither role has direct UPDATE rights
  * on applications, same cross-cutting-advancement pattern as the
  * department/BPLO actions.
+ *
+ * BPLO can also call this (migration 0030, CLAUDE.md 7v) -- a real,
+ * live-tested gap: a walk-in applicant who pays at the Treasury counter
+ * and brings the OR receipt straight to BPLO had no path forward before
+ * this, since only Treasury could record it. BPLO gains exactly what
+ * Treasury already had here (confirm payment, record an OR number) --
+ * rule #7's actual restriction, never adjusting what's owed, is
+ * unaffected; this function still never touches application_fee_lines.
+ * The audit log tags a BPLO-recorded payment distinctly ("on behalf of
+ * Treasury") so the trail shows who actually typed it in, same reasoning
+ * as department_reviews.acted_on_behalf for a BPLO proxy decision --
+ * payments has no equivalent column, so this is captured in
+ * audit_log's free-text summary instead (received_by already points at
+ * the real actor's own staff_users row either way).
  */
 export async function recordPayment(formData: FormData) {
   const staff = await getCurrentStaff();
-  if (!staff || staff.role !== "treasury") throw new Error("Not authorized");
+  if (!staff || (staff.role !== "treasury" && staff.role !== "bplo")) throw new Error("Not authorized");
+  const actedOnBehalf = staff.role === "bplo";
 
   const applicationId = String(formData.get("applicationId"));
   const amount = Number(formData.get("amount"));
@@ -66,7 +81,7 @@ export async function recordPayment(formData: FormData) {
     actorRole: staff.role,
     actorLabel: actorLabelFor(staff),
     action: "payment_recorded",
-    summary: `Payment of ₱${amount.toLocaleString()} recorded for ${updated.reference_number}`,
+    summary: `Payment of ₱${amount.toLocaleString()} recorded for ${updated.reference_number}${actedOnBehalf ? " (BPLO, on behalf of Treasury)" : ""}`,
     details: { amount, method, orNumber },
   });
 

@@ -616,6 +616,20 @@ Live-testing Treasury: entering an OR number and clicking "Record payment" threw
 
 ---
 
+## 7v. BPLO can record a payment on Treasury's behalf (2026-08-15, same day)
+
+A real workflow gap, flagged by the project owner live-testing: "some applicants could walk on to the treasurer, pay the amount, get issued with receipt and goes back directly to the BPLO to show it. BPLO should also be able to approve it on Treasurer's behalf." Before this, an application sitting at `pending_payment` had exactly one path forward -- a Treasury staff member, specifically, recording it from their own dashboard -- so a walk-in who already paid and brought their OR receipt straight to BPLO had no way to move their own application along without separately tracking down Treasury.
+
+**Same shape as rule #9's existing precedent** (BPLO acting on a department's behalf), applied to Treasury: BPLO gains exactly what Treasury already had here -- confirm payment, record an OR number -- not the ability to adjust what's owed. Rule #7's actual restriction is untouched; `recordPayment()` still never writes to `application_fee_lines`.
+
+**Migration `0030_bplo_record_payment_on_behalf.sql`**: an additive INSERT policy on `payments` scoped to `role = 'bplo'` + own LGU, sitting alongside the original Treasury-only policy from migration 0002 (Postgres ORs multiple permissive policies together, same pattern used throughout this schema). `recordPayment()` (`treasury/actions.ts`) now accepts either role; the audit log tags a BPLO-recorded payment distinctly ("on behalf of Treasury") since `payments` has no `acted_on_behalf` column the way `department_reviews` does -- `received_by` already points at the real actor's own `staff_users` row regardless, so nothing about who actually received the money is ambiguous.
+
+**Extracted the queue itself, not just the permission**: the query + cards + form used to live inline in `treasury/page.tsx` only. Pulled into a new shared `src/app/dashboard/payment-queue.tsx` (`AwaitingPaymentSection`) so BPLO's dashboard renders the identical thing rather than a second near-copy -- same reasoning as `review-workflow.ts`'s `openDepartmentReviewRound` or `lbt-categories.ts`'s `setBusinessLbtCategory`. Each page keeps its own visibility policy: Treasury always shows the section (it's their one job), BPLO only shows it when there's actually something waiting (`awaitingPayment.length > 0`), matching the same hide-when-empty convention "Ready to print"/"Ready to release" already use for BPLO's own secondary confirm-only queues. Copy on BPLO's version says plainly this is normally Treasury's step, not the default path.
+
+Verified directly against production, not just written and handed off: re-ran the exact blocked scenario as the real account role/LGU combination, inside a rolled-back transaction, and confirmed the payments INSERT now succeeds under BPLO's own session (the original Treasury-only policy is untouched and still passes its own case).
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

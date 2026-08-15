@@ -14,6 +14,7 @@ import {
 } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 import { AssessmentManualSection, type ManualFieldSpec } from "./assessment-manual-fields";
+import { AwaitingPaymentSection } from "../payment-queue";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -248,6 +249,16 @@ export default async function BploDashboardPage() {
           </div>
         )}
       </div>
+
+      {awaitingPayment.length > 0 && (
+        <div className="mb-9">
+          <SectionHead
+            title="Awaiting payment"
+            sub="Normally Treasury's own step — use this only if the applicant already paid at the Treasury counter and brought their OR receipt straight to you."
+          />
+          <AwaitingPaymentSection lguId={staff.lgu_id} />
+        </div>
+      )}
 
       {printing.length > 0 && (
         <div className="mb-9">
