@@ -409,17 +409,10 @@ export async function markPrinted(formData: FormData) {
     .single();
   if (error || !updated) throw error ?? new Error("Update failed");
 
-  // CLAUDE.md 7w -- the Mayor previously had no signal a permit was
-  // waiting on their signature except checking their own dashboard cold.
-  await notifyStaffByRole(
-    staff.lgu_id,
-    "mayor",
-    applicationId,
-    `Ready for signature: ${updated.reference_number}`,
-    `<p><strong>${updated.reference_number}</strong> has been printed -- ready for your signature.</p>`,
-    `MuniServe: ${updated.reference_number} is printed and ready for your signature.`
-  );
-
+  // No Mayor notification here (CLAUDE.md 7w follow-up) -- the real
+  // process is BPLO physically carries the printed copies to the Mayor's
+  // office themselves right after this step, so an SMS/email would just
+  // be redundant noise, not new information.
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,
     applicationId,

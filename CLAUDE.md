@@ -658,6 +658,18 @@ Deliberately unchanged: the existing 24-hour reminder cron stays email-only for 
 
 Verified directly against production: confirmed the new `staff_users.phone` column and its RLS coverage, then ran `updateStaffPhone`'s exact write inside a rolled-back transaction under a real BPLO session and confirmed it succeeds.
 
+**Follow-up, same day -- the "printed" notification to the Mayor was wrong, corrected the real workflow instead of just deleting it.** The project owner caught this immediately: at this pilot LGU, the Mayor never opens the app for a signature at all. The real physical process is BPLO prints the permit, personally carries it to the Mayor's office, gets it signed on paper, carries it back, and records the signature themselves -- so notifying the Mayor when something's printed would just be noise (they're about to be handed the physical copy by the person who'd also be reading that notification).
+
+Two things followed from that, not just removing the notification:
+- **`markPrinted` no longer notifies the Mayor at all** -- reverted, with a comment explaining why rather than silently deleting it (a future reader shouldn't have to guess whether this was an oversight).
+- **BPLO can now sign a permit on the Mayor's behalf** (migration `0032_bplo_sign_permit_on_behalf.sql`) -- `signPermit` (`mayor/actions.ts`) accepts `role = 'bplo'` in addition to `'mayor'`, same "widen, don't replace" shape as migration 0030's payments-on-behalf and rule #9's department-decision-on-behalf. The Mayor's own dashboard path is untouched and still works identically for any LGU where a real Mayor login actually does this. Additive INSERT policies on `permits` and `permit_history` (both were previously `role = 'mayor'`-only, full stop) mirror the existing mayor-only ones rather than replacing them.
+- **BPLO's dashboard gained a real action queue** for this stage ("At the Mayor's Office" -- printed and carried over, mark it once the signed copy comes back) instead of just the existing stat card with nothing underneath, same `Row` + single-button pattern as "Ready to print"/"Ready to release".
+- **The applicant now hears "ready for pickup" the moment it's signed** (a new `notifyApplicantSms` in `signPermit`), not only once it's physically handed over (`markReleased`'s existing "released" SMS) -- these are two different, both-real moments now that signing and hand-off can be meaningfully separated in time (BPLO carrying it between two offices).
+- **The BPLO "ready for release" staff notification only fires when the Mayor genuinely signed it themselves** (`actedOnBehalf` check) -- when BPLO is the one calling this on the Mayor's behalf, they already know it's done; notifying them of their own action would be pure noise, the same reasoning that started this whole follow-up.
+- Audit log tags a BPLO-recorded signature distinctly ("(BPLO, on behalf of Mayor's Office)"), same convention as `recordPayment`'s "(on behalf of Treasury)" tag -- `permits` has no `acted_on_behalf` column the way `department_reviews` does.
+
+Verified directly against production: both new INSERT policies confirmed present, then the exact `permits`/`permit_history` inserts `signPermit` performs re-run inside a rolled-back transaction under a real BPLO session -- both succeed.
+
 ---
 
 ## 8. UI reference

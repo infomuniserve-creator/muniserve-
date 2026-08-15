@@ -15,6 +15,7 @@ import {
 import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 import { AssessmentManualSection, type ManualFieldSpec } from "./assessment-manual-fields";
 import { AwaitingPaymentSection } from "../payment-queue";
+import { signPermit } from "../mayor/actions";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -273,6 +274,29 @@ export default async function BploDashboardPage() {
                 <form action={markPrinted}>
                   <input type="hidden" name="applicationId" value={a.id} />
                   <MiniButton type="submit">Mark as printed</MiniButton>
+                </form>
+              </Row>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {awaitingSignature.length > 0 && (
+        <div className="mb-9">
+          <SectionHead
+            title="At the Mayor's Office"
+            sub="Printed and carried over for signature — mark this once you've brought the signed copy back."
+          />
+          <Card>
+            {awaitingSignature.map((a) => (
+              <Row key={a.id}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+                </div>
+                <form action={signPermit}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit">Mark as signed</MiniButton>
                 </form>
               </Row>
             ))}

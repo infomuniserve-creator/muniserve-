@@ -3,7 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
-import { notifyStaffByRole } from "@/lib/notifications";
+import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -25,14 +25,27 @@ const PAY_FREQUENCY_TO_HISTORY: Record<string, string> = {
 };
 
 /**
- * Mayor signs (pending_mayor -> pending_release, not straight to
+ * Signs the permit (pending_mayor -> pending_release, not straight to
  * released -- the signed permit still has to be physically handed to
  * the applicant, a separate BPLO checkpoint, see bplo/actions.ts's
  * markReleased and CLAUDE.md 7i). Creates the permits row via the
- * Mayor's own RLS-scoped session (migration 0002's "only mayor can
- * issue permits" policy enforces the role check for real); advancing
- * applications.status uses the service role afterward, same pattern as
- * the other role-gated actions.
+ * caller's own RLS-scoped session (migration 0002's "only mayor can
+ * issue permits" policy, widened by migration 0032 to also cover BPLO --
+ * see below); advancing applications.status uses the service role
+ * afterward, same pattern as the other role-gated actions.
+ *
+ * BPLO can call this on the Mayor's behalf (migration 0032, CLAUDE.md 7w
+ * follow-up) -- the real physical process at this pilot LGU: BPLO prints
+ * the permit and carries it to the Mayor's office themselves (no
+ * dashboard notification needed there, see markPrinted), the Mayor signs
+ * it on paper, and BPLO carries the signed copy back and marks it here.
+ * The Mayor's own dashboard path still works unchanged for any LGU where
+ * the Mayor genuinely does this themselves -- same "widen, don't
+ * replace" shape as rule #9's department-decision-on-behalf and payments
+ * (migration 0030). The audit log tags a BPLO-recorded signature
+ * distinctly, same reasoning as recordPayment's "(on behalf of
+ * Treasury)" tag -- permits has no acted_on_behalf column the way
+ * department_reviews does.
  *
  * permit_number reuses the application's own reference_number (e.g.
  * MS-2026-00001) rather than a separate counter -- one human-readable
@@ -64,7 +77,8 @@ const PAY_FREQUENCY_TO_HISTORY: Record<string, string> = {
  */
 export async function signPermit(formData: FormData) {
   const staff = await getCurrentStaff();
-  if (!staff || staff.role !== "mayor") throw new Error("Not authorized");
+  if (!staff || (staff.role !== "mayor" && staff.role !== "bplo")) throw new Error("Not authorized");
+  const actedOnBehalf = staff.role === "bplo";
 
   const applicationId = String(formData.get("applicationId"));
 
@@ -73,7 +87,7 @@ export async function signPermit(formData: FormData) {
     .from("applications")
     .select(
       `reference_number, application_year, application_type, form_inputs, business_id,
-       business:businesses(business_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, organization_type, business_tax_payment, legacy_license_no, legacy_owner_name, owner:owners(full_name, gender))`
+       business:businesses(business_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, organization_type, business_tax_payment, legacy_license_no, legacy_owner_name, owner:owners(full_name, gender, phone))`
     )
     .eq("id", applicationId)
     .single();
@@ -111,7 +125,7 @@ export async function signPermit(formData: FormData) {
     business_tax_payment: string | null;
     legacy_license_no: string | null;
     legacy_owner_name: string | null;
-    owner: { full_name: string; gender: string | null } | null;
+    owner: { full_name: string; gender: string | null; phone: string | null } | null;
   } | null;
   const formInputs = application.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null;
 
@@ -185,25 +199,40 @@ export async function signPermit(formData: FormData) {
     .eq("status", "pending_mayor");
   if (statusError) throw statusError;
 
-  // CLAUDE.md 7w -- BPLO previously had no signal a signed permit was
-  // waiting to be released except checking their own dashboard cold.
-  await notifyStaffByRole(
-    staff.lgu_id,
-    "bplo",
-    applicationId,
-    `Ready for release: ${application.reference_number}`,
-    `<p><strong>${application.reference_number}</strong> has been signed -- ready for release to the applicant.</p>`,
-    `MuniServe: ${application.reference_number} signed -- ready for release.`
-  );
+  // CLAUDE.md 7w -- only notify BPLO when the Mayor genuinely signed it
+  // themselves; when BPLO is the one calling this on the Mayor's behalf
+  // (the real process at this pilot LGU), they already know it's done --
+  // notifying them of their own action is just noise.
+  if (!actedOnBehalf) {
+    await notifyStaffByRole(
+      staff.lgu_id,
+      "bplo",
+      applicationId,
+      `Ready for release: ${application.reference_number}`,
+      `<p><strong>${application.reference_number}</strong> has been signed -- ready for release to the applicant.</p>`,
+      `MuniServe: ${application.reference_number} signed -- ready for release.`
+    );
+  }
+
+  // The applicant hears about this the moment it's signed, not only once
+  // it's physically handed over (markReleased's own SMS) -- "ready for
+  // pickup" is real, actionable information the moment it's true.
+  if (business?.owner?.phone) {
+    await notifyApplicantSms(
+      applicationId,
+      business.owner.phone,
+      `MuniServe: your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.`
+    );
+  }
 
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,
     applicationId,
     actorRole: staff.role,
-    actorLabel: actorLabelFor(staff),
+    actorLabel: actedOnBehalf ? `${actorLabelFor(staff)} on behalf of Mayor's Office` : actorLabelFor(staff),
     action: "permit_signed",
-    summary: `Permit signed for ${application.reference_number} -- valid until ${validUntil}`,
-    details: { permitNumber: application.reference_number, validUntil, amountPaid },
+    summary: `Permit signed for ${application.reference_number} -- valid until ${validUntil}${actedOnBehalf ? " (BPLO, on behalf of Mayor's Office)" : ""}`,
+    details: { permitNumber: application.reference_number, validUntil, amountPaid, actedOnBehalf },
   });
 
   revalidatePath("/dashboard/mayor");
