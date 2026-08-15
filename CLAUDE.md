@@ -562,6 +562,46 @@ The project owner asked for four things after seeing the live assessment card: r
 
 ---
 
+## 7s. Business Tax & Mayor's Permit Fee Setup: CSV import (2026-08-15)
+
+7r's own "deliberately not built" note flagged the real gap directly: the engine could handle multiple LGU shapes, but onboarding a new client's actual tax rates still meant a developer reading the ordinance and hand-writing a seed script or raw SQL run through the Supabase MCP connection -- a real bottleneck the moment more than one or two clients need onboarding. The project owner asked directly for a scalable fix, floated a CSV-upload idea, and this section is the design discussion and the build that followed, informed by two real ordinances read in full: San Miguel's (already on file) and a newly-provided **2006 San Ildefonso Revenue Code** spreadsheet.
+
+**What the discussion settled on, and why it's safe:** the risky step was never "who clicks upload" -- it's "who correctly translates a real ordinance's prose brackets into structured numbers." That step doesn't change: a developer (via Claude Code) still reads the actual ordinance and produces the filled file, exactly like it always has. What changes is that the *output* is a reviewable spreadsheet uploaded through the app instead of raw SQL run directly against the database, which adds a real safety property that didn't exist before -- the file itself is inspectable before it goes live, and the upload flow shows a plain-language preview of every rule before anything is written.
+
+**Two templates** (`src/lib/fee-rule-import.ts`), matching `fee_category`:
+- **LBT**: always the graduated-bracket shape (`computation_type = 'tiered'`). One row per bracket (schedule name, category code, optional new-business flat-rate-with-floor %, then min/max/base fee/rate %/rate basis). Confirmed against San Ildefonso's real Retailer schedule that a pure flat-percentage-with-one-threshold schedule (2.2% up to ₱400k, 1.1% above, no real bracket table in the ordinance at all) still fits cleanly as two brackets with `rate_basis = 'full_amount'` -- no third shape needed.
+- **Mayor's Permit**: a `shape` column per row (`flat`, `per_unit`, `tier_matrix`, or the `standard_new`/`standard_renewal` fallback) covers both San Miguel's named-business-type catalog and San Ildefonso's business-size tier grid in one file format. A file mixing `tier_matrix` rows with `flat`/`per_unit` rows is rejected outright -- one LGU only ever uses one shape, per both real ordinances read.
+
+**Deliberately out of scope for v1, stated plainly rather than silently unsupported**: San Ildefonso's per-vehicle-type flat rates with no basis at all (public utility permit fees), and a Mayor's Permit `standard:renewal` fallback that's itself tiered by prior-year LBT (San Miguel's actual shape) -- importing that one specific row still needs a migration. Every other row in both real ordinances read for this pass imports cleanly.
+
+**Round-trips both ways, on purpose**: downloading a template exports the LGU's *currently active* rates in the same shape the upload expects, not a blank form -- a brand-new LGU with nothing set up yet gets a labeled example to replace, an LGU updating next year's numbers gets *their own* rates back as an editable starting point. Both "set this up for the first time" and "change a couple of numbers" are the same download-edit-upload loop.
+
+**Preview before publish**: upload parses the file and shows a plain-language line per rule (e.g. *"Security Agency (applies_to "security agency") -- ₱300 base + ₱50 per locality count"*) plus any warnings, before anything touches live data. Only an explicit "Looks right -- publish" click writes anything.
+
+**Publish re-parses server-side**, never trusts the browser's own preview state -- same reasoning as `finalizeAssessment`'s "never trusts the page's own preview, re-runs computation server-side," since a client value is technically editable. New rules are inserted first; only once every insert succeeds does the fee category's previously-active rules get deactivated (soft-delete, matching this schema's standing convention everywhere else) -- not a real database transaction (supabase-js has no multi-statement transaction API against PostgREST), but bounded so a failed upload can't leave an LGU half-covered by old rates and half by a broken new set: on any insert failure, whatever new rows *did* get inserted this run are deleted again and the old rules are never touched.
+
+**Migration `0028_bplo_lbt_mayors_permit_rls.sql`** widens migration 0027's "BPLO can manage regulatory fees" RLS pattern to `fee_category in ('lbt', 'mayors_permit')` on both `fee_rules` and `fee_rule_brackets` -- deliberately left service-role-only in 7r ("stays a service-role/migration task for now"); this pass is what changes that, since the new preview-before-publish flow is what makes opening it up safe. Applying this migration to production was blocked by the session's own auto-mode permission classifier (a direct schema/policy write) -- applied only after the project owner explicitly approved that specific action, not worked around.
+
+**A real latent bug fixed along the way**: `getLbtCategoryOptions()` (`src/lib/lbt-categories.ts`, powers BPLO's manual LBT-category dropdown) filtered on `name LIKE 'LBT Schedule%'` -- a naming-convention guess that would have silently hidden any imported schedule not named that exact way. Switched to `fee_category = 'lbt'` (migration 0026's real discriminator, the same fix this project already applied to the fee engine itself) -- a strict widening, every existing row already satisfies both, verified by construction.
+
+**Verified against real data, not just synthetic scenarios**: San Miguel's live Schedule A shape, both Mayor's Permit styles (including per-unit Security Agency and the standard fallback), and San Ildefonso's actual tier_matrix rows straight out of the source workbook (including a category with only Medium/Large tiers, not all four) all round-trip correctly through parse/build/summarize. Also confirmed the template-download route fails closed (403) with no staff session, and checked the component's real rendering against the app's actual design system via a temporary unauthenticated fixture route, deleted immediately after -- same technique 7o/7p already established for verifying without a real Google-OAuth staff login, since neither that nor a real file-picker upload can be driven from this environment (the same file-picker limitation flagged back in 7d).
+
+---
+
+## 7t. Settings reorganization: staff management moved in, sections reordered (2026-08-15, same day)
+
+The project owner asked directly to declutter the top nav and consolidate: staff-account management (`/dashboard/staff`, its own tab since 7m) moved into `/dashboard/settings` as a new first section, **"Add/Remove Staff"**, and "Your public application form" (Settings' original first section, since 7o) moved to the bottom.
+
+**Why staff management fits here rather than its own tab**: it's an occasional admin task -- add/deactivate an account -- in the same category as the rest of Settings (fee setup, regulatory fees, the Automated Assessment toggle), not a primary day-to-day section like Applications or Businesses. The reordering itself (public application form to the bottom) was the project owner's own explicit instruction, not a judgment call made here.
+
+**Structure mirrors the 7s pattern deliberately**: `src/app/dashboard/settings/staff-management.tsx` (presentational, a plain server component -- every control is already a server-action form, nothing needed client state) and `staff-actions.ts` (server actions, moved from `dashboard/staff/actions.ts` with `revalidatePath` updated to `/dashboard/settings`), same one-file-per-section split `fee-rule-import.tsx` already established rather than growing `settings/page.tsx` or `settings/actions.ts` into a single large file.
+
+`src/app/dashboard/staff/` is deleted entirely -- no redirect left behind, since nothing else in the app links to that path anymore (checked every reference, including the welcome-email copy in `admin/actions.ts` and the doc comments in `admin/page.tsx`/`embed-code-box.tsx`/`auth/callback/route.ts`, all updated to point at `/dashboard/settings`). `DashboardTopBar` (`ui.tsx`) drops the `staffHref` prop and the "Staff" nav pill entirely, and `"staff"` is removed from the `active` tab union -- every call site that used to pass `staffHref` (bplo, businesses, businesses/history, audit, stats) updated accordingly.
+
+Verified with a full `next build` (not just `tsc --noEmit`, which fights with Next's own generated ambient types once `.next` is cleared) -- clean, and `/dashboard/staff` no longer appears in the route list.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
