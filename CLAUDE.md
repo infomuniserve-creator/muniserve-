@@ -602,6 +602,20 @@ Verified with a full `next build` (not just `tsc --noEmit`, which fights with Ne
 
 ---
 
+## 7u. `current_staff()` picking the wrong staff_users row -- a schema-wide RLS bug, not a Treasury bug (2026-08-15, same day)
+
+Live-testing Treasury: entering an OR number and clicking "Record payment" threw a bare server error every time. `get_runtime_errors` (Vercel) named the real cause immediately: `42501 new row violates row-level security policy for table "payments"` -- not a bug in `recordPayment()` (`treasury/actions.ts`) at all, which matched CLAUDE.md's own spec (advances `pending_payment -> pending_printing`, SMS's the applicant "your permit is now being printed") exactly.
+
+**Root cause, confirmed directly against production before writing a fix**: `current_staff()` -- the SQL function nearly every RLS policy in this schema calls, not just payments' -- was `select * from staff_users where auth_user_id = auth.uid() limit 1`, with no ordering at all. A platform admin who has ever used "View as" (migration 0019, section 7o) legitimately owns *two* `staff_users` rows for one login when that Google account is also real client staff somewhere -- exactly the project owner's own test account, confirmed with a query: one inactive real `bplo` row (left over from earlier testing), one active admin-proxy row currently set to whatever role "View as" last picked. With no `order by`, Postgres was free to return either row, and reliably returned the wrong one -- so `role = 'treasury'` in the payments INSERT policy evaluated false every time, regardless of which role the proxy row actually claimed to be.
+
+**This was already fixed once, but only at the app layer.** `src/lib/staff.ts`'s `getCurrentStaff()` solved this identical problem back in section 7o's own "View as" work -- "the active admin-proxy row always wins over a real account" -- after the *exact same account* got silently bounced back to `/admin` for the exact same reason. That fix never propagated down to the SQL-level `current_staff()`, so every RLS policy in the schema (`applications`, `businesses`, `payments`, `permits`, `department_reviews`, `fee_rules`, `lgus`, `staff_users`, `audit_log`, ...) stayed exposed to the same nondeterminism this whole time -- the identical *class* of bug as 7q's "Unknown applicant" gap (app-layer and DB-layer logic silently drifting apart), just not yet tripped over a second table.
+
+**Fixed** (migration `0029_fix_current_staff_row_selection.sql`): `current_staff()` now orders by the identical precedence `getCurrentStaff()` already uses -- an active admin-proxy row first, else the active real row. Applied directly to production, then verified two ways before calling it done, not just written and handed off: re-ran `current_staff()` under the exact failing account's session inside a transaction (`set local role authenticated` + `request.jwt.claims`) and confirmed it now resolves to the proxy row instead of the stale real one; then re-ran the actual blocked `payments` INSERT the same way, inside a rolled-back transaction, and confirmed it now succeeds.
+
+**Worth remembering**: any staff-facing permission fix that touches `getCurrentStaff()` (app layer) needs the same check asked of `current_staff()` (DB layer) too, and vice versa -- this is now the second real bug from exactly that gap (7q, this one). The two are meant to answer the identical question ("who is this session, really") and have no business disagreeing.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
