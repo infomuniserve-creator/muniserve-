@@ -62,7 +62,6 @@ export default async function PerformanceStatsPage({
         initials={office.initials}
         active="stats"
         applicationsHref={office.homeHref}
-        staffHref={staff.role === "bplo" ? "/dashboard/staff" : undefined}
         settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
         auditHref="/dashboard/audit"
         statsHref="/dashboard/stats"

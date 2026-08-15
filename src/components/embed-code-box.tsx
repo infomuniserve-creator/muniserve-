@@ -4,7 +4,7 @@ import { useState } from "react";
 
 /**
  * A read-only code snippet with a copy button (CLAUDE.md 7o follow-up) --
- * used on both /dashboard/staff (Tailwind-styled) and /admin (plain inline
+ * used on both /dashboard/settings (Tailwind-styled) and /admin (plain inline
  * styles), so this is deliberately self-contained with its own inline
  * styles rather than the dashboard's ui.tsx component library, matching
  * how apply/login/status/verify/admin already share plain-styled pieces

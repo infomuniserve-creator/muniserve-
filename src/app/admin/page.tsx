@@ -13,7 +13,7 @@ import { createLguClient, deleteLguClient, setLguPaused, viewAsLgu } from "./act
  * its own subdomain, see src/lib/lgu.ts's resolveLguId), any departments
  * named, and a bootstrap BPLO account for that LGU, then emails that
  * BPLO a sign-in link -- the same self-service pattern as
- * /dashboard/staff, one level up.
+ * /dashboard/settings's "Add/Remove Staff" section, one level up.
  *
  * Deliberately plain inline styles (not the dashboard's Tailwind
  * component library, ui.tsx) -- this is its own route segment, not

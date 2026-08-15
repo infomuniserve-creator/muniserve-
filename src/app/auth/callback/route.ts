@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
  *
  * Also claims a pre-provisioned staff_users OR platform_admins row by
  * email, if one exists with no auth_user_id yet (CLAUDE.md sections 7l,
- * 7o) -- BPLO adds a new staff member by email through /dashboard/staff,
+ * 7o) -- BPLO adds a new staff member by email through /dashboard/settings,
  * or a platform admin adds a new client's first BPLO through /admin,
  * BEFORE that person has ever signed in (there's no Supabase auth_user_id
  * to give them until they have), so the row starts out unlinked. First

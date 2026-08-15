@@ -295,7 +295,6 @@ export function DashboardTopBar({
   initials,
   active,
   applicationsHref,
-  staffHref,
   settingsHref,
   auditHref,
   statsHref,
@@ -304,11 +303,9 @@ export function DashboardTopBar({
   officeLabel: string;
   officeSub: string;
   initials: string;
-  active: "applications" | "businesses" | "staff" | "settings" | "audit" | "stats";
+  active: "applications" | "businesses" | "settings" | "audit" | "stats";
   applicationsHref: string;
-  /** Only BPLO can manage staff (src/app/dashboard/staff) -- pass this in only from bplo/page.tsx so the tab doesn't render for anyone else. */
-  staffHref?: string;
-  /** Only BPLO has settings (src/app/dashboard/settings) -- same gating as staffHref, passed from the same call sites. Rendered as an icon button, not a nav pill, since it's a shortcut rather than a primary section. */
+  /** Only BPLO has settings (src/app/dashboard/settings) -- staff-account management lives there too now (2026-08-15), no longer its own top-nav tab. Rendered as an icon button, not a nav pill, since it's a shortcut rather than a primary section. */
   settingsHref?: string;
   /** BPLO and Mayor both see the Audit Trail (CLAUDE.md 7o follow-up, the project owner asked for Mayor explicitly) -- a real nav pill, not an icon, since it's a primary reporting section rather than an occasional admin task like Settings. */
   auditHref?: string;
@@ -349,16 +346,6 @@ export function DashboardTopBar({
         >
           Businesses
         </Link>
-        {staffHref && (
-          <Link
-            href={staffHref}
-            className={`rounded-full px-4.5 py-2 font-display text-[13px] font-bold transition-colors ${
-              active === "staff" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            Staff
-          </Link>
-        )}
         {auditHref && (
           <Link
             href={auditHref}

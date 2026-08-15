@@ -112,7 +112,6 @@ export default async function AuditTrailPage({
         initials={office.initials}
         active="audit"
         applicationsHref={office.homeHref}
-        staffHref={staff.role === "bplo" ? "/dashboard/staff" : undefined}
         settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
         auditHref="/dashboard/audit"
         statsHref="/dashboard/stats"

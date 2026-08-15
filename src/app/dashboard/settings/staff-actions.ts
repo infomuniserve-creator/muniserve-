@@ -18,10 +18,16 @@ const ROLE_LABEL: Record<string, string> = {
 
 /**
  * BPLO provisions a new staff account by email (CLAUDE.md section 7l).
+ * Moved from the old standalone /dashboard/staff page into Settings
+ * (2026-08-15) -- "Add/Remove Staff" is now the first section there rather
+ * than its own top-nav tab, kept as a separate actions file from the rest
+ * of settings/actions.ts since staff-account management is its own
+ * concern, not LGU-level fee configuration.
+ *
  * auth_user_id starts null -- there's no Supabase auth_user_id to give
- * this row until that person actually signs in with Google at least
- * once; /auth/callback/route.ts claims it automatically on their first
- * real sign-in, matched by email. Uses BPLO's own RLS-scoped session
+ * this row until that person actually signs in with Google at least once;
+ * /auth/callback/route.ts claims it automatically on their first real
+ * sign-in, matched by email. Uses BPLO's own RLS-scoped session
  * (migration 0015's insert policy enforces the role/lgu_id check for
  * real, not just this action's own staff.role check).
  *
@@ -82,7 +88,7 @@ export async function addStaffMember(formData: FormData) {
     details: { email, role, department },
   });
 
-  revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/settings");
 }
 
 /**
@@ -137,5 +143,5 @@ export async function setStaffActive(formData: FormData) {
     summary: `Staff account ${isActive ? "activated" : "deactivated"}: ${target?.full_name || target?.email || staffId}`,
   });
 
-  revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/settings");
 }

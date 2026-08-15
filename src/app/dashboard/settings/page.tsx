@@ -8,17 +8,17 @@ import { SignOutButton } from "../sign-out-button";
 import { Card, DashboardTopBar, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
 import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
+import { StaffManagementSection } from "./staff-management";
 
 /**
- * BPLO-only settings hub (CLAUDE.md section 7o follow-up) -- split out of
- * /dashboard/staff, which was starting to carry two unrelated concerns
- * (managing staff accounts vs. LGU-level configuration like the public
- * application form's link/embed code). This page is meant to grow: more
- * LGU-level settings land here going forward rather than back on the
- * Staff page.
- *
- * Same guard as /dashboard/staff (BPLO only) -- settings here are about
- * the whole LGU's configuration, not any one staff member's own account.
+ * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
+ * split out of /dashboard/staff to separate LGU-level configuration from
+ * staff-account management; as of 2026-08-15, staff management moved back
+ * in as this page's own first section ("Add/Remove Staff") instead of a
+ * separate top-nav tab -- it's an occasional admin task, same category as
+ * everything else here, not a primary day-to-day section like
+ * Applications or Businesses. This page is meant to keep growing: more
+ * LGU-level settings land here going forward.
  */
 export default async function SettingsPage() {
   const staff = await getCurrentStaff();
@@ -37,6 +37,21 @@ export default async function SettingsPage() {
     .order("sort_order");
   const regulatoryFees = regulatoryFeesRaw ?? [];
 
+  const { data: staffListRaw } = await supabase
+    .from("staff_users")
+    .select("id, full_name, email, role, department, is_active, auth_user_id")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("is_admin_proxy", false)
+    .order("role", { ascending: true })
+    .order("full_name", { ascending: true });
+
+  const { data: departmentsRaw } = await supabase
+    .from("lgu_departments")
+    .select("name, display_name")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
   return (
     <>
       <DashboardTopBar
@@ -45,44 +60,13 @@ export default async function SettingsPage() {
         initials={office.initials}
         active="settings"
         applicationsHref={office.homeHref}
-        staffHref="/dashboard/staff"
         settingsHref="/dashboard/settings"
         auditHref="/dashboard/audit"
         statsHref="/dashboard/stats"
         rightSlot={<SignOutButton />}
       />
 
-      {lgu.subdomain ? (
-        <div className="mb-9">
-          <SectionHead title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL." />
-          <Card className="flex flex-col gap-4 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <a
-                href={`https://${lgu.subdomain}.muniserve.ph/apply`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[13.5px] font-bold text-info-ink underline underline-offset-2"
-              >
-                {lgu.subdomain}.muniserve.ph/apply
-              </a>
-              <span className="text-[12px] text-ink-soft">
-                If this link isn&rsquo;t working yet, your domain is still being set up by MuniServe -- check back soon.
-              </span>
-            </div>
-            <div className="border-t border-border pt-4">
-              <p className="mb-2 text-[12px] font-bold text-ink-soft">
-                Embed on your website (iframe) -- applicants see your own domain, not muniserve.ph:
-              </p>
-              <EmbedCodeBox code={buildApplyEmbedSnippet(lgu.subdomain)} />
-            </div>
-          </Card>
-        </div>
-      ) : (
-        <div className="mb-9">
-          <SectionHead title="Your public application form" />
-          <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact MuniServe support.</p>
-        </div>
-      )}
+      <StaffManagementSection lguName={lgu.name} lguProvince={lgu.province} staffList={staffListRaw ?? []} departments={departmentsRaw ?? []} />
 
       <div className="mb-9">
         <SectionHead
@@ -168,6 +152,38 @@ export default async function SettingsPage() {
           </form>
         </Card>
       </div>
+
+      {lgu.subdomain ? (
+        <div className="mb-9">
+          <SectionHead title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL." />
+          <Card className="flex flex-col gap-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <a
+                href={`https://${lgu.subdomain}.muniserve.ph/apply`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13.5px] font-bold text-info-ink underline underline-offset-2"
+              >
+                {lgu.subdomain}.muniserve.ph/apply
+              </a>
+              <span className="text-[12px] text-ink-soft">
+                If this link isn&rsquo;t working yet, your domain is still being set up by MuniServe -- check back soon.
+              </span>
+            </div>
+            <div className="border-t border-border pt-4">
+              <p className="mb-2 text-[12px] font-bold text-ink-soft">
+                Embed on your website (iframe) -- applicants see your own domain, not muniserve.ph:
+              </p>
+              <EmbedCodeBox code={buildApplyEmbedSnippet(lgu.subdomain)} />
+            </div>
+          </Card>
+        </div>
+      ) : (
+        <div className="mb-9">
+          <SectionHead title="Your public application form" />
+          <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact MuniServe support.</p>
+        </div>
+      )}
     </>
   );
 }

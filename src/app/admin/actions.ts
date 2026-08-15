@@ -34,7 +34,7 @@ const VIEW_AS_ROLES = new Set(["bplo", "treasury", "mayor"]);
  * Requiring it up front would block onboarding on a detail that isn't
  * always available yet. When it's left blank, no staff_users row or
  * welcome email is created at all -- add the real one later from
- * /dashboard/staff (reachable via "View as BPLO" for this LGU) once it's
+ * /dashboard/settings (reachable via "View as BPLO" for this LGU) once it's
  * known, exactly the same self-service flow as adding anyone else.
  *
  * Barangays are also optional, same reasoning (CLAUDE.md 7o follow-up,
