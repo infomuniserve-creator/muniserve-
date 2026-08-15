@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
-import { generatePrePrintCertificate } from "@/lib/print-certificate";
+import { computeCertificateFieldValues, generatePrePrintCertificate, type PrintCertificateInput } from "@/lib/print-certificate";
+import { fillCustomTemplate } from "@/lib/print-template-fill";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * Serves the pre-signature print-ready certificate for an application at
@@ -10,6 +12,15 @@ import { createClient } from "@/lib/supabase/server";
  * inline, not attachment) so clicking it from bplo/page.tsx's queue opens
  * the PDF directly in a new tab, ready for the browser's own print
  * dialog, rather than downloading a file first.
+ *
+ * Uses the LGU's own uploaded template (CLAUDE.md 7y) when one exists,
+ * falling back to the generated certificate otherwise -- and falling
+ * back to it again, not erroring out, if filling the custom template
+ * throws for any reason (a corrupted stored file, a field renamed since
+ * the mapping was saved). BPLO must always get *something* printable
+ * here; a broken custom template must never block the workflow the way
+ * a missing PDF/QR at signing already doesn't (permit-pdf.ts's own
+ * try/catch, section 7k).
  *
  * BPLO-only, same gating as markPrinted/the rest of that queue -- a
  * route handler rather than a server action since a PDF response needs
@@ -68,7 +79,7 @@ export async function GET(request: NextRequest) {
     .join(", ");
   const address = structuredAddress || business?.address || "";
 
-  const pdf = await generatePrePrintCertificate({
+  const input: PrintCertificateInput = {
     referenceNumber: application.reference_number,
     applicationType: application.application_type as "new" | "renewal",
     businessName: business?.trade_name || business?.business_name || "(business record missing)",
@@ -79,7 +90,22 @@ export async function GET(request: NextRequest) {
     issuedOn: latestPayment?.received_at ? new Date(latestPayment.received_at) : new Date(),
     applicationYear: application.application_year,
     lgu,
-  });
+  };
+
+  let pdf: Uint8Array | null = null;
+  if (lgu.printTemplatePath) {
+    try {
+      const service = createServiceClient();
+      const { data: templateFile, error: downloadError } = await service.storage.from("permit-print-templates").download(lgu.printTemplatePath);
+      if (downloadError || !templateFile) throw downloadError ?? new Error("Template file not found");
+      const templateBytes = new Uint8Array(await templateFile.arrayBuffer());
+      const values = computeCertificateFieldValues(input);
+      pdf = await fillCustomTemplate(templateBytes, lgu.printTemplateFieldMapping ?? {}, values);
+    } catch (err) {
+      console.error("Custom print template failed, falling back to the generated certificate", err);
+    }
+  }
+  if (!pdf) pdf = await generatePrePrintCertificate(input);
 
   return new NextResponse(Buffer.from(pdf), {
     headers: {

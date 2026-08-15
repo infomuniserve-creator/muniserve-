@@ -9,6 +9,7 @@ import { Card, DashboardTopBar, MiniButton, PrimaryButton, SectionHead, TonePill
 import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive, updateMayorName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
+import { PrintTemplateUpload } from "./print-template-upload";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
@@ -173,6 +174,9 @@ export default async function SettingsPage() {
             <PrimaryButton type="submit">Save</PrimaryButton>
           </form>
         </Card>
+        <div className="mt-3">
+          <PrintTemplateUpload hasTemplate={Boolean(lgu.printTemplatePath)} />
+        </div>
       </div>
 
       {lgu.subdomain ? (

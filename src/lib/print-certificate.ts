@@ -62,6 +62,31 @@ export type PrintCertificateInput = {
   lgu: LguDisplay;
 };
 
+/**
+ * The fixed set of data points a print template (generated or custom-
+ * uploaded, CLAUDE.md 7y) can place -- the canonical vocabulary a BPLO's
+ * own field-mapping screen offers, and the single source of truth both
+ * generatePrePrintCertificate() and fillCustomTemplate() (print-template-
+ * fill.ts) compute values from, so the two paths can't drift apart on
+ * date/currency formatting the way two independent implementations
+ * eventually would.
+ */
+export const PRINT_TEMPLATE_FIELDS = [
+  { key: "permit_number", label: "Permit Number" },
+  { key: "application_type", label: "Application Type (NEW / RENEWAL)" },
+  { key: "business_name", label: "Registered Trade Name / Business Name" },
+  { key: "business_address", label: "Business Address" },
+  { key: "business_owner", label: "Business Owner" },
+  { key: "receipt_no", label: "Receipt No." },
+  { key: "amount_paid", label: "Amount Paid" },
+  { key: "issued_on", label: "Issued On" },
+  { key: "valid_until", label: "Valid Until" },
+  { key: "renew_by", label: "Renewal Deadline" },
+  { key: "mayor_name", label: "Mayor's Name" },
+  { key: "mayor_title", label: "Mayor's Title (City/Municipal Mayor)" },
+] as const;
+export type PrintTemplateFieldKey = (typeof PRINT_TEMPLATE_FIELDS)[number]["key"];
+
 function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" });
 }
@@ -71,17 +96,41 @@ function formatDateOnly(isoDate: string): string {
   return formatDate(new Date(`${isoDate}T12:00:00Z`));
 }
 
+/**
+ * Computes every canonical field's display-ready string for one
+ * application -- "Php" not "₱" (see the note further down: pdf-lib's
+ * standard fonts can't encode the peso symbol at all), dates already
+ * formatted, application type already uppercased. Both the generated
+ * certificate and a custom-uploaded one fill in exactly these strings,
+ * never their own separate formatting.
+ */
+export function computeCertificateFieldValues(input: PrintCertificateInput): Record<PrintTemplateFieldKey, string> {
+  const isCity = /\bcity\b/i.test(input.lgu.bploOfficeName);
+  return {
+    permit_number: input.referenceNumber,
+    application_type: input.applicationType === "renewal" ? "RENEWAL" : "NEW",
+    business_name: input.businessName,
+    business_address: input.address || "—",
+    business_owner: input.ownerName,
+    receipt_no: input.receiptNo ?? "—",
+    amount_paid: input.amountPaid != null ? `Php ${input.amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—",
+    issued_on: formatDate(input.issuedOn),
+    valid_until: formatDateOnly(`${input.applicationYear}-12-31`),
+    renew_by: formatDateOnly(`${input.applicationYear + 1}-01-20`),
+    mayor_name: input.lgu.mayorName ? `HON. ${input.lgu.mayorName.toUpperCase()}` : "",
+    mayor_title: isCity ? "City Mayor" : "Municipal Mayor",
+  };
+}
+
 export async function generatePrePrintCertificate(input: PrintCertificateInput): Promise<Uint8Array> {
+  const values = computeCertificateFieldValues(input);
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const isCity = /\bcity\b/i.test(input.lgu.bploOfficeName);
-  const mayorTitle = isCity ? "City Mayor" : "Municipal Mayor";
   const officeTitle = isCity ? "OFFICE OF THE CITY MAYOR" : "OFFICE OF THE MUNICIPAL MAYOR";
-  const validUntil = formatDateOnly(`${input.applicationYear}-12-31`);
-  const renewBy = formatDateOnly(`${input.applicationYear + 1}-01-20`);
 
   // --- Letterhead banner ---
   const bannerHeight = 118;
@@ -102,9 +151,9 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
 
   // --- Permit No. + application type, prominent, right under the banner ---
   y = PAGE_HEIGHT - bannerHeight - 32;
-  centerText(page, `Permit No. ${input.referenceNumber}`, y, bold, 15, NAVY);
+  centerText(page, `Permit No. ${values.permit_number}`, y, bold, 15, NAVY);
   y -= 18;
-  centerText(page, input.applicationType === "renewal" ? "RENEWAL" : "NEW", y, bold, 11, MUTED);
+  centerText(page, values.application_type, y, bold, 11, MUTED);
 
   // --- Details table ---
   // "Php" not "₱" (caught by actually rendering a test PDF, not just
@@ -112,15 +161,15 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
   // encoding, which has no glyph for U+20B1 and throws outright when
   // asked to draw it. The real reference certificate writes "Php." too,
   // not the peso symbol, so this isn't a workaround-vs-ideal tradeoff --
-  // it's just what the actual document does.
+  // it's just what the actual document does (see computeCertificateFieldValues).
   y -= 40;
   const rows: [string, string][] = [
-    ["Registered trade name", input.businessName],
-    ["Business address", input.address || "—"],
-    ["Business owner", input.ownerName],
-    ["Receipt No.", input.receiptNo ?? "—"],
-    ["Amount paid", input.amountPaid != null ? `Php ${input.amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"],
-    ["Issued on", formatDate(input.issuedOn)],
+    ["Registered trade name", values.business_name],
+    ["Business address", values.business_address],
+    ["Business owner", values.business_owner],
+    ["Receipt No.", values.receipt_no],
+    ["Amount paid", values.amount_paid],
+    ["Issued on", values.issued_on],
   ];
   for (const [label, value] of rows) {
     page.drawText(label, { x: MARGIN, y, font: bold, size: 10.5, color: MUTED });
@@ -131,7 +180,7 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
   // --- Disclaimer ---
   y -= 14;
   const disclaimerLines = wrapText(
-    `This Business Permit is revocable and is null and void if the permittee violates any applicable law, ordinance, or regulation, or fails to pay any tax, fee, or charge as they become due. Valid until ${validUntil}.`,
+    `This Business Permit is revocable and is null and void if the permittee violates any applicable law, ordinance, or regulation, or fails to pay any tax, fee, or charge as they become due. Valid until ${values.valid_until}.`,
     font,
     10,
     PAGE_WIDTH - MARGIN * 2
@@ -157,14 +206,14 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
   // --- Signature block (blank -- this is the pre-signature copy) ---
   const sigY = 175;
   page.drawLine({ start: { x: PAGE_WIDTH - MARGIN - 220, y: sigY }, end: { x: PAGE_WIDTH - MARGIN, y: sigY }, thickness: 1, color: INK });
-  if (input.lgu.mayorName) {
-    centerTextInRange(page, `HON. ${input.lgu.mayorName.toUpperCase()}`, PAGE_WIDTH - MARGIN - 220, PAGE_WIDTH - MARGIN, sigY - 14, bold, 10, INK);
+  if (values.mayor_name) {
+    centerTextInRange(page, values.mayor_name, PAGE_WIDTH - MARGIN - 220, PAGE_WIDTH - MARGIN, sigY - 14, bold, 10, INK);
   }
-  centerTextInRange(page, mayorTitle, PAGE_WIDTH - MARGIN - 220, PAGE_WIDTH - MARGIN, sigY - 28, font, 9, MUTED);
+  centerTextInRange(page, values.mayor_title, PAGE_WIDTH - MARGIN - 220, PAGE_WIDTH - MARGIN, sigY - 28, font, 9, MUTED);
 
   // --- Legal basis ---
   const basisLines = wrapText(
-    `Having complied with the requirements of the Revenue Code of ${input.lgu.displayName}. This permit must be renewed on or before ${renewBy}, unless sooner revoked for cause.`,
+    `Having complied with the requirements of the Revenue Code of ${input.lgu.displayName}. This permit must be renewed on or before ${values.renew_by}, unless sooner revoked for cause.`,
     font,
     9,
     PAGE_WIDTH - MARGIN * 2 - 240

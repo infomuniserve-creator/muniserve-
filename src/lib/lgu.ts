@@ -36,12 +36,19 @@ export type LguDisplay = {
   displayName: string; // e.g. "Municipality of San Miguel Bulacan" -- letterhead line
   bploOfficeName: string; // e.g. "Office of the Municipal Business Permit and Licensing Officer"
   mayorName: string | null; // migration 0033 -- e.g. "John A. Alvarez", for the pre-signature print certificate (CLAUDE.md 7x). No generic fallback -- unlike bploOfficeName, there's no sensible default for a person's actual name.
+  printTemplatePath: string | null; // migration 0034 -- storage path in the private permit-print-templates bucket, null until BPLO uploads one (CLAUDE.md 7y)
+  printTemplateFieldMapping: Record<string, string> | null; // { "<PDF field name>": "<canonical data key>" }, built from that specific upload's own field names
   isPaused: boolean; // migration 0020 -- dashboard/layout.tsx blocks real staff (not a platform-admin proxy) when true
   automatedAssessmentEnabled: boolean; // migration 0026 -- BPLO's own manual-override switch, off means the assessment card falls back to hand-entered amounts for the LBT/Mayor's Permit/graduated-regulatory lines
 };
 
+const LGU_SELECT_COLUMNS = "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, is_paused, automated_assessment_enabled";
+
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
-function withFallback(row: { id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null; mayor_name: string | null; is_paused: boolean; automated_assessment_enabled: boolean }): LguDisplay {
+function withFallback(row: {
+  id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null; mayor_name: string | null;
+  print_template_path: string | null; print_template_field_mapping: Record<string, string> | null; is_paused: boolean; automated_assessment_enabled: boolean;
+}): LguDisplay {
   return {
     id: row.id,
     name: row.name,
@@ -50,6 +57,8 @@ function withFallback(row: { id: string; name: string; province: string | null; 
     displayName: row.display_name ?? `Municipality of ${row.name}${row.province ? ` ${row.province}` : ""}`,
     bploOfficeName: row.bplo_office_name ?? "Office of the Municipal Business Permit and Licensing Officer",
     mayorName: row.mayor_name,
+    printTemplatePath: row.print_template_path,
+    printTemplateFieldMapping: row.print_template_field_mapping,
     isPaused: row.is_paused,
     automatedAssessmentEnabled: row.automated_assessment_enabled,
   };
@@ -57,11 +66,7 @@ function withFallback(row: { id: string; name: string; province: string | null; 
 
 /** Takes the caller's own client (staff's RLS-scoped session, or service-role for pre-auth pages) -- staff already have a "view their own lgu" SELECT policy (migration 0002), no new policy needed. */
 export async function getLguDisplay(supabase: SupabaseClient, lguId: string): Promise<LguDisplay> {
-  const { data, error } = await supabase
-    .from("lgus")
-    .select("id, name, province, subdomain, display_name, bplo_office_name, mayor_name, is_paused, automated_assessment_enabled")
-    .eq("id", lguId)
-    .single();
+  const { data, error } = await supabase.from("lgus").select(LGU_SELECT_COLUMNS).eq("id", lguId).single();
   if (error || !data) throw new Error("LGU not found");
   return withFallback(data);
 }
@@ -69,11 +74,7 @@ export async function getLguDisplay(supabase: SupabaseClient, lguId: string): Pr
 /** The default LGU's display info -- used by resolveLguDisplay() as the fallback for a host that doesn't match any LGU's own subdomain. */
 export async function getPilotLguDisplay(): Promise<LguDisplay> {
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("lgus")
-    .select("id, name, province, subdomain, display_name, bplo_office_name, mayor_name, is_paused, automated_assessment_enabled")
-    .eq("name", "San Miguel")
-    .single();
+  const { data, error } = await supabase.from("lgus").select(LGU_SELECT_COLUMNS).eq("name", "San Miguel").single();
   if (error || !data) throw new Error("Pilot LGU (San Miguel) not found");
   return withFallback(data);
 }
