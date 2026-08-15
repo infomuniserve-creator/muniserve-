@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Card, DashboardTopBar, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
 import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive } from "./actions";
+import { FeeRuleImportCard } from "./fee-rule-import";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up) -- split out of
@@ -82,6 +83,17 @@ export default async function SettingsPage() {
           <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact MuniServe support.</p>
         </div>
       )}
+
+      <div className="mb-9">
+        <SectionHead
+          title="Business Tax & Mayor's Permit Fee Setup"
+          sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed."
+        />
+        <div className="flex flex-col gap-3">
+          <FeeRuleImportCard feeType="lbt" label="Local Business Tax" />
+          <FeeRuleImportCard feeType="mayors_permit" label="Mayor's Permit Fee" />
+        </div>
+      </div>
 
       <div className="mb-9">
         <SectionHead

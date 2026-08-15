@@ -16,6 +16,14 @@ export type LbtCategoryOption = { value: string; label: string };
  * see reference/official-application-form/README.md), but BPLO still needs
  * this list to fill it in themselves until the fee engine (build order
  * step 7) can derive it from nature_of_business automatically.
+ *
+ * Filters on `fee_category = 'lbt'` (migration 0026's discriminator),
+ * not a `name LIKE 'LBT Schedule%'` guess -- switched 2026-08-15 alongside
+ * the CSV import feature (src/lib/fee-rule-import.ts), since an imported
+ * schedule has no reason to keep San Miguel's exact naming convention.
+ * Every row this used to match already has fee_category = 'lbt' too (that's
+ * literally how migration 0026 backfilled it), so this is a strict
+ * widening, not a behavior change for any LGU onboarded before this.
  */
 export async function getLbtCategoryOptions(lguId: string): Promise<LbtCategoryOption[]> {
   const supabase = createServiceClient();
@@ -24,7 +32,7 @@ export async function getLbtCategoryOptions(lguId: string): Promise<LbtCategoryO
     .select("applies_to, name")
     .eq("lgu_id", lguId)
     .eq("is_active", true)
-    .like("name", "LBT Schedule%")
+    .eq("fee_category", "lbt")
     .order("sort_order");
 
   if (error) throw error;
