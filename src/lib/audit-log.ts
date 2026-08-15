@@ -36,7 +36,8 @@ export type AuditAction =
   | "regulatory_fee_added"
   | "regulatory_fee_updated"
   | "lbt_rates_imported"
-  | "mayors_permit_rates_imported";
+  | "mayors_permit_rates_imported"
+  | "mayor_name_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

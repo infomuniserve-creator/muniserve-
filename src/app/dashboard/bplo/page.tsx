@@ -271,6 +271,14 @@ export default async function BploDashboardPage() {
                   <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
                   <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
                 </div>
+                <a
+                  href={`/api/dashboard/print-permit?applicationId=${a.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-info px-3.5 py-1.5 text-[12.5px] font-bold text-info hover:bg-info-bg"
+                >
+                  Open permit
+                </a>
                 <form action={markPrinted}>
                   <input type="hidden" name="applicationId" value={a.id} />
                   <MiniButton type="submit">Mark as printed</MiniButton>

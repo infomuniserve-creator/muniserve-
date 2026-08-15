@@ -6,7 +6,7 @@ import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Card, DashboardTopBar, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive } from "./actions";
+import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive, updateMayorName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 
@@ -149,6 +149,28 @@ export default async function SettingsPage() {
             <MiniButton type="submit" tone={lgu.automatedAssessmentEnabled ? "bad" : "good"}>
               {lgu.automatedAssessmentEnabled ? "Turn off" : "Turn back on"}
             </MiniButton>
+          </form>
+        </Card>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="Permit Certificate Details"
+          sub="Shown on the pre-signature certificate printed at the 'For Printing' stage — see the Applications tab."
+        />
+        <Card className="p-5">
+          <form action={updateMayorName} className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Mayor&rsquo;s full name</span>
+              <input
+                name="mayorName"
+                type="text"
+                defaultValue={lgu.mayorName ?? ""}
+                placeholder="e.g. John A. Alvarez"
+                className="h-9 w-64 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <PrimaryButton type="submit">Save</PrimaryButton>
           </form>
         </Card>
       </div>

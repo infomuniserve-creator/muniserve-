@@ -134,6 +134,37 @@ export async function setAutomatedAssessmentEnabled(formData: FormData) {
   revalidatePath("/dashboard/bplo");
 }
 
+/**
+ * Sets the Mayor's name shown on the pre-signature print certificate
+ * (CLAUDE.md 7x, print-certificate.ts) -- migration 0033's lgus.mayor_name.
+ * No generic fallback exists for a person's actual name (unlike
+ * bplo_office_name), so this stays blank on the certificate's signature
+ * block until BPLO fills it in here. Same "RLS bounds rows, not columns"
+ * convention as setAutomatedAssessmentEnabled -- reuses migration 0027's
+ * existing "bplo can update their own lgu's settings" policy, no new
+ * migration needed for this control.
+ */
+export async function updateMayorName(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const mayorName = String(formData.get("mayorName") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lgus").update({ mayor_name: mayorName }).eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "mayor_name_updated",
+    summary: mayorName ? `Mayor's name set to "${mayorName}" for the print certificate` : "Mayor's name cleared",
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
 // ============================================================
 // Business Tax & Mayor's Permit Fee Setup -- CSV import (2026-08-15)
 //
