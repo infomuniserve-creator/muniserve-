@@ -4,7 +4,7 @@ import { getCurrentStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { getLguDisplay } from "@/lib/lgu";
-import { notifyApplicantSms } from "@/lib/notifications";
+import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { createClient } from "@/lib/supabase/server";
@@ -102,7 +102,9 @@ export async function submitInitialReview(formData: FormData) {
  * new review round with fresh pending rows for just those departments.
  * Departments that already approved in an earlier round aren't touched;
  * their approval keeps counting via areAllDepartmentsCleared's
- * latest-decision-across-rounds logic.
+ * latest-decision-across-rounds logic. Notifies just the re-triggered
+ * department(s), not every department -- same targeting rule #6 already
+ * applies to the fan-out itself (CLAUDE.md 7w).
  */
 export async function resubmitToDepartments(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -133,6 +135,25 @@ export async function resubmitToDepartments(formData: FormData) {
     .from("department_reviews")
     .insert(departments.map((department) => ({ review_round_id: round.id, department, decision: "pending" })));
   if (insertError) throw insertError;
+
+  const { data: app } = await supabase
+    .from("applications")
+    .select("reference_number, business:businesses(business_name)")
+    .eq("id", applicationId)
+    .single();
+  const biz = app?.business as unknown as { business_name: string } | null;
+  const refNumber = app?.reference_number ?? applicationId;
+  for (const department of departments) {
+    await notifyStaffByRole(
+      staff.lgu_id,
+      "department",
+      applicationId,
+      `Resubmitted for review: ${refNumber}`,
+      `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${refNumber}) was resubmitted -- needs ${department}'s re-review.</p>`,
+      `MuniServe: ${biz?.business_name ?? "Application"} (${refNumber}) was resubmitted -- needs your department's re-review.`,
+      department
+    );
+  }
 
   revalidatePath("/dashboard/bplo");
 }
@@ -336,6 +357,17 @@ export async function finalizeAssessment(formData: FormData) {
     );
   }
 
+  // CLAUDE.md 7w -- Treasury previously had no way to know a payment was
+  // due except checking their own dashboard cold.
+  await notifyStaffByRole(
+    staff.lgu_id,
+    "treasury",
+    applicationId,
+    `Payment due: ${application.reference_number}`,
+    `<p><strong>${application.reference_number}</strong> has been assessed -- total due ₱${totalDue.toLocaleString()}. Awaiting payment.</p>`,
+    `MuniServe: ${application.reference_number} assessed -- total due PHP ${totalDue.toLocaleString()}, awaiting payment.`
+  );
+
   const manualCount = lineRows.filter((l) => l.is_manual).length;
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,
@@ -376,6 +408,17 @@ export async function markPrinted(formData: FormData) {
     .select("reference_number")
     .single();
   if (error || !updated) throw error ?? new Error("Update failed");
+
+  // CLAUDE.md 7w -- the Mayor previously had no signal a permit was
+  // waiting on their signature except checking their own dashboard cold.
+  await notifyStaffByRole(
+    staff.lgu_id,
+    "mayor",
+    applicationId,
+    `Ready for signature: ${updated.reference_number}`,
+    `<p><strong>${updated.reference_number}</strong> has been printed -- ready for your signature.</p>`,
+    `MuniServe: ${updated.reference_number} is printed and ready for your signature.`
+  );
 
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,

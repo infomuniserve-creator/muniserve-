@@ -1,5 +1,6 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { isLguPaused, resolveLguId } from "@/lib/lgu";
+import { notifyStaffByRole } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createServiceClient } from "@/lib/supabase/service";
 import { REQUIRED_FIELDS, isFieldCurrentlyRequired, type FieldKey } from "@/lib/application-form-logic";
@@ -362,6 +363,17 @@ export async function POST(request: Request) {
     summary: `${body.applicationType === "renewal" ? "Renewal" : "New"} application submitted -- ${body.businessName} (${application.reference_number})`,
     details: { applicationType: body.applicationType, businessName: body.businessName },
   });
+
+  // CLAUDE.md 7w -- BPLO previously had no signal a new application
+  // landed in their queue except checking their own dashboard cold.
+  await notifyStaffByRole(
+    lguId,
+    "bplo",
+    application.id,
+    `New application: ${application.reference_number}`,
+    `<p>New ${body.applicationType} application -- <strong>${body.businessName}</strong> (${application.reference_number}). Needs initial review.</p>`,
+    `MuniServe: New application ${application.reference_number} (${body.businessName}) needs initial review.`
+  );
 
   return NextResponse.json({ referenceNumber: application.reference_number });
 }

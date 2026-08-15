@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { notifyApplicantSms, notifyStaffEmail } from "@/lib/notifications";
+import { notifyApplicantSms, notifyStaffByRole, notifyStaffEmail } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import type { CurrentStaff } from "@/lib/staff";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -19,6 +19,12 @@ type DepartmentDecision = "approved" | "approved_with_condition" | "request_more
  * call sites run as BPLO, and migration 0008's review_rounds INSERT
  * policy + migration 0002's "bplo full access to department_reviews"
  * policy already cover this at the database layer.
+ *
+ * Notifies every fanned-out department's staff (CLAUDE.md 7w) -- before
+ * this pass, a department only ever heard about a new item in their
+ * queue via the 24-hour reminder cron if they hadn't acted yet, nothing
+ * immediate. Both callers (submitInitialReview, startWalkInApplication)
+ * get this for free.
  */
 export async function openDepartmentReviewRound(
   supabase: SupabaseClient,
@@ -44,6 +50,26 @@ export async function openDepartmentReviewRound(
       departments.map((d) => ({ review_round_id: round.id, department: d.name, decision: "pending" }))
     );
     if (fanOutError) throw fanOutError;
+
+    const { data: app } = await supabase
+      .from("applications")
+      .select("reference_number, business:businesses(business_name)")
+      .eq("id", applicationId)
+      .single();
+    const businessName = (app?.business as unknown as { business_name: string } | null)?.business_name ?? "(business record missing)";
+    const refNumber = app?.reference_number ?? applicationId;
+
+    for (const d of departments) {
+      await notifyStaffByRole(
+        lguId,
+        "department",
+        applicationId,
+        `New review needed: ${refNumber}`,
+        `<p><strong>${businessName}</strong> (${refNumber}) needs ${d.name}'s review.</p>`,
+        `MuniServe: ${businessName} (${refNumber}) needs your department's review.`,
+        d.name
+      );
+    }
   }
 }
 
@@ -195,11 +221,29 @@ export async function submitDepartmentDecision(params: {
 
   const cleared = await areAllDepartmentsCleared(round.application_id, staff.lgu_id);
   if (cleared) {
-    await service
+    const { data: updatedApp } = await service
       .from("applications")
       .update({ status: "pending_bplo_assessment" })
       .eq("id", round.application_id)
-      .eq("status", "pending_dept_review");
+      .eq("status", "pending_dept_review")
+      .select("reference_number, business:businesses(business_name)")
+      .single();
+
+    // BPLO needs to hear about this the moment it happens, same as a
+    // rejection/request-for-info above -- an application ready for
+    // assessment used to sit silently until someone happened to check
+    // the dashboard (CLAUDE.md 7w).
+    if (updatedApp) {
+      const biz = updatedApp.business as unknown as { business_name: string } | null;
+      await notifyStaffByRole(
+        staff.lgu_id,
+        "bplo",
+        round.application_id,
+        `Ready for assessment: ${updatedApp.reference_number}`,
+        `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${updatedApp.reference_number}) cleared all departments -- ready for fee assessment.</p>`,
+        `MuniServe: ${biz?.business_name ?? "Application"} (${updatedApp.reference_number}) cleared all departments -- ready for assessment.`
+      );
+    }
   }
 }
 

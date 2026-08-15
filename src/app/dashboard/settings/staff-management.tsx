@@ -1,5 +1,5 @@
 import { Card, EmptyState, MiniButton, PrimaryButton, Row, SectionHead, TonePill } from "../ui";
-import { addStaffMember, setStaffActive } from "./staff-actions";
+import { addStaffMember, setStaffActive, updateStaffPhone } from "./staff-actions";
 
 const ROLE_LABEL: Record<string, string> = {
   bplo: "BPLO",
@@ -8,7 +8,7 @@ const ROLE_LABEL: Record<string, string> = {
   department: "Department",
 };
 
-type StaffRow = { id: string; full_name: string | null; email: string; role: string; department: string | null; is_active: boolean; auth_user_id: string | null };
+type StaffRow = { id: string; full_name: string | null; email: string; phone: string | null; role: string; department: string | null; is_active: boolean; auth_user_id: string | null };
 type DepartmentOption = { name: string; display_name: string | null };
 
 /**
@@ -49,6 +49,9 @@ export function StaffManagementSection({ lguName, lguProvince, staffList, depart
               ))}
             </select>
           </Field>
+          <Field label="Mobile (for SMS)">
+            <input name="phone" type="tel" placeholder="09XXXXXXXXX" className="h-9 w-36 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
+          </Field>
           <PrimaryButton type="submit">Add staff</PrimaryButton>
         </form>
       </Card>
@@ -67,6 +70,17 @@ export function StaffManagementSection({ lguName, lguProvince, staffList, depart
               <TonePill label={s.role === "department" ? (s.department ?? "Department") : ROLE_LABEL[s.role]} tone="info" />
               {!s.auth_user_id && <TonePill label="Not yet signed in" tone="neutral" />}
               <TonePill label={s.is_active ? "Active" : "Inactive"} tone={s.is_active ? "good" : "bad"} />
+              <form action={updateStaffPhone} className="flex items-center gap-1.5">
+                <input type="hidden" name="staffId" value={s.id} />
+                <input
+                  name="phone"
+                  type="tel"
+                  defaultValue={s.phone ?? ""}
+                  placeholder="No SMS number"
+                  className="h-8 w-32 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
+                />
+                <MiniButton type="submit" tone="neutral">Save</MiniButton>
+              </form>
               <form action={setStaffActive}>
                 <input type="hidden" name="staffId" value={s.id} />
                 <input type="hidden" name="isActive" value={String(!s.is_active)} />

@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
+import { notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -183,6 +184,17 @@ export async function signPermit(formData: FormData) {
     .eq("id", applicationId)
     .eq("status", "pending_mayor");
   if (statusError) throw statusError;
+
+  // CLAUDE.md 7w -- BPLO previously had no signal a signed permit was
+  // waiting to be released except checking their own dashboard cold.
+  await notifyStaffByRole(
+    staff.lgu_id,
+    "bplo",
+    applicationId,
+    `Ready for release: ${application.reference_number}`,
+    `<p><strong>${application.reference_number}</strong> has been signed -- ready for release to the applicant.</p>`,
+    `MuniServe: ${application.reference_number} signed -- ready for release.`
+  );
 
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,

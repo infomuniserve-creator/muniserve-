@@ -39,7 +39,7 @@ export default async function SettingsPage() {
 
   const { data: staffListRaw } = await supabase
     .from("staff_users")
-    .select("id, full_name, email, role, department, is_active, auth_user_id")
+    .select("id, full_name, email, phone, role, department, is_active, auth_user_id")
     .eq("lgu_id", staff.lgu_id)
     .eq("is_admin_proxy", false)
     .order("role", { ascending: true })

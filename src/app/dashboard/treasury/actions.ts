@@ -1,7 +1,7 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
-import { notifyApplicantSms } from "@/lib/notifications";
+import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -74,6 +74,17 @@ export async function recordPayment(formData: FormData) {
       `MuniServe: we received your payment for application ${updated.reference_number}. Your permit is now being printed.`
     );
   }
+
+  // CLAUDE.md 7w -- BPLO previously had no signal an application was
+  // ready to print except checking their own dashboard cold.
+  await notifyStaffByRole(
+    staff.lgu_id,
+    "bplo",
+    applicationId,
+    `Ready to print: ${updated.reference_number}`,
+    `<p><strong>${updated.reference_number}</strong> -- payment received, ready to print.</p>`,
+    `MuniServe: ${updated.reference_number} payment received -- ready to print.`
+  );
 
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,

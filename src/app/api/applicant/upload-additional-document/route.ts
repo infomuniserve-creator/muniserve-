@@ -1,5 +1,6 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { createServiceClient } from "@/lib/supabase/service";
+import { notifyStaffByRole } from "@/lib/notifications";
 import { NextResponse } from "next/server";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -40,10 +41,10 @@ export async function POST(request: Request) {
 
   const { data: application, error: fetchError } = await supabase
     .from("applications")
-    .select("id, business:businesses(owner_id)")
+    .select("id, lgu_id, status, reference_number, business:businesses(business_name, owner_id)")
     .eq("id", applicationId)
     .maybeSingle();
-  const business = application?.business as unknown as { owner_id: string | null } | null;
+  const business = application?.business as unknown as { business_name: string; owner_id: string | null } | null;
   if (fetchError || !application || business?.owner_id !== ownerId) {
     return NextResponse.json({ error: "not_found_or_not_yours" }, { status: 403 });
   }
@@ -66,5 +67,57 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "record_failed" }, { status: 500 });
   }
 
+  await notifyCurrentOwner(supabase, application, business, documentType);
+
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * CLAUDE.md 7w -- the BFP payment-screenshot case (section 7c) is the
+ * motivating one, but this fires for any additional-document upload:
+ * whoever can currently act on the application should hear about it
+ * immediately, not discover it by re-opening a card they'd already
+ * reviewed. "Whoever can currently act" depends on where the application
+ * actually sits right now:
+ *   - pending_dept_review: only the department(s) still pending in the
+ *     MOST RECENT round -- a department that already approved doesn't
+ *     need to be told about a document that arrived after their decision.
+ *   - pending_bplo_initial / pending_bplo_assessment: BPLO.
+ *   - pending_payment: Treasury.
+ *   - anything else (pending_printing/mayor/release, released, returned):
+ *     BPLO as a fallback, since rule #9 already gives them visibility and
+ *     action rights everywhere else in the pipeline.
+ */
+async function notifyCurrentOwner(
+  supabase: ReturnType<typeof createServiceClient>,
+  application: { id: string; lgu_id: string; status: string; reference_number: string },
+  business: { business_name: string } | null,
+  documentType: string
+) {
+  const subject = `Document uploaded: ${application.reference_number}`;
+  const emailHtml = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) -- applicant uploaded a new document (${documentType}).</p>`;
+  const smsMessage = `MuniServe: ${business?.business_name ?? "Applicant"} (${application.reference_number}) uploaded a new document (${documentType}).`;
+
+  if (application.status === "pending_dept_review") {
+    const { data: latestRound } = await supabase
+      .from("review_rounds")
+      .select("id")
+      .eq("application_id", application.id)
+      .order("round_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!latestRound) return;
+    const { data: pending } = await supabase
+      .from("department_reviews")
+      .select("department")
+      .eq("review_round_id", latestRound.id)
+      .eq("decision", "pending");
+    for (const p of pending ?? []) {
+      await notifyStaffByRole(application.lgu_id, "department", application.id, subject, emailHtml, smsMessage, p.department);
+    }
+    return;
+  }
+
+  const role = application.status === "pending_payment" ? "treasury" : "bplo";
+  await notifyStaffByRole(application.lgu_id, role, application.id, subject, emailHtml, smsMessage);
 }

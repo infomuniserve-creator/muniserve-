@@ -630,6 +630,36 @@ Verified directly against production, not just written and handed off: re-ran th
 
 ---
 
+## 7w. Staff notifications: SMS + email on every new queue item (2026-08-15, same day)
+
+The project owner flagged a real, asymmetric gap: MuniServe notified applicants at every point the ball moved into or out of their hands (section 7j), but staff had almost nothing -- only three touchpoints existed before this (staff invite/welcome emails, a department rejection/request-info alert to BPLO, and the 24-hour reminder cron), all email-only. A new application landing in BPLO's queue, a department round opening, all departments clearing, an assessment finalized, or an applicant uploading a document (the BFP payment-proof case from section 7c being the motivating one) all fired silently -- staff only found out by checking their own dashboard cold.
+
+**The blocking gap, identified correctly by the project owner before any code was written**: `staff_users` had no phone column at all, so there was nowhere to send an SMS even if the rest of the plumbing existed.
+
+**Scope discussed and confirmed explicitly, not assumed**: SMS on every one of these events, not just the highest-value few -- flagged directly as a real cost tradeoff (SMS is billed per message and this fans out to every department reviewer on every application), and the project owner chose the broad version anyway ("we can always change the volume of it in the future"). Recorded here so a future pass narrowing this isn't a mystery -- it's a deliberate, informed choice, not an oversight to fix.
+
+**Migration `0031_staff_phone.sql`**: `staff_users.phone`, nullable and unvalidated at the schema level (same as `owners.phone` -- normalized app-side via the existing `normalizePhone()`, not a new convention). A staff member with no phone on file just never gets an SMS; email still always works, since it's their real login identity. No new RLS policy needed -- migration 0015's existing "bplo updates staff at their own lgu" UPDATE policy is already row-scoped, not column-scoped (the same "RLS bounds rows, not columns" pattern `setStaffActive` already relies on), so it covers writing this new column for free.
+
+**UI**: an optional "Mobile (for SMS)" field on the "Add staff" form, plus the first real per-field edit control this page has ever had (`updateStaffPhone`, `staff-actions.ts`) -- an inline phone input + Save button on each roster row. Everything else here is still add-only plus activate/deactivate (7m's "not full profile editing" scope note stands); phone is the one exception, since it's the whole point of this pass.
+
+**Infrastructure** (`src/lib/notifications.ts`): `notifyStaffSms` mirrors `notifyApplicantSms`'s best-effort/never-throws shape exactly. `notifyStaffByRole(lguId, role, applicationId, subject, emailHtml, smsMessage, department?)` is the new centralizing helper -- looks up every active, non-proxy staff member of a role (or a specific department) at an LGU and sends both channels, replacing what would otherwise have been eight near-identical hand-written lookups.
+
+**Every wired trigger point**, each notifying whoever can actually act next:
+- New application submitted (`submit-application/route.ts`) -> BPLO.
+- A department review round opens, first time or resubmission (`review-workflow.ts`'s `openDepartmentReviewRound`, `bplo/actions.ts`'s `resubmitToDepartments`) -> that round's active department(s) only -- resubmission notifies just the re-triggered department(s), matching rule #6's existing targeting.
+- All departments clear (`review-workflow.ts`'s `submitDepartmentDecision`) -> BPLO, ready for assessment.
+- Assessment finalized (`bplo/actions.ts`'s `finalizeAssessment`) -> Treasury, payment due.
+- Payment recorded (`treasury/actions.ts`'s `recordPayment`) -> BPLO, ready to print.
+- Marked printed (`bplo/actions.ts`'s `markPrinted`) -> Mayor, ready to sign.
+- Signed (`mayor/actions.ts`'s `signPermit`) -> BPLO, ready to release.
+- An applicant uploads an additional document (`upload-additional-document/route.ts`) -> whoever can currently act, resolved from the application's own status: the department(s) still `pending` in the *most recent* review round if `pending_dept_review`, Treasury if `pending_payment`, BPLO otherwise (rule #9's existing cross-cutting visibility makes BPLO the correct fallback for every other stage, including `pending_bplo_initial`/`pending_bplo_assessment` and the post-assessment stages).
+
+Deliberately unchanged: the existing 24-hour reminder cron stays email-only for now -- it's a different notification (stale/overdue, not "new item"), out of the scope the project owner actually asked for this pass.
+
+Verified directly against production: confirmed the new `staff_users.phone` column and its RLS coverage, then ran `updateStaffPhone`'s exact write inside a rolled-back transaction under a real BPLO session and confirmed it succeeds.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

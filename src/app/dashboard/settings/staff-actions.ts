@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { notifyStaffEmail } from "@/lib/notifications";
+import { normalizePhone } from "@/lib/phone";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -46,15 +47,25 @@ export async function addStaffMember(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = String(formData.get("role") ?? "");
   const department = String(formData.get("department") ?? "").trim() || null;
+  const phoneInput = String(formData.get("phone") ?? "").trim();
 
   if (!email || !VALID_ROLES.has(role)) throw new Error("Invalid request");
   if (role === "department" && !department) throw new Error("A department must be selected for a department role");
+
+  // Optional -- a staff member with no phone on file just never gets an
+  // SMS (email still works either way, CLAUDE.md 7w), not a blocker.
+  let phone: string | null = null;
+  if (phoneInput) {
+    phone = normalizePhone(phoneInput);
+    if (!phone) throw new Error("That mobile number doesn't look right -- check it and try again.");
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from("staff_users").insert({
     lgu_id: staff.lgu_id,
     full_name: fullName || null,
     email,
+    phone,
     role,
     department: role === "department" ? department : null,
     is_active: true,
@@ -142,6 +153,35 @@ export async function setStaffActive(formData: FormData) {
     action: isActive ? "staff_activated" : "staff_deactivated",
     summary: `Staff account ${isActive ? "activated" : "deactivated"}: ${target?.full_name || target?.email || staffId}`,
   });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
+ * Sets or clears a staff member's phone number for SMS notifications
+ * (CLAUDE.md 7w) -- the first real "edit an existing staff member" control
+ * this page has (everything else so far is add-only plus activate/
+ * deactivate, per 7m's own "not full profile editing" scope note). Scoped
+ * narrowly on purpose, same "RLS bounds which rows, not which columns"
+ * convention as setStaffActive: this action only ever writes the phone
+ * column, nothing about role/department/email is touched here.
+ */
+export async function updateStaffPhone(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const staffId = String(formData.get("staffId"));
+  const phoneInput = String(formData.get("phone") ?? "").trim();
+
+  let phone: string | null = null;
+  if (phoneInput) {
+    phone = normalizePhone(phoneInput);
+    if (!phone) throw new Error("That mobile number doesn't look right -- check it and try again.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("staff_users").update({ phone }).eq("id", staffId).eq("lgu_id", staff.lgu_id);
+  if (error) throw error;
 
   revalidatePath("/dashboard/settings");
 }
