@@ -530,10 +530,18 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       }
       const data = await res.json();
       setBusinessCount(data.businessCount);
+      // The businessId-driven renewal path never has the applicant type
+      // their own phone (server-resolved, see verify-otp/route.ts) --
+      // `phone` state stays populated from here on, matching every other
+      // path where it's set on the earlier "phone" screen. Without this,
+      // the read-only "Mobile phone" field on the form stayed blank for
+      // that one path, and since it's a required field, silently blocked
+      // the Documents section from ever appearing (caught live).
+      if (data.phone) setPhone(data.phone);
       // Placeholder-named owners (brand new, or claimed-but-unnamed legacy)
       // have full_name === phone -- leave the name fields blank for those
       // rather than pre-filling with the phone number itself.
-      if (data.ownerName && data.ownerName !== phone) {
+      if (data.ownerName && data.ownerName !== data.phone) {
         const [first, ...rest] = String(data.ownerName).split(" ");
         setFirstName(first ?? "");
         setLastName(rest.join(" "));
@@ -722,13 +730,22 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
    * can be uploaded to a section that isn't shown yet); declarationAccepted
    * is its own final checkbox, not a prerequisite for showing that checkbox.
    */
-  const readyForDocuments = [...REQUIRED_FIELDS].every(
+  // 2026-08-16 follow-up: a returning owner's renewal is pre-filled from
+  // their existing (sometimes sparse legacy-import) profile, so most
+  // fields already look done -- if one cascade-gating field (Business
+  // Operation's "same address?" -> premises ownership -> employees ->
+  // barangay clearance/tax incentives, each hidden until the one above it
+  // is answered) is the only thing left blank, this section's own bare
+  // "fill in the required fields above" gave no hint of which one. Now
+  // lists them by name instead of leaving the applicant to hunt.
+  const missingRequiredFields = [...REQUIRED_FIELDS].filter(
     (key) =>
-      key === "declarationAccepted" ||
-      DOCUMENT_FIELD_KEYS.has(key) ||
-      !isFieldVisible(key, formValues) ||
-      !isBlankValue(formValues[key])
+      key !== "declarationAccepted" &&
+      !DOCUMENT_FIELD_KEYS.has(key) &&
+      isFieldVisible(key, formValues) &&
+      isBlankValue(formValues[key])
   );
+  const readyForDocuments = missingRequiredFields.length === 0;
 
   function renderField(fd: FieldDescriptor) {
     if (!isFieldVisible(fd.key, formValues)) return null;
@@ -1013,6 +1030,11 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
               <p style={{ fontSize: 12, color: "#6b7280" }}>
                 Fill in the required fields above (marked *) to continue to document uploads, your signature, and submission.
               </p>
+              {missingRequiredFields.length > 0 && (
+                <p style={{ fontSize: 11, color: "#6b7280", marginTop: 6 }}>
+                  Still needed: {missingRequiredFields.map(fieldLabel).join(", ")}.
+                </p>
+              )}
             </div>
           )}
         </>

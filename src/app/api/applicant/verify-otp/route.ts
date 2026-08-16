@@ -152,6 +152,17 @@ export async function POST(request: Request) {
     ownerName,
     ownerEmail,
     ownerGender,
+    // Always the phone this OTP was actually checked against -- for the
+    // client-typed-phone paths this just echoes back what it already
+    // knew, but for the businessId-driven renewal path (2026-08-16
+    // follow-up) the client never learned the real number until now.
+    // Safe to reveal at this point regardless: verification just proved
+    // they received the SMS on it. Without this, the form's own
+    // read-only "Mobile phone" field (bound to that same client state)
+    // stayed blank for that path -- a real bug, not hypothetical, caught
+    // live: it's also in REQUIRED_FIELDS, so it silently blocked the
+    // "Documents to submit" section from ever appearing.
+    phone,
     businessCount: businessCount ?? 0,
   });
 }
