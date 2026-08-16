@@ -41,7 +41,8 @@ export type AuditAction =
   | "print_template_updated"
   | "building_permit_fee_updated"
   | "owner_phone_updated"
-  | "legacy_business_claimed";
+  | "legacy_business_claimed"
+  | "cedula_delivery_mode_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

@@ -1,5 +1,5 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
-import { isLguPaused, resolveLguId } from "@/lib/lgu";
+import { getCedulaIncludedOnline, isLguPaused, resolveLguId } from "@/lib/lgu";
 import { notifyStaffByRole } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -117,6 +117,14 @@ export async function POST(request: Request) {
   const email = String(body.email ?? "").trim();
   const gender = body.gender ? String(body.gender).trim() : null;
 
+  // Resolved up front (moved ahead of the required-fields check below) --
+  // CEDULA's upload requirement depends on this LGU's own setting
+  // (Settings, CLAUDE.md follow-up), so it has to be known before deciding
+  // what's actually required, not just before the rest of the writes.
+  const supabase = createServiceClient();
+  const lguId = await resolveLguId(request.headers.get("host"));
+  const cedulaIncludedOnline = await getCedulaIncludedOnline(supabase, lguId);
+
   const values: Partial<Record<FieldKey, unknown>> = {
     applicationType: body.applicationType === "new" ? "New" : "Renewal",
     firstName,
@@ -181,7 +189,11 @@ export async function POST(request: Request) {
   };
 
   const missing = [...REQUIRED_FIELDS].filter(
-    (field) => field !== "declarationAccepted" && isFieldCurrentlyRequired(field, values) && isBlank(values[field])
+    (field) =>
+      field !== "declarationAccepted" &&
+      !(field === "cedulaDoc" && cedulaIncludedOnline) &&
+      isFieldCurrentlyRequired(field, values) &&
+      isBlank(values[field])
   );
   if (missing.length > 0) {
     return NextResponse.json({ error: "missing_required_fields", fields: missing }, { status: 400 });
@@ -189,8 +201,6 @@ export async function POST(request: Request) {
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "invalid_email" }, { status: 400 });
   }
-
-  const supabase = createServiceClient();
 
   // Every submission can correct a typo'd name/email or update gender --
   // this is now the only place that writes to it (the old standalone
@@ -202,11 +212,6 @@ export async function POST(request: Request) {
   if (ownerUpdateError) {
     return NextResponse.json({ error: "owner_update_failed" }, { status: 500 });
   }
-  // Resolved from the request's own Host header (CLAUDE.md 7o), not
-  // blindly the pilot LGU -- a new client's applicants reach this route
-  // from their own subdomain, and their application has to land under
-  // their own lgu_id, not get silently filed under San Miguel's.
-  const lguId = await resolveLguId(request.headers.get("host"));
 
   // Defense in depth (CLAUDE.md 7o follow-up, migration 0020): apply/
   // page.tsx already hides the whole wizard when paused, but a tab

@@ -42,6 +42,7 @@ export type LguDisplay = {
   buildingPermitFeeLabel: string; // BPLO-editable, e.g. "Building Permit Fee" -- not hardcoded, since wording genuinely varies (San Miguel's own materials separately mention a flat "Building Inspection Fee")
   isPaused: boolean; // migration 0020 -- dashboard/layout.tsx blocks real staff (not a platform-admin proxy) when true
   automatedAssessmentEnabled: boolean; // migration 0026 -- BPLO's own manual-override switch, off means the assessment card falls back to hand-entered amounts for the LBT/Mayor's Permit/graduated-regulatory lines
+  cedulaIncludedOnline: boolean; // migration 0038 -- true when both of this LGU's CEDULA fee_rules rows have delivery_mode = 'online' (fee-engine.ts's own source of truth, not a separate lgus column); when true, CEDULA joins the online total and the application form skips the upload requirement, since there's no pre-existing document to upload
 };
 
 const LGU_SELECT_COLUMNS =
@@ -52,7 +53,7 @@ function withFallback(row: {
   id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null; mayor_name: string | null;
   print_template_path: string | null; print_template_field_mapping: Record<string, string> | null;
   building_permit_fee_enabled: boolean; building_permit_fee_label: string | null; is_paused: boolean; automated_assessment_enabled: boolean;
-}): LguDisplay {
+}, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
     name: row.name,
@@ -67,14 +68,28 @@ function withFallback(row: {
     buildingPermitFeeLabel: row.building_permit_fee_label ?? "Building Permit Fee",
     isPaused: row.is_paused,
     automatedAssessmentEnabled: row.automated_assessment_enabled,
+    cedulaIncludedOnline,
   };
+}
+
+/** Both of an LGU's CEDULA rows (individual/juridical) are always toggled together (settings/actions.ts's setCedulaIncludedOnline), so checking one is enough -- defaults to false (today's reference_only behavior) if somehow neither row exists yet. Exported separately from getLguDisplay() for callers (submit-application/route.ts) that need just this one flag without the rest of LguDisplay's own lgus-table query. */
+export async function getCedulaIncludedOnline(supabase: SupabaseClient, lguId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("fee_rules")
+    .select("delivery_mode")
+    .eq("lgu_id", lguId)
+    .eq("fee_category", "cedula")
+    .limit(1)
+    .maybeSingle();
+  return data?.delivery_mode === "online";
 }
 
 /** Takes the caller's own client (staff's RLS-scoped session, or service-role for pre-auth pages) -- staff already have a "view their own lgu" SELECT policy (migration 0002), no new policy needed. */
 export async function getLguDisplay(supabase: SupabaseClient, lguId: string): Promise<LguDisplay> {
   const { data, error } = await supabase.from("lgus").select(LGU_SELECT_COLUMNS).eq("id", lguId).single();
   if (error || !data) throw new Error("LGU not found");
-  return withFallback(data);
+  const cedulaIncludedOnline = await getCedulaIncludedOnline(supabase, lguId);
+  return withFallback(data, cedulaIncludedOnline);
 }
 
 /** The default LGU's display info -- used by resolveLguDisplay() as the fallback for a host that doesn't match any LGU's own subdomain. */
@@ -82,7 +97,8 @@ export async function getPilotLguDisplay(): Promise<LguDisplay> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.from("lgus").select(LGU_SELECT_COLUMNS).eq("name", "San Miguel").single();
   if (error || !data) throw new Error("Pilot LGU (San Miguel) not found");
-  return withFallback(data);
+  const cedulaIncludedOnline = await getCedulaIncludedOnline(supabase, data.id);
+  return withFallback(data, cedulaIncludedOnline);
 }
 
 /**

@@ -198,6 +198,51 @@ export async function updateBuildingPermitFeeSettings(formData: FormData) {
   revalidatePath("/dashboard/department");
 }
 
+/**
+ * CEDULA inclusion toggle (2026-08-16 follow-up) -- some LGUs want CEDULA
+ * folded into the online assessment total, some want it kept as today
+ * (paid separately at the Treasury counter, applicant uploads proof).
+ * CEDULA's own amount is a fixed national formula (RA 7160 -- confirmed
+ * with the project owner, not something any LGU customizes), so this
+ * toggle only ever controls delivery_mode, never the computation itself.
+ *
+ * No new `lgus` column -- fee-engine.ts already reads
+ * `cedulaRule.delivery_mode === "online"` directly to decide
+ * `includedInTotal`, so that's the one source of truth this writes to,
+ * on BOTH of the LGU's CEDULA rows (individual and juridical) together --
+ * they should never disagree, since the decision being made here is "does
+ * this LGU sell CEDULA online," not something that varies by filer type.
+ */
+export async function setCedulaIncludedOnline(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const enabled = formData.get("enabled") === "true";
+  const deliveryMode = enabled ? "online" : "reference_only";
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("fee_rules")
+    .update({ delivery_mode: deliveryMode })
+    .eq("lgu_id", staff.lgu_id)
+    .eq("fee_category", "cedula");
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "cedula_delivery_mode_updated",
+    summary: enabled
+      ? "CEDULA turned on for the online assessment -- applicants no longer upload a copy, it's issued as part of the application"
+      : "CEDULA turned off from the online assessment -- back to Treasury counter payment, applicants upload a copy",
+  });
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/bplo");
+  revalidatePath("/apply");
+}
+
 // ============================================================
 // Business Tax & Mayor's Permit Fee Setup -- CSV import (2026-08-15)
 //

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName } from "./actions";
+import { addRegulatoryFee, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -176,6 +176,31 @@ export default async function SettingsPage() {
             </label>
             <input type="hidden" name="enabled" value={lgu.buildingPermitFeeEnabled.toString()} />
             <PrimaryButton type="submit">Save label</PrimaryButton>
+          </form>
+        </Card>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="CEDULA (Community Tax Certificate)"
+          sub="CEDULA's own amount is fixed by national law and never changes here -- this only controls how it's collected."
+        />
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div>
+            <p className="text-[13px] font-bold text-ink">
+              {lgu.cedulaIncludedOnline ? "Online -- included in the assessment total" : "Counter -- paid separately at Treasury"}
+            </p>
+            <p className="mt-1 max-w-md text-[12px] text-ink-soft">
+              {lgu.cedulaIncludedOnline
+                ? "CEDULA is included in the applicant's online total and issued as part of the application -- the form no longer asks them to upload a copy."
+                : "Applicants pay for their CEDULA at the Treasurer's counter and upload a copy as part of their application (today's default)."}
+            </p>
+          </div>
+          <form action={setCedulaIncludedOnline}>
+            <input type="hidden" name="enabled" value={(!lgu.cedulaIncludedOnline).toString()} />
+            <MiniButton type="submit" tone={lgu.cedulaIncludedOnline ? "bad" : "good"}>
+              {lgu.cedulaIncludedOnline ? "Switch to counter payment" : "Include in online assessment"}
+            </MiniButton>
           </form>
         </Card>
       </div>

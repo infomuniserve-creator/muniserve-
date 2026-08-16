@@ -905,7 +905,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           {readyForDocuments ? (
             <>
               <SectionHeading>Documents to submit</SectionHeading>
-              {DOCUMENT_FIELDS.filter((d) => isFieldVisible(d.key, formValues)).map((d) => (
+              {DOCUMENT_FIELDS.filter((d) => isFieldVisible(d.key, formValues) && !(d.key === "cedulaDoc" && lgu.cedulaIncludedOnline)).map((d) => (
                 <div key={d.key} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 6 }}>
                   <span style={{ fontSize: 12 }}>
                     {d.label}{REQUIRED_FIELDS.has(d.key) ? " *" : ""}{documents[d.key] ? " ✓" : ""}
