@@ -165,6 +165,39 @@ export async function updateMayorName(formData: FormData) {
   revalidatePath("/dashboard/settings");
 }
 
+/**
+ * Turns the Engineering-assessed Building Permit Fee on/off, and sets its
+ * display label (CLAUDE.md 7aa) -- migration 0035's lgus.building_permit_
+ * fee_enabled/building_permit_fee_label. Off by default: no LGU sees the
+ * amount field on Engineering's review until BPLO deliberately turns this
+ * on. Same "RLS bounds rows, not columns" convention as updateMayorName
+ * -- reuses migration 0027's existing lgus UPDATE policy, no new
+ * migration needed for this control itself.
+ */
+export async function updateBuildingPermitFeeSettings(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const enabled = formData.get("enabled") === "true";
+  const label = String(formData.get("label") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lgus").update({ building_permit_fee_enabled: enabled, building_permit_fee_label: label }).eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "building_permit_fee_updated",
+    summary: `${label ?? "Building Permit Fee"} ${enabled ? "turned on" : "turned off"} for Engineering's review`,
+  });
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/bplo");
+  revalidatePath("/dashboard/department");
+}
+
 // ============================================================
 // Business Tax & Mayor's Permit Fee Setup -- CSV import (2026-08-15)
 //

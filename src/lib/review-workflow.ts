@@ -132,6 +132,49 @@ export async function areAllDepartmentsCleared(applicationId: string, lguId: str
 }
 
 /**
+ * Engineering's latest APPROVED assessed_amount for this application
+ * (CLAUDE.md 7aa) -- "latest across rounds" for the identical reason
+ * areAllDepartmentsCleared needs it: Engineering may have approved (and
+ * entered their figure) in an earlier round and never been re-triggered
+ * since (rule #6), so their real answer isn't necessarily on the most
+ * recent round's own row. Used by both AssessmentCard's live preview and
+ * finalizeAssessment's actual write, so the number BPLO sees before
+ * finalizing is guaranteed to be the same one that gets charged.
+ */
+export async function getEngineeringAssessedAmount(applicationId: string): Promise<number | null> {
+  const service = createServiceClient();
+
+  const { data: rounds } = await service
+    .from("review_rounds")
+    .select("id, round_number")
+    .eq("application_id", applicationId)
+    .order("round_number", { ascending: false });
+  if (!rounds || rounds.length === 0) return null;
+
+  const roundIds = rounds.map((r) => r.id);
+  const { data: reviews } = await service
+    .from("department_reviews")
+    .select("decision, assessed_amount, review_round_id")
+    .eq("department", "Engineering")
+    .in("review_round_id", roundIds);
+  if (!reviews || reviews.length === 0) return null;
+
+  const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));
+  let latest: (typeof reviews)[number] | null = null;
+  let latestRound = -1;
+  for (const review of reviews) {
+    const roundNumber = roundNumberById.get(review.review_round_id) ?? -1;
+    if (roundNumber >= latestRound) {
+      latestRound = roundNumber;
+      latest = review;
+    }
+  }
+
+  if (!latest || (latest.decision !== "approved" && latest.decision !== "approved_with_condition")) return null;
+  return latest.assessed_amount != null ? Number(latest.assessed_amount) : null;
+}
+
+/**
  * Shared by both the department dashboard's own-department action and
  * BPLO's "act on a department's behalf" action (rule #9) -- same
  * decision-recording logic either way, only the actor and the
@@ -143,20 +186,43 @@ export async function areAllDepartmentsCleared(applicationId: string, lguId: str
  * to do), then -- only if that succeeds -- uses the service-role client to
  * check rule #5/#6's all-clear condition and advance applications.status
  * if every active department's latest decision now clears.
+ *
+ * assessedAmount (CLAUDE.md 7aa): Engineering's own computed Building
+ * Permit Fee, when this LGU has that turned on. The primary guard is the
+ * UI's Approve/Approve-with-condition buttons going inert without a
+ * value (DepartmentReviewActions, a client component -- this needs to
+ * react to live typing, the same reason AssessmentManualSection is a
+ * client component); this is the defense-in-depth backstop against a
+ * stale form submitting anyway, same "check before any write, not after"
+ * shape as requireLbtCategorySet. Checked via a separate read before the
+ * real update, since the department name isn't known from the caller's
+ * params alone -- only from the row itself.
  */
 export async function submitDepartmentDecision(params: {
   departmentReviewId: string;
   decision: DepartmentDecision;
   notes: string | null;
+  assessedAmount: number | null;
   staff: CurrentStaff;
   actedOnBehalf: boolean;
 }) {
-  const { departmentReviewId, decision, notes, staff, actedOnBehalf } = params;
+  const { departmentReviewId, decision, notes, assessedAmount, staff, actedOnBehalf } = params;
   const supabase = await createClient();
+
+  if (decision === "approved" || decision === "approved_with_condition") {
+    const { data: reviewRow } = await supabase.from("department_reviews").select("department").eq("id", departmentReviewId).single();
+    if (reviewRow?.department === "Engineering") {
+      const { data: lgu } = await supabase.from("lgus").select("building_permit_fee_enabled").eq("id", staff.lgu_id).single();
+      if (lgu?.building_permit_fee_enabled && (assessedAmount == null || assessedAmount <= 0)) {
+        throw new Error("Enter the Building Permit Fee amount before approving.");
+      }
+    }
+  }
 
   const { data: updated, error } = await supabase
     .from("department_reviews")
     .update({
+      assessed_amount: assessedAmount,
       decision,
       notes,
       reviewer_id: staff.id,

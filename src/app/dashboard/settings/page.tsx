@@ -6,7 +6,7 @@ import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
 import { Card, DashboardTopBar, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive, updateMayorName } from "./actions";
+import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -150,6 +150,46 @@ export default async function SettingsPage() {
             <MiniButton type="submit" tone={lgu.automatedAssessmentEnabled ? "bad" : "good"}>
               {lgu.automatedAssessmentEnabled ? "Turn off" : "Turn back on"}
             </MiniButton>
+          </form>
+        </Card>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="Building Permit Fee (Engineering)"
+          sub="When on, Engineering enters their own computed amount during department review, and it's included in the applicant's total once approved."
+        />
+        <Card className="flex flex-col gap-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-bold text-ink">{lgu.buildingPermitFeeEnabled ? "On -- Engineering can enter an amount" : "Off -- no field shown to Engineering"}</p>
+              <p className="mt-1 max-w-md text-[12px] text-ink-soft">
+                {lgu.buildingPermitFeeEnabled
+                  ? "Engineering can't approve without entering an amount first."
+                  : "Turn this on if Engineering computes and charges their own Building Permit Fee."}
+              </p>
+            </div>
+            <form action={updateBuildingPermitFeeSettings}>
+              <input type="hidden" name="enabled" value={(!lgu.buildingPermitFeeEnabled).toString()} />
+              <input type="hidden" name="label" value={lgu.buildingPermitFeeLabel} />
+              <MiniButton type="submit" tone={lgu.buildingPermitFeeEnabled ? "bad" : "good"}>
+                {lgu.buildingPermitFeeEnabled ? "Turn off" : "Turn on"}
+              </MiniButton>
+            </form>
+          </div>
+          <form action={updateBuildingPermitFeeSettings} className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Fee label</span>
+              <input
+                name="label"
+                type="text"
+                defaultValue={lgu.buildingPermitFeeLabel}
+                placeholder="Building Permit Fee"
+                className="h-9 w-64 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <input type="hidden" name="enabled" value={lgu.buildingPermitFeeEnabled.toString()} />
+            <PrimaryButton type="submit">Save label</PrimaryButton>
           </form>
         </Card>
       </div>

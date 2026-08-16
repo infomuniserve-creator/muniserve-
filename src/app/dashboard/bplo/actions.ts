@@ -1,7 +1,7 @@
 "use server";
 
 import { getCurrentStaff } from "@/lib/staff";
-import { openDepartmentReviewRound } from "@/lib/review-workflow";
+import { getEngineeringAssessedAmount, openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { getLguDisplay } from "@/lib/lgu";
 import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
@@ -300,6 +300,19 @@ export async function finalizeAssessment(formData: FormData) {
     }
   }
 
+  // Engineering's own computed Building Permit Fee (CLAUDE.md 7aa) --
+  // never part of computeApplicationFees()'s own output (fee-engine.ts
+  // has no idea this exists), so it's appended here directly rather than
+  // going through the manual-entry-vs-computed branching above. Uses the
+  // exact same lookup AssessmentCard's live preview already showed BPLO,
+  // so the number that actually gets charged is never a surprise.
+  if (lgu.buildingPermitFeeEnabled) {
+    const engineeringAmount = await getEngineeringAssessedAmount(applicationId);
+    if (engineeringAmount != null) {
+      finalLines.push({ feeRuleId: null, feeCategory: "regulatory", displayLabel: lgu.buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManual: true });
+    }
+  }
+
   const lineRows = finalLines.map((line) => {
     let overriddenAmount: number | null = null;
     let overrideReason: string | null = null;
@@ -476,11 +489,13 @@ export async function submitDepartmentDecisionAsBplo(formData: FormData) {
   const staff = await getCurrentStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
+  const assessedAmountRaw = String(formData.get("assessedAmount") ?? "").trim();
   const { submitDepartmentDecision } = await import("@/lib/review-workflow");
   await submitDepartmentDecision({
     departmentReviewId: String(formData.get("departmentReviewId")),
     decision: String(formData.get("decision")) as Decision,
     notes: String(formData.get("notes") ?? "").trim() || null,
+    assessedAmount: assessedAmountRaw ? Number(assessedAmountRaw) : null,
     staff,
     actedOnBehalf: true,
   });

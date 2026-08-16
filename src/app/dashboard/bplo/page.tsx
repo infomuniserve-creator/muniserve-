@@ -1,6 +1,6 @@
 import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
-import { getSignedDocumentUrl } from "@/lib/review-workflow";
+import { getEngineeringAssessedAmount, getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { getLbtCategoryOptions } from "@/lib/lbt-categories";
 import { computeApplicationFees, type FeeComputationResult, type FeeLineResult } from "@/lib/fee-engine";
@@ -16,6 +16,7 @@ import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased,
 import { AssessmentManualSection, type ManualFieldSpec } from "./assessment-manual-fields";
 import { AwaitingPaymentSection } from "../payment-queue";
 import { signPermit } from "../mayor/actions";
+import { DepartmentReviewActions } from "../department-review-actions";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -185,6 +186,8 @@ export default async function BploDashboardPage() {
                 lguId={staff.lgu_id}
                 supabase={supabase}
                 automatedAssessmentEnabled={lgu.automatedAssessmentEnabled}
+                buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
+                buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
               />
             ))}
           </div>
@@ -223,11 +226,17 @@ export default async function BploDashboardPage() {
                   </div>
 
                   {reviews.filter((r) => r.decision === "pending").map((r) => (
-                    <form key={r.id} action={submitDepartmentDecisionAsBplo} className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                      <input type="hidden" name="departmentReviewId" value={r.id} />
+                    <div key={r.id} className="flex flex-wrap items-center gap-1.5">
                       <span className="mr-1 text-[11px] font-bold text-ink-soft">Act for {r.department}:</span>
-                      <DecisionButtons compact />
-                    </form>
+                      <DepartmentReviewActions
+                        action={submitDepartmentDecisionAsBplo}
+                        departmentReviewId={r.id}
+                        department={r.department}
+                        buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
+                        buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
+                        compact
+                      />
+                    </div>
                   ))}
 
                   {flagged.length > 0 && (
@@ -381,7 +390,7 @@ const CATEGORY_ORDER: Record<FeeLineResult["feeCategory"], number> = {
  * can't compute something.
  */
 async function AssessmentCard({
-  applicationId, businessName, ownerName, applicationType, status, business, formInputs, lguId, supabase, automatedAssessmentEnabled,
+  applicationId, businessName, ownerName, applicationType, status, business, formInputs, lguId, supabase, automatedAssessmentEnabled, buildingPermitFeeEnabled, buildingPermitFeeLabel,
 }: {
   applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
   business: (Record<string, unknown> & { id: string }) | null;
@@ -389,6 +398,8 @@ async function AssessmentCard({
   lguId: string;
   supabase: Awaited<ReturnType<typeof createClient>>;
   automatedAssessmentEnabled: boolean;
+  buildingPermitFeeEnabled: boolean;
+  buildingPermitFeeLabel: string;
 }) {
   const result: FeeComputationResult = business
     ? await computeApplicationFees(supabase, {
@@ -442,7 +453,22 @@ async function AssessmentCard({
     );
   }
 
-  const lines = result.ok ? [...result.lines].sort((a, b) => CATEGORY_ORDER[a.feeCategory] - CATEGORY_ORDER[b.feeCategory]) : [];
+  // Engineering's own computed Building Permit Fee (CLAUDE.md 7aa) --
+  // shown in this live preview and actually charged at finalizeAssessment
+  // using the exact same lookup, so what BPLO sees here is never a
+  // different number than what gets written. Independent of whether the
+  // engine itself could compute LBT/Mayor's Permit -- Engineering's
+  // figure is real either way, so it's added even when result is blocked
+  // (Automated Assessment off, the blocked reason is just a warning here).
+  const engineeringAmount = buildingPermitFeeEnabled ? await getEngineeringAssessedAmount(applicationId) : null;
+  const engineeringLine: FeeLineResult | null =
+    engineeringAmount != null
+      ? { feeRuleId: null, feeCategory: "regulatory", displayLabel: buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManualEligible: false }
+      : null;
+
+  const baseLines = result.ok ? result.lines : [];
+  const rawLines = engineeringLine ? [...baseLines, engineeringLine] : baseLines;
+  const lines = [...rawLines].sort((a, b) => CATEGORY_ORDER[a.feeCategory] - CATEGORY_ORDER[b.feeCategory]);
   const warnings = result.ok ? result.warnings : [result.blockedReason];
 
   const computedLines = lines.filter((l) => automatedAssessmentEnabled || !l.isManualEligible);

@@ -12,10 +12,12 @@ export async function submitOwnDepartmentDecision(formData: FormData) {
   const staff = await getCurrentStaff();
   if (!staff || staff.role !== "department") throw new Error("Not authorized");
 
+  const assessedAmountRaw = String(formData.get("assessedAmount") ?? "").trim();
   await submitDepartmentDecision({
     departmentReviewId: String(formData.get("departmentReviewId")),
     decision: String(formData.get("decision")) as Decision,
     notes: String(formData.get("notes") ?? "").trim() || null,
+    assessedAmount: assessedAmountRaw ? Number(assessedAmountRaw) : null,
     staff,
     actedOnBehalf: false,
   });

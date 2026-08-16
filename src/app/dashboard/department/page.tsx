@@ -5,7 +5,8 @@ import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-pro
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../sign-out-button";
-import { BusinessProfileBlock, Card, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList, EmptyState, NotesField, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
+import { BusinessProfileBlock, Card, ClockIcon, DashboardTopBar, DocumentList, EmptyState, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
+import { DepartmentReviewActions } from "../department-review-actions";
 import { getApplicationDocuments, submitOwnDepartmentDecision } from "./actions";
 
 /**
@@ -85,6 +86,9 @@ export default async function DepartmentDashboardPage() {
                 legacyAddress={biz?.address ?? null}
                 profile={biz ? mapBusinessProfile(biz) : null}
                 basisAmount={app?.form_inputs?.capital_investment ?? app?.form_inputs?.gross_sales ?? null}
+                department={staff.department ?? ""}
+                buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
+                buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
               />
             );
           })}
@@ -95,10 +99,11 @@ export default async function DepartmentDashboardPage() {
 }
 
 async function DepartmentReviewCard({
-  departmentReviewId, applicationId, businessName, ownerName, applicationType, status, legacyAddress, profile, basisAmount,
+  departmentReviewId, applicationId, businessName, ownerName, applicationType, status, legacyAddress, profile, basisAmount, department, buildingPermitFeeEnabled, buildingPermitFeeLabel,
 }: {
   departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
   legacyAddress: string | null; profile: import("../ui").BusinessProfile | null; basisAmount: number | null;
+  department: string; buildingPermitFeeEnabled: boolean; buildingPermitFeeLabel: string;
 }) {
   const documents = applicationId ? await getApplicationDocuments(applicationId) : [];
   const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
@@ -114,11 +119,14 @@ async function DepartmentReviewCard({
 
       <DocumentList documents={documents} signedUrls={signedUrls} />
 
-      <form action={submitOwnDepartmentDecision}>
-        <input type="hidden" name="departmentReviewId" value={departmentReviewId} />
-        <NotesField name="notes" placeholder="Notes (required if requesting info or rejecting)" />
-        <DecisionButtons />
-      </form>
+      <DepartmentReviewActions
+        action={submitOwnDepartmentDecision}
+        departmentReviewId={departmentReviewId}
+        department={department}
+        buildingPermitFeeEnabled={buildingPermitFeeEnabled}
+        buildingPermitFeeLabel={buildingPermitFeeLabel}
+        showNotes
+      />
     </Card>
   );
 }
