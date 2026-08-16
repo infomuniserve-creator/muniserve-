@@ -768,6 +768,34 @@ Fix: hoisted `DashboardTopBar` out of all nine dashboard pages (bplo, businesses
 
 ---
 
+## 7cc. Downloadable submitted-form PDF (2026-08-16)
+
+The project owner asked for a way to download exactly what an applicant filled up when they submitted an application -- a non-editable PDF record for staff, format specifically chosen (PDF) so it can't be edited afterward.
+
+**A real architectural gap found before building anything**: the ~40 fields an applicant types (business name, address, TIN, employee counts, lessor info, etc.) don't live on `applications` -- they live on the mutable `businesses` row, which gets overwritten by every later renewal. Only the uploaded documents (already `application_id`-scoped) and two numbers (`form_inputs.capital_investment`/`gross_sales`) are tied to a specific application. Downloading "the form for application X" using current business data would silently show newer data than what was actually submitted, for any application that isn't a business's most recent one -- a real problem for something meant to be a tamper-proof record. Presented this to the project owner directly with two options (reconstruct from current data vs. snapshot at submission) rather than silently picking one; they chose the snapshot approach.
+
+**Migration `0036_application_form_snapshot.sql`**, live in production: `applications.form_snapshot jsonb`, nullable. No RLS change needed (RLS bounds rows on `applications`, already covers this column, per the standing convention).
+
+**Captured at submission time**, two sources:
+- `submit-application/route.ts` (the applicant's own online form): snapshots the same `values` object already built for field validation, minus the 9 document-id fields (not human-readable -- the PDF lists actual documents separately, queried live from `documents`) and `phone` (the `"verified"` placeholder set for validation, not a real value -- see 7d/7h's existing reasoning for why phone is read live from `owners` instead).
+- `businesses/actions.ts`'s `startWalkInApplication` (BPLO filing on behalf of a walk-in): this flow deliberately doesn't re-collect the ~40-field profile (own doc comment, unchanged), so its snapshot is the business's own current profile at filing time via `mapBusinessProfile()`, with `capitalInvestment`/`grossSales` overridden by the one figure actually being filed -- genuinely accurate to "what was submitted" for a counter transaction, since BPLO is vouching for the existing record, not retyping it.
+
+**`src/lib/application-form-pdf.ts`**: renders the PDF. Section titles and field labels copied directly from `reference/official-application-form/fields.json`'s real `customFieldLabel`/header text (one source typo, "INFORMATON", corrected -- this document doesn't claim pixel-exact facsimile status the way print-certificate.ts's own doc comment already establishes for that certificate). A pre-migration application with no snapshot falls back to reconstructing from the business's current profile + this application's own `form_inputs`, rendered with `snapshot.source === "reconstructed"` triggering a visible disclaimer banner rather than silently presenting possibly-stale data as exact.
+
+**`src/app/api/dashboard/application-form-pdf/route.ts`**: any staff role at the application's own LGU can download (read-only, same audience as the Business Registry itself), not BPLO-only -- matches the "staff only" scope the project owner confirmed (not the applicant).
+
+Download links added wherever staff already review an application's documents (BPLO's initial-review card, a department's review card, next to the existing `DocumentList`) and in the Business Registry's per-business application history, so it's reachable both while reviewing and when looking back at a business's past filings later.
+
+**Verified against real production data, not just type-checked**: a temporary script (deleted after use, same pattern as this project's other one-off verification scripts) called `generateApplicationFormPdf()` directly against San Miguel's real first-ever test application (`MS-2026-00001`, no snapshot -- exercises the reconstructed fallback) and a synthetic full-field payload (exercises the snapshot path), then read the actual rendered PDF bytes back. Caught and fixed two real bugs this way, not found by type-checking:
+- Long field labels (e.g. "Do You Have Tax Incentives from Any Government Entity?") overflowed into the value column and visually overlapped it -- the row renderer had no wrapping at all. Fixed with a proper word-wrap on both label and value columns, row height computed from whichever wraps to more lines.
+- The reconstructed fallback for `grossSales` read only `form_inputs.gross_sales`, which is `null` on this exact real application (its `form_inputs` predates the current shape entirely -- an older `basis_amount`-keyed version) -- silently dropping a real, known figure (₱3,462,287, still recoverable from the business's own `gross_sales_history`) instead of falling back to it. Fixed to prefer `form_inputs` when present, fall back to the business's current derived value otherwise, only for the two fields (`grossSales`/`capitalInvestment`) where a same-application-year fallback source actually exists.
+
+## 7dd. Business Registry discoverability (2026-08-16)
+
+The project owner reported not seeing anywhere to look up a business and see its full details -- turned out the Business Registry (`/dashboard/businesses`) already does exactly this via a click-to-expand row (`<details>`/`<summary>`), just with a bare chevron icon as the only affordance. Confirmed with the project owner this was a discoverability gap, not a missing feature. Added a visible "View details" label next to the chevron (desktop widths only, matching the existing `dateLabel` column's own `sm:` breakpoint, so mobile rows don't get crowded) so the row reads unambiguously as expandable rather than relying on an icon alone.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

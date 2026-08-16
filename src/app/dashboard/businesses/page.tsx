@@ -311,7 +311,11 @@ function RegistryRow({
         </div>
         <TonePill label={BUSINESS_STATUS_LABEL[status]} tone={BUSINESS_STATUS_TONE[status]} />
         <span className="hidden w-28 shrink-0 text-right text-[11.5px] text-ink-faint sm:block">{dateLabel}</span>
-        <ChevronRightIcon className="chev size-3.5 shrink-0 text-ink-faint" />
+        <span className="hidden shrink-0 items-center gap-1 text-[11.5px] font-bold text-brand-navy sm:flex">
+          View details
+          <ChevronRightIcon className="chev size-3.5 shrink-0" />
+        </span>
+        <ChevronRightIcon className="chev size-3.5 shrink-0 text-ink-faint sm:hidden" />
       </summary>
 
       <div className="px-4.5 pb-4.5">
@@ -362,9 +366,15 @@ function RegistryRow({
                 <div key={a.id} className="flex items-center gap-3 border-b border-border py-2 text-[12.5px] last:border-b-0">
                   <span className="w-32 shrink-0 font-bold tabular-nums text-ink">{a.reference_number ?? "—"}</span>
                   <span className="w-11 shrink-0 text-ink-faint tabular-nums">{a.application_year ?? "—"}</span>
-                  <span className="text-ink-soft">
+                  <span className="min-w-0 flex-1 text-ink-soft">
                     {a.application_type === "new" ? "New" : "Renewal"} · {APP_STATUS_LABEL[a.status] ?? a.status}
                   </span>
+                  <a
+                    href={`/api/dashboard/application-form-pdf?applicationId=${a.id}`}
+                    className="shrink-0 text-[11.5px] font-bold text-info-ink underline underline-offset-2"
+                  >
+                    Submitted form (PDF)
+                  </a>
                 </div>
               ))}
             </div>

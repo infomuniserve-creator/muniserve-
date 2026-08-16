@@ -108,6 +108,15 @@ async function DepartmentReviewCard({
 
       <DocumentList documents={documents} signedUrls={signedUrls} />
 
+      {applicationId && (
+        <a
+          href={`/api/dashboard/application-form-pdf?applicationId=${applicationId}`}
+          className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-info px-3.5 py-1.5 text-[12.5px] font-bold text-info hover:bg-info-bg"
+        >
+          Download submitted form (PDF)
+        </a>
+      )}
+
       <DepartmentReviewActions
         action={submitOwnDepartmentDecision}
         departmentReviewId={departmentReviewId}

@@ -325,6 +325,20 @@ export async function POST(request: Request) {
     gross_sales: body.applicationType === "renewal" ? body.grossSales ?? null : null,
   };
 
+  // Snapshot of exactly what was submitted (migration 0036) -- `values`
+  // already has everything, minus the doc-id fields (not human-readable,
+  // application-form-pdf.ts lists actual documents separately) and
+  // `phone` (the "verified" placeholder set above, not a real value --
+  // the applicant's real phone is always read live from `owners` instead,
+  // same reasoning CLAUDE.md 7d/7h already applied to this exact field).
+  const {
+    phone: _phone, cedulaDoc: _cedulaDoc, govIdDoc: _govIdDoc, dtiSecCdaDoc: _dtiSecCdaDoc,
+    leaseContractDoc: _leaseContractDoc, vicinityMapDoc: _vicinityMapDoc, barangayClearanceDoc: _barangayClearanceDoc,
+    taxIncentivesDoc: _taxIncentivesDoc, swornStatementDoc: _swornStatementDoc,
+    ...snapshotFields
+  } = values;
+  const formSnapshot = { source: "online" as const, fields: snapshotFields };
+
   const { data: application, error: appError } = await supabase
     .from("applications")
     .insert({
@@ -334,6 +348,7 @@ export async function POST(request: Request) {
       application_year: year,
       status: "pending_bplo_initial",
       form_inputs: formInputs,
+      form_snapshot: formSnapshot,
       reference_number: referenceNumber,
       declaration_accepted_at: new Date().toISOString(),
     })

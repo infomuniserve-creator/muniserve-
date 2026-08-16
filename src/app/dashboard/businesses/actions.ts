@@ -5,6 +5,8 @@ import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { normalizePhone } from "@/lib/phone";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
+import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
+import type { FieldKey } from "@/lib/application-form-logic";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -50,7 +52,7 @@ export async function startWalkInApplication(formData: FormData) {
 
   const { data: business, error: fetchError } = await supabase
     .from("businesses")
-    .select("business_name, gross_sales_history, is_legacy_unclaimed, owner_id, legacy_owner_name")
+    .select(`${BUSINESS_PROFILE_COLUMNS}, is_legacy_unclaimed, owner_id`)
     .eq("id", businessId)
     .single();
   if (fetchError || !business) throw fetchError ?? new Error("Business not found");
@@ -111,6 +113,19 @@ export async function startWalkInApplication(formData: FormData) {
       ? { capital_investment: amount, gross_sales: null }
       : { capital_investment: null, gross_sales: amount };
 
+  // Walk-ins don't re-collect the ~40-field profile (see this function's
+  // own doc comment) -- the snapshot is what was already on file for this
+  // business at filing time, which is genuinely what was "submitted" here
+  // (BPLO vouching for the physical documents against the existing
+  // record), plus the one figure that's specific to this filing.
+  const { id: _profileId, lbtCategory: _lbtCategory, ...profileFields } = mapBusinessProfile(business);
+  const snapshotFields: Partial<Record<FieldKey, unknown>> = {
+    ...(profileFields as Partial<Record<FieldKey, unknown>>),
+    capitalInvestment: applicationType === "new" ? amount : undefined,
+    grossSales: applicationType === "renewal" ? amount : undefined,
+  };
+  const formSnapshot = { source: "walkin" as const, fields: snapshotFields };
+
   const { data: application, error: appError } = await supabase
     .from("applications")
     .insert({
@@ -120,6 +135,7 @@ export async function startWalkInApplication(formData: FormData) {
       application_year: year,
       status: "pending_dept_review",
       form_inputs: formInputs,
+      form_snapshot: formSnapshot,
       reference_number: referenceNumber,
       declaration_accepted_at: new Date().toISOString(),
       initial_review_decision: "approved",
