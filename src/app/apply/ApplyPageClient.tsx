@@ -565,7 +565,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       } else if (path === "renewal" && phoneSigninMode) {
         // Returning owner signing in by phone for a later renewal.
         if (!data.matched) {
-          setError("We don't have an account under this number yet. If you have an existing business, please use your Permit Number instead.");
+          setError("We don't have an account under this number yet. If you have an existing business, please use your Permit No. or License No. instead.");
           setScreen("renewal_license");
           return;
         }
@@ -824,13 +824,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
       {screen === "renewal_license" && (
         <>
-          <Head title="Find your business" sub="Enter the Permit Number printed on your last permit or receipt (or your old License Number, if you haven't renewed with us before)." />
-          <Field label="Permit number">
-            <input value={permitNumberInput} onChange={(e) => setPermitNumberInput(e.target.value)} placeholder="e.g. MS-2026-00001" style={inputStyle} />
+          <Head title="Find your business" sub="Enter the Permit Number printed on your last permit or receipt, or your old License Number if you haven't renewed with us before." />
+          <Field label="Permit No. or License No.">
+            <input value={permitNumberInput} onChange={(e) => setPermitNumberInput(e.target.value)} placeholder="e.g. MS-2026-00001 or your old License No." style={inputStyle} />
           </Field>
           <button onClick={lookupPermitNumber} disabled={loading || !permitNumberInput.trim()} style={{ ...actBtnStyle, ...((loading || !permitNumberInput.trim()) ? disabledBtnStyle : {}) }}>Continue</button>
           <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
-            Don&rsquo;t have your Permit Number handy?{" "}
+            Don&rsquo;t have either number handy?{" "}
             <a href="#" onClick={(e) => { e.preventDefault(); setPhoneSigninMode(true); setScreen("phone"); }} style={{ color: "#0C447C" }}>
               Sign in with your phone instead
             </a>.
@@ -841,7 +841,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       {screen === "renewal_confirm" && (
         noMatch ? (
           <>
-            <Head title="No match found" sub="We could not find a business with that Permit Number. Please check the number or visit the BPLO counter for assistance." />
+            <Head title="No match found" sub="We could not find a business with that Permit No. or License No. Please check the number or visit the BPLO counter for assistance." />
             <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
           </>
         ) : claimedMatch ? (
@@ -861,7 +861,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           </>
         ) : matchedLegacy && (
           <>
-            <Head title="Is this your business?" sub="We found a record under this Permit Number. Confirm before continuing." />
+            <Head title="Is this your business?" sub="We found a record under that number. Confirm before continuing." />
             <div style={cardStyle}>
               <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{matchedLegacy.businessName}</p>
               <p style={{ fontSize: 12, color: "#6b7280" }}>
