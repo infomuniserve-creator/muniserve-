@@ -39,7 +39,8 @@ export type AuditAction =
   | "mayors_permit_rates_imported"
   | "mayor_name_updated"
   | "print_template_updated"
-  | "building_permit_fee_updated";
+  | "building_permit_fee_updated"
+  | "owner_phone_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

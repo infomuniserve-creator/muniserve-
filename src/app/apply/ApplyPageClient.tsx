@@ -296,6 +296,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   const [licenseInput, setLicenseInput] = useState("");
   const [matchedLegacy, setMatchedLegacy] = useState<LegacyMatch | null>(null);
   const [noMatch, setNoMatch] = useState(false);
+  const [alreadyClaimedPhone, setAlreadyClaimedPhone] = useState<string | null>(null);
 
   const [phone, setPhone] = useState("");
   const [otpInput, setOtpInput] = useState("");
@@ -428,9 +429,11 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       if (data.found) {
         setMatchedLegacy(data.business);
         setNoMatch(false);
+        setAlreadyClaimedPhone(null);
       } else {
         setMatchedLegacy(null);
         setNoMatch(true);
+        setAlreadyClaimedPhone(data.alreadyClaimed ? data.maskedPhone : null);
       }
       setScreen("renewal_confirm");
     } finally {
@@ -773,10 +776,17 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
       {screen === "renewal_confirm" && (
         noMatch ? (
-          <>
-            <Head title="No match found" sub="We could not find a business with that License Number. Please check the number or visit the BPLO counter for assistance." />
-            <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
-          </>
+          alreadyClaimedPhone ? (
+            <>
+              <Head title="Already registered" sub={`This business is already on file under a mobile number ending in ${alreadyClaimedPhone.slice(-4)}. If that's no longer your number, please visit the BPLO office to have it updated.`} />
+              <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
+            </>
+          ) : (
+            <>
+              <Head title="No match found" sub="We could not find a business with that License Number. Please check the number or visit the BPLO counter for assistance." />
+              <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
+            </>
+          )
         ) : matchedLegacy && (
           <>
             <Head title="Is this your business?" sub="We found a record under this License Number. Confirm before continuing." />

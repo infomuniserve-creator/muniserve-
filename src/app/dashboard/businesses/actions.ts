@@ -190,3 +190,71 @@ export async function setLbtCategory(formData: FormData) {
   revalidatePath("/dashboard/businesses");
   revalidatePath("/dashboard/bplo");
 }
+
+/**
+ * BPLO updates the phone number on file for an already-claimed business's
+ * owner (2026-08-16 follow-up) -- the real fix for a returning owner who
+ * lost access to their registered number between renewal years. Deliberately
+ * staff-only, in-person-verified, same trust model this app already uses
+ * for every other "prove who you are" moment (walk-in filings, payment/
+ * signing on someone's behalf) -- self-service can't safely do this (see
+ * lookup-license/route.ts's own doc comment on why License Number alone
+ * isn't a safe enough bar once a business is already claimed).
+ *
+ * Only meaningful for a business that already has an owner; a still-
+ * legacy-unclaimed business should go through the walk-in form's own
+ * phone field instead (that's a first claim, not an update), so this
+ * throws rather than silently doing something unintended if called on one.
+ *
+ * Blocks reassigning to a number already registered to a DIFFERENT
+ * owner -- a genuine "this is actually the same real person, merge
+ * their records" case is rare enough (and `owners.merged_into_owner_id`
+ * exists but is unused elsewhere in this codebase) that it's better
+ * handled as a deliberate, separate decision than silently allowed here.
+ */
+export async function updateOwnerPhone(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const businessId = String(formData.get("businessId") ?? "");
+  const newPhoneInput = String(formData.get("newPhone") ?? "").trim();
+  if (!businessId || !newPhoneInput) throw new Error("Invalid request");
+
+  const newPhone = normalizePhone(newPhoneInput);
+  if (!newPhone) throw new Error("That mobile number doesn't look right -- check it and try again.");
+
+  const supabase = await createClient();
+  const { data: business, error: fetchError } = await supabase
+    .from("businesses")
+    .select("business_name, owner_id")
+    .eq("id", businessId)
+    .single();
+  if (fetchError || !business) throw fetchError ?? new Error("Business not found");
+  if (!business.owner_id) {
+    throw new Error("This business has no registered owner yet -- use the walk-in form below to claim it instead.");
+  }
+
+  const { data: conflictingOwner } = await supabase
+    .from("owners")
+    .select("id")
+    .eq("phone", newPhone)
+    .neq("id", business.owner_id)
+    .maybeSingle();
+  if (conflictingOwner) {
+    throw new Error("That number is already registered to a different owner -- double-check it before saving.");
+  }
+
+  const { error: updateError } = await supabase.from("owners").update({ phone: newPhone }).eq("id", business.owner_id);
+  if (updateError) throw updateError;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "owner_phone_updated",
+    summary: `Updated registered mobile number for ${business.business_name ?? "(business record missing)"} -- verified in person at the counter`,
+    details: { businessId },
+  });
+
+  revalidatePath("/dashboard/businesses");
+}

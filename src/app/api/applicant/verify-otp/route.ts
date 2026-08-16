@@ -11,11 +11,25 @@ import { NextResponse } from "next/server";
  * are (dedupe on phone, not per-business) -- no confirmation gate beyond
  * the OTP itself, since receiving the SMS already proves phone ownership
  * (the applicant-flow prototype's "No, different person" branch doesn't
- * really apply once OTP verification is real rather than mocked). If no
- * match and a legacyBusinessId was passed (the renewal legacy-claim path,
- * CLAUDE.md section 5), the owner is created from that record's name and
- * the business is claimed atomically. Otherwise a placeholder-named owner
- * is created and the client is told to collect a real name next.
+ * really apply once OTP verification is real rather than mocked). If a
+ * legacyBusinessId was passed (the renewal legacy-claim path, CLAUDE.md
+ * section 5) and it's still unclaimed, it gets linked to whichever owner
+ * this phone resolves to -- a brand-new owner gets the legacy record's
+ * name, an already-existing owner just gains the business.
+ *
+ * The claim step is resolved BEFORE, and independently of, whether an
+ * owner already existed for this phone (2026-08-16 follow-up -- a real
+ * bug, not hypothetical): the previous version only ran the claim inside
+ * the "no existing owner" branch, so a retry after an earlier failed
+ * phone-sign-in attempt for the same number (which already creates a
+ * bare owner row with no business attached, see the "renewal_license"
+ * screen's "sign in with your phone instead" link) could never actually
+ * claim the business afterward -- the owner now "existed" by the time the
+ * retry ran, so the claim was silently skipped and the applicant hit a
+ * confusing "not yours" error only once they tried to submit. Same root
+ * cause blocked an owner with more than one still-unclaimed legacy
+ * business from ever claiming a second one via License Number lookup,
+ * once their phone already had an owner row from claiming the first.
  *
  * Identity (First/Last Name, Email, Gender) now lives directly on the main
  * application form itself -- pre-filled here from whatever's on file (blank
@@ -41,6 +55,20 @@ export async function POST(request: Request) {
 
   const supabase = createServiceClient();
 
+  let legacyBusiness: { id: string; legacy_owner_name: string | null } | null = null;
+  if (legacyBusinessId) {
+    const { data: business, error: businessError } = await supabase
+      .from("businesses")
+      .select("id, legacy_owner_name")
+      .eq("id", legacyBusinessId)
+      .eq("is_legacy_unclaimed", true)
+      .maybeSingle();
+    if (businessError || !business) {
+      return NextResponse.json({ error: "legacy_business_not_found" }, { status: 400 });
+    }
+    legacyBusiness = business;
+  }
+
   const { data: existingOwner } = await supabase
     .from("owners")
     .select("id, full_name, email, gender")
@@ -51,60 +79,40 @@ export async function POST(request: Request) {
   let ownerName: string;
   let ownerEmail: string | null = null;
   let ownerGender: string | null = null;
-  let matched: boolean;
+  const matched = Boolean(existingOwner);
 
   if (existingOwner) {
     ownerId = existingOwner.id;
     ownerName = existingOwner.full_name;
     ownerEmail = existingOwner.email;
     ownerGender = existingOwner.gender;
-    matched = true;
   } else {
-    matched = false;
+    const nameForOwner = legacyBusiness?.legacy_owner_name || phone;
+    const { data: newOwner, error: ownerError } = await supabase
+      .from("owners")
+      .insert({
+        full_name: nameForOwner,
+        phone,
+        ...(legacyBusiness ? { claimed_at: new Date().toISOString() } : {}),
+      })
+      .select("id, full_name")
+      .single();
+    if (ownerError || !newOwner) {
+      return NextResponse.json({ error: "owner_create_failed" }, { status: 500 });
+    }
+    ownerId = newOwner.id;
+    // Placeholder (= phone) when there's no legacy name to adopt -- the
+    // form's own identity fields ask for their real one.
+    ownerName = newOwner.full_name;
+  }
 
-    if (legacyBusinessId) {
-      const { data: business, error: businessError } = await supabase
-        .from("businesses")
-        .select("id, legacy_owner_name, is_legacy_unclaimed")
-        .eq("id", legacyBusinessId)
-        .eq("is_legacy_unclaimed", true)
-        .maybeSingle();
-
-      if (businessError || !business) {
-        return NextResponse.json({ error: "legacy_business_not_found" }, { status: 400 });
-      }
-
-      const nameForOwner = business.legacy_owner_name || phone;
-      const { data: newOwner, error: ownerError } = await supabase
-        .from("owners")
-        .insert({ full_name: nameForOwner, phone, claimed_at: new Date().toISOString() })
-        .select("id, full_name")
-        .single();
-      if (ownerError || !newOwner) {
-        return NextResponse.json({ error: "owner_create_failed" }, { status: 500 });
-      }
-
-      const { error: claimError } = await supabase
-        .from("businesses")
-        .update({ owner_id: newOwner.id, is_legacy_unclaimed: false })
-        .eq("id", legacyBusinessId);
-      if (claimError) {
-        return NextResponse.json({ error: "business_claim_failed" }, { status: 500 });
-      }
-
-      ownerId = newOwner.id;
-      ownerName = newOwner.full_name;
-    } else {
-      const { data: newOwner, error: ownerError } = await supabase
-        .from("owners")
-        .insert({ full_name: phone, phone })
-        .select("id, full_name")
-        .single();
-      if (ownerError || !newOwner) {
-        return NextResponse.json({ error: "owner_create_failed" }, { status: 500 });
-      }
-      ownerId = newOwner.id;
-      ownerName = newOwner.full_name; // placeholder (= phone) -- the form's own identity fields ask for their real one
+  if (legacyBusiness) {
+    const { error: claimError } = await supabase
+      .from("businesses")
+      .update({ owner_id: ownerId, is_legacy_unclaimed: false })
+      .eq("id", legacyBusiness.id);
+    if (claimError) {
+      return NextResponse.json({ error: "business_claim_failed" }, { status: 500 });
     }
   }
 
