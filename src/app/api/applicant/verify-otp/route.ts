@@ -37,12 +37,36 @@ import { NextResponse } from "next/server";
  * screen the way this used to work. This route's job is just to report
  * what's on file today so the client can pre-fill; the form's own submit
  * writes any corrections back to the owners row.
+ *
+ * `businessId` (2026-08-16 follow-up, Permit Number renewal lookup): an
+ * alternative to the client supplying `phone` directly. When present, the
+ * phone this OTP is checked against is resolved server-side from that
+ * business's own linked owner -- the client never learns or sends the real
+ * number, only ever a masked hint for display (lookup-license/route.ts).
+ * Everything after that resolves identically to the phone-sign-in path,
+ * since by construction this business's owner already exists.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const phone = normalizePhone(body?.phone ?? "");
   const code = String(body?.code ?? "");
   const legacyBusinessId: string | undefined = body?.legacyBusinessId || undefined;
+  const renewalBusinessId: string | undefined = body?.businessId || undefined;
+
+  const supabase = createServiceClient();
+
+  let phone = normalizePhone(body?.phone ?? "");
+  if (renewalBusinessId) {
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("owner:owners(phone)")
+      .eq("id", renewalBusinessId)
+      .maybeSingle();
+    const owner = business?.owner as unknown as { phone: string | null } | null;
+    if (!owner?.phone) {
+      return NextResponse.json({ error: "business_not_found" }, { status: 400 });
+    }
+    phone = owner.phone;
+  }
 
   if (!phone || !code) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -52,8 +76,6 @@ export async function POST(request: Request) {
   if (!ok) {
     return NextResponse.json({ error: "invalid_or_expired_code" }, { status: 400 });
   }
-
-  const supabase = createServiceClient();
 
   let legacyBusiness: { id: string; legacy_owner_name: string | null } | null = null;
   if (legacyBusinessId) {

@@ -29,12 +29,20 @@ import type { LguFormOptions } from "@/lib/lgu-form-options";
  *
  * Extends the prototype in two ways CLAUDE.md's written description
  * (section 5) calls for but the demo doesn't show:
- *   1. A "sign in with your phone instead" link on the license-number
- *      screen, for a returning owner's second-and-later renewal ("every
- *      renewal after this first one works purely on phone-number OTP, no
- *      License Number needed").
+ *   1. A "sign in with your phone instead" link on the renewal-lookup
+ *      screen, for a returning owner who doesn't have their permit handy.
  *   2. A business-picker step when a returning owner chooses to renew and
  *      turns out to have more than one business on file.
+ *
+ * 2026-08-16 follow-up: renewal lookup generalized from "License Number"
+ * (only ever matched a still-unclaimed legacy business) to "Permit
+ * Number" -- a business registered fresh through MuniServe never gets a
+ * License Number at all, but every business gets a Permit Number
+ * (`applications.reference_number`, printed on the actual certificate).
+ * Now searches both and, for an already-claimed match, sends the OTP to
+ * the real phone already on file server-side (see send-renewal-otp/
+ * route.ts) rather than asking the applicant to type and correctly
+ * remember which number they originally registered with.
  *
  * Takes `lgu` as a prop (CLAUDE.md 7n) rather than hardcoding San Miguel's
  * name -- fetched server-side by the thin page.tsx wrapper, since this
@@ -103,6 +111,7 @@ type BusinessProfile = {
 };
 
 type LegacyMatch = BusinessProfile & { ownerNameMasked: string };
+type ClaimedMatch = BusinessProfile & { maskedPhone: string };
 
 type FormState = {
   businessName: string;
@@ -293,10 +302,11 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   const [path, setPath] = useState<"new" | "renewal" | null>(null);
   const [phoneSigninMode, setPhoneSigninMode] = useState(false);
 
-  const [licenseInput, setLicenseInput] = useState("");
+  const [permitNumberInput, setPermitNumberInput] = useState("");
   const [matchedLegacy, setMatchedLegacy] = useState<LegacyMatch | null>(null);
+  const [claimedMatch, setClaimedMatch] = useState<ClaimedMatch | null>(null);
   const [noMatch, setNoMatch] = useState(false);
-  const [alreadyClaimedPhone, setAlreadyClaimedPhone] = useState<string | null>(null);
+  const [renewalOtpSent, setRenewalOtpSent] = useState(false);
 
   const [phone, setPhone] = useState("");
   const [otpInput, setOtpInput] = useState("");
@@ -346,9 +356,11 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     setScreen("landing");
     setPath(null);
     setPhoneSigninMode(false);
-    setLicenseInput("");
+    setPermitNumberInput("");
     setMatchedLegacy(null);
+    setClaimedMatch(null);
     setNoMatch(false);
+    setRenewalOtpSent(false);
     setPhone("");
     setOtpInput("");
     setOtpSent(false);
@@ -416,24 +428,28 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     }));
   }
 
-  async function lookupLicense() {
+  async function lookupPermitNumber() {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/applicant/lookup-license", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ licenseNumber: licenseInput.trim() }),
+        body: JSON.stringify({ permitNumber: permitNumberInput.trim() }),
       });
       const data = await res.json();
-      if (data.found) {
-        setMatchedLegacy(data.business);
+      if (data.found && data.claimed) {
+        setMatchedLegacy(null);
+        setClaimedMatch(data.business);
         setNoMatch(false);
-        setAlreadyClaimedPhone(null);
+      } else if (data.found) {
+        setMatchedLegacy(data.business);
+        setClaimedMatch(null);
+        setNoMatch(false);
       } else {
         setMatchedLegacy(null);
+        setClaimedMatch(null);
         setNoMatch(true);
-        setAlreadyClaimedPhone(data.alreadyClaimed ? data.maskedPhone : null);
       }
       setScreen("renewal_confirm");
     } finally {
@@ -462,6 +478,30 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     }
   }
 
+  /** Permit Number renewal lookup's own send step (2026-08-16) -- the destination phone is resolved server-side from claimedMatch's own linked owner, never something this client knows or supplies (see send-renewal-otp/route.ts). */
+  async function sendRenewalOtp() {
+    if (!claimedMatch) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/applicant/send-renewal-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: claimedMatch.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error === "too_soon" ? "Please wait a bit before requesting another code." : "Could not send a code right now — try again in a moment.");
+        return;
+      }
+      setRenewalOtpSent(true);
+      setOtpSent(true);
+      setScreen("otp");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function fetchMyBusinesses(): Promise<BusinessProfile[]> {
     const res = await fetch("/api/applicant/my-businesses");
     const data = await res.json();
@@ -481,6 +521,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           phone,
           code: otpInput.trim(),
           legacyBusinessId: path === "renewal" && matchedLegacy ? matchedLegacy.id : undefined,
+          businessId: path === "renewal" && claimedMatch ? claimedMatch.id : undefined,
         }),
       });
       if (!res.ok) {
@@ -507,10 +548,16 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         // Legacy claim just completed -- go straight to the form for that business.
         applyProfile(matchedLegacy);
         setScreen("form");
+      } else if (path === "renewal" && claimedMatch) {
+        // Permit Number lookup found an already-claimed business and the
+        // applicant just proved control of its real phone -- straight to
+        // that specific business's form, same as the legacy-claim path.
+        applyProfile(claimedMatch);
+        setScreen("form");
       } else if (path === "renewal" && phoneSigninMode) {
         // Returning owner signing in by phone for a later renewal.
         if (!data.matched) {
-          setError("We don't have an account under this number yet. If you have an existing business, please use your License Number instead.");
+          setError("We don't have an account under this number yet. If you have an existing business, please use your Permit Number instead.");
           setScreen("renewal_license");
           return;
         }
@@ -760,13 +807,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
       {screen === "renewal_license" && (
         <>
-          <Head title="Find your business" sub="Enter the License Number printed on your current permit or last official receipt." />
-          <Field label="License number">
-            <input value={licenseInput} onChange={(e) => setLicenseInput(e.target.value)} placeholder="e.g. 7094956" style={inputStyle} />
+          <Head title="Find your business" sub="Enter the Permit Number printed on your last permit or receipt (or your old License Number, if you haven't renewed with us before)." />
+          <Field label="Permit number">
+            <input value={permitNumberInput} onChange={(e) => setPermitNumberInput(e.target.value)} placeholder="e.g. MS-2026-00001" style={inputStyle} />
           </Field>
-          <button onClick={lookupLicense} disabled={loading || !licenseInput.trim()} style={{ ...actBtnStyle, ...((loading || !licenseInput.trim()) ? disabledBtnStyle : {}) }}>Continue</button>
+          <button onClick={lookupPermitNumber} disabled={loading || !permitNumberInput.trim()} style={{ ...actBtnStyle, ...((loading || !permitNumberInput.trim()) ? disabledBtnStyle : {}) }}>Continue</button>
           <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
-            Already claimed your business before?{" "}
+            Don&rsquo;t have your Permit Number handy?{" "}
             <a href="#" onClick={(e) => { e.preventDefault(); setPhoneSigninMode(true); setScreen("phone"); }} style={{ color: "#0C447C" }}>
               Sign in with your phone instead
             </a>.
@@ -776,20 +823,28 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
       {screen === "renewal_confirm" && (
         noMatch ? (
-          alreadyClaimedPhone ? (
-            <>
-              <Head title="Already registered" sub={`This business is already on file under a mobile number ending in ${alreadyClaimedPhone.slice(-4)}. If that's no longer your number, please visit the BPLO office to have it updated.`} />
-              <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
-            </>
-          ) : (
-            <>
-              <Head title="No match found" sub="We could not find a business with that License Number. Please check the number or visit the BPLO counter for assistance." />
-              <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
-            </>
-          )
+          <>
+            <Head title="No match found" sub="We could not find a business with that Permit Number. Please check the number or visit the BPLO counter for assistance." />
+            <button onClick={() => setScreen("renewal_license")} style={actBtnStyle}>Try again</button>
+          </>
+        ) : claimedMatch ? (
+          <>
+            <Head title="Is this your business?" sub="This business is already registered. We'll text a one-time code to the mobile number on file." />
+            <div style={cardStyle}>
+              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{claimedMatch.businessName}</p>
+              <p style={{ fontSize: 12, color: "#6b7280" }}>Registered mobile number ending in {claimedMatch.maskedPhone.slice(-4)}</p>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={sendRenewalOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Send code to this number</button>
+              <button onClick={() => { setClaimedMatch(null); setScreen("renewal_license"); }} style={actBtnStyle}>Not me</button>
+            </div>
+            <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
+              That&rsquo;s not your number anymore? Please visit the BPLO office to have it updated.
+            </p>
+          </>
         ) : matchedLegacy && (
           <>
-            <Head title="Is this your business?" sub="We found a record under this License Number. Confirm before continuing." />
+            <Head title="Is this your business?" sub="We found a record under this Permit Number. Confirm before continuing." />
             <div style={cardStyle}>
               <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{matchedLegacy.businessName}</p>
               <p style={{ fontSize: 12, color: "#6b7280" }}>
@@ -816,13 +871,20 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
       {screen === "otp" && (
         <>
-          <Head title="Enter the code" sub={`We sent a 6-digit code to ${phone}.`} />
+          <Head
+            title="Enter the code"
+            sub={
+              renewalOtpSent && claimedMatch
+                ? `We sent a 6-digit code to the number ending in ${claimedMatch.maskedPhone.slice(-4)}.`
+                : `We sent a 6-digit code to ${phone}.`
+            }
+          />
           <Field label="Verification code">
             <input value={otpInput} onChange={(e) => setOtpInput(e.target.value)} placeholder="6-digit code" style={inputStyle} />
           </Field>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={verifyOtp} disabled={loading || otpInput.trim().length !== 6} style={{ ...actBtnStyle, ...((loading || otpInput.trim().length !== 6) ? disabledBtnStyle : {}) }}>Verify</button>
-            <button onClick={sendOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Resend code</button>
+            <button onClick={renewalOtpSent && claimedMatch ? sendRenewalOtp : sendOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Resend code</button>
           </div>
           {otpSent && <p style={{ fontSize: 11, color: "#6b7280", marginTop: 10 }}>Code sent via SMS.</p>}
         </>
