@@ -91,7 +91,22 @@ const COLUMNS: { key: SortKey; label: string; sticky?: boolean; sortable?: boole
   { key: "payFrequency", label: "Pay Freq.", sortable: true },
 ];
 
-const STICKY_LEFT = [0, 96, 224]; // px offsets for the 3 sticky columns
+/**
+ * Fixed pixel widths for the 3 frozen/sticky columns (Year, Permit No.,
+ * Business Name) -- STICKY_LEFT is derived from these, not guessed
+ * independently. A previous version hardcoded STICKY_LEFT as [0, 96, 224]
+ * without ever giving those columns a matching fixed width, so the
+ * columns' real (auto-computed) widths didn't line up with the assumed
+ * offsets -- once scrolled, the frozen "Business Name" column silently
+ * overlapped and hid the left portion of the (non-sticky) "Owner" column
+ * right after it, which read as the owner name being cut off (reported by
+ * the project owner, 2026-08-16). Giving each sticky column an explicit,
+ * enforced width (not just max-width) and deriving STICKY_LEFT as their
+ * running total makes the offsets correct by construction -- there's now
+ * only one place to change a width, and the two numbers can't drift apart.
+ */
+const STICKY_COL_WIDTHS = [90, 130, 220]; // Year, Permit No., Business Name
+const STICKY_LEFT = [0, STICKY_COL_WIDTHS[0], STICKY_COL_WIDTHS[0] + STICKY_COL_WIDTHS[1]];
 
 export function PermitHistoryTable({ rows }: { rows: PermitRow[] }) {
   const [search, setSearch] = useState("");
@@ -338,8 +353,8 @@ export function PermitHistoryTable({ rows }: { rows: PermitRow[] }) {
                 <th
                   key={col.key}
                   onClick={col.sortable ? () => sortBy(col.key) : undefined}
-                  className={`whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold tracking-wide ${col.sortable ? "cursor-pointer hover:bg-brand-teal" : ""} ${col.sticky ? "sticky z-[3] bg-brand-navy" : ""}`}
-                  style={col.sticky ? { left: STICKY_LEFT[i] } : undefined}
+                  className={`truncate px-3 py-2.5 text-left text-[11px] font-bold tracking-wide ${col.sortable ? "cursor-pointer hover:bg-brand-teal" : ""} ${col.sticky ? "sticky z-[3] bg-brand-navy" : ""}`}
+                  style={col.sticky ? { left: STICKY_LEFT[i], width: STICKY_COL_WIDTHS[i], minWidth: STICKY_COL_WIDTHS[i], maxWidth: STICKY_COL_WIDTHS[i] } : undefined}
                 >
                   {col.label}
                   {sortCol === col.key && (sortDir === 1 ? " ▲" : " ▼")}
@@ -355,9 +370,24 @@ export function PermitHistoryTable({ rows }: { rows: PermitRow[] }) {
             ) : (
               slice.map((r) => (
                 <tr key={r.id} className="group border-b border-border last:border-b-0 hover:bg-info-bg">
-                  <td className="sticky z-[2] whitespace-nowrap bg-surface px-3 py-2 tabular-nums group-hover:bg-info-bg" style={{ left: STICKY_LEFT[0] }}>{r.year}</td>
-                  <td className="sticky z-[2] whitespace-nowrap bg-surface px-3 py-2 group-hover:bg-info-bg" style={{ left: STICKY_LEFT[1] }}>{r.permitNo ?? "—"}</td>
-                  <td className="sticky z-[2] max-w-[220px] truncate bg-surface px-3 py-2 font-bold text-ink group-hover:bg-info-bg" style={{ left: STICKY_LEFT[2] }}>{r.businessName}</td>
+                  <td
+                    className="sticky z-[2] truncate bg-surface px-3 py-2 tabular-nums group-hover:bg-info-bg"
+                    style={{ left: STICKY_LEFT[0], width: STICKY_COL_WIDTHS[0], minWidth: STICKY_COL_WIDTHS[0], maxWidth: STICKY_COL_WIDTHS[0] }}
+                  >
+                    {r.year}
+                  </td>
+                  <td
+                    className="sticky z-[2] truncate bg-surface px-3 py-2 group-hover:bg-info-bg"
+                    style={{ left: STICKY_LEFT[1], width: STICKY_COL_WIDTHS[1], minWidth: STICKY_COL_WIDTHS[1], maxWidth: STICKY_COL_WIDTHS[1] }}
+                  >
+                    {r.permitNo ?? "—"}
+                  </td>
+                  <td
+                    className="sticky z-[2] truncate bg-surface px-3 py-2 font-bold text-ink group-hover:bg-info-bg"
+                    style={{ left: STICKY_LEFT[2], width: STICKY_COL_WIDTHS[2], minWidth: STICKY_COL_WIDTHS[2], maxWidth: STICKY_COL_WIDTHS[2] }}
+                  >
+                    {r.businessName}
+                  </td>
                   <td className="max-w-[180px] truncate px-3 py-2">{r.ownerName ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">{r.barangay ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
