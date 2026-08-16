@@ -224,25 +224,39 @@ export function parseLbtCsv(text: string): ImportResult {
   for (let r = 1; r < grid.length; r++) {
     const rowNum = r + 1; // 1-based, matching what a spreadsheet shows
     const cells = grid[r];
+    // schedule_name/new_business_rate_percent/delivery_mode are only
+    // actually needed on a category_code's FIRST row -- category_code is
+    // the one thing every row must repeat, since it's what groups rows
+    // into a schedule. (Bug fixed 2026-08-15: this used to require
+    // schedule_name on every single row, contradicting both the
+    // template this file itself generates -- which does leave those
+    // three blank after the first row of each schedule -- and what
+    // buildLbtTemplateCsv's own docs/the onboarding prompt already told
+    // users was correct. A real upload built exactly as documented
+    // failed on nearly every row until this was caught.)
     const scheduleName = col(idx, cells, "schedule_name");
     const categoryCode = col(idx, cells, "category_code").toLowerCase();
-    if (!scheduleName || !categoryCode) {
-      errors.push(`Row ${rowNum}: schedule_name and category_code are both required.`);
+    if (!categoryCode) {
+      errors.push(`Row ${rowNum}: category_code is required.`);
       continue;
     }
     const minAmount = num(col(idx, cells, "bracket_min"));
     const baseFee = num(col(idx, cells, "base_fee"));
     if (minAmount == null || baseFee == null) {
-      errors.push(`Row ${rowNum} ("${scheduleName}"): bracket_min and base_fee must both be numbers.`);
+      errors.push(`Row ${rowNum} ("${categoryCode}"): bracket_min and base_fee must both be numbers.`);
       continue;
     }
     const rateBasisRaw = col(idx, cells, "rate_basis").toLowerCase() || "excess_over_min";
     if (rateBasisRaw !== "excess_over_min" && rateBasisRaw !== "full_amount") {
-      errors.push(`Row ${rowNum} ("${scheduleName}"): rate_basis must be "excess_over_min" or "full_amount", got "${rateBasisRaw}".`);
+      errors.push(`Row ${rowNum} ("${categoryCode}"): rate_basis must be "excess_over_min" or "full_amount", got "${rateBasisRaw}".`);
       continue;
     }
 
     if (!bySchedule.has(categoryCode)) {
+      if (!scheduleName) {
+        errors.push(`Row ${rowNum}: schedule_name is required on the first row for category_code "${categoryCode}".`);
+        continue;
+      }
       const deliveryModeRaw = col(idx, cells, "delivery_mode").toLowerCase() || "online";
       if (!DELIVERY_MODES.has(deliveryModeRaw)) {
         errors.push(`Row ${rowNum} ("${scheduleName}"): delivery_mode must be online, reference_only, or external -- got "${deliveryModeRaw}".`);
@@ -265,7 +279,9 @@ export function parseLbtCsv(text: string): ImportResult {
     }
 
     const rule = bySchedule.get(categoryCode)!;
-    if (rule.name !== scheduleName) warnings.push(`Row ${rowNum}: category_code "${categoryCode}" was already used for "${rule.name}" -- this row's schedule_name ("${scheduleName}") is ignored, only the first one is kept.`);
+    // Only warn on an ACTUAL conflict -- a later row leaving schedule_name
+    // blank (the documented, expected shape) is not a conflict.
+    if (scheduleName && rule.name !== scheduleName) warnings.push(`Row ${rowNum}: category_code "${categoryCode}" was already used for "${rule.name}" -- this row's schedule_name ("${scheduleName}") is ignored, only the first one is kept.`);
     const maxAmountCell = col(idx, cells, "bracket_max");
     rule.brackets.push({
       minAmount,
