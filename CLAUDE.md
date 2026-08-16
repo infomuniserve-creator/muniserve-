@@ -744,6 +744,24 @@ Verified directly against production, not just type-checked: confirmed Engineeri
 
 ---
 
+## 7bb. Click feedback: every button and nav tab was silent while working (2026-08-16)
+
+The project owner's own words: "when I click on anything, it doesn't show anything, it's as if there's nothing happening." True and systemic, not a one-off -- a plain `<form action={serverAction}>` gives zero visual feedback while the action runs, by default, and that's the pattern nearly every button on every dashboard page uses (Approve/Reject, every Settings toggle, Mark as printed/released, Record payment, ...).
+
+**Two separate mechanisms for two separate causes**, not one fix:
+
+- **Form/server-action submits** (the actual majority of "nothing happens" reports): `PrimaryButton`/`OutlineButton`/`MiniButton`/`GhostButton` moved to a new `src/app/dashboard/pending-ui.tsx` ("use client"), rebuilt around React's `useFormStatus()` -- stable, built into `react-dom` since React 19, already this project's installed version, no new dependency. `ui.tsx` re-exports the same four names unchanged, so every existing `import { PrimaryButton, ... } from "../ui"` across the whole dashboard (bplo, department, treasury, mayor, settings, businesses -- everywhere) is fixed at once with zero changes needed at any call site. A button now shows a small spinner and goes inert the instant its form starts submitting, which also incidentally closes a real latent bug: nothing previously stopped a double-click from firing the same server action twice.
+
+  One real nuance worth remembering: `useFormStatus()` reflects the whole enclosing `<form>`'s pending state, not which specific button was clicked -- so `DecisionButtons`' four buttons (Approve/Approve w/ condition/Request info/Reject) all show pending together the instant any one of them is clicked. Confirmed this is a *feature*, not a bug, before shipping it: it means all four go inert together, which is exactly the right behavior (prevents a second click landing a conflicting decision while the first is still in flight), not a cosmetic imprecision to fix.
+
+  `useFormStatus()` returns `{ pending: false }` by default when a button isn't inside a `<form>` at all, or is `type="button"` -- confirmed against React's own docs before relying on this, then confirmed directly: a button with no enclosing form, or explicitly `type="button"`, never shows pending, so this is safe to apply unconditionally everywhere these four components are already used, including the CSV-import wizard's own plain `onClick`-driven buttons.
+
+- **Tab/nav-pill navigation** (`DashboardTopBar`, `BusinessesSubNav`): a new `NavLinkPendingHint` (same file), using `useLinkStatus()` -- confirmed against this project's actual installed Next 16 docs (`node_modules/next/dist/docs`) before using it, not assumed from training data, per AGENTS.md's own standing warning about this specific Next.js version. Deliberately a secondary, subtle touch (a small pulsing dot next to the tab label), not the primary fix -- Next's own docs say outright a route with a `loading.js` file (this dashboard already has one, section 7e) may skip the pending phase entirely on a fast navigation. This just closes the small gap before that skeleton appears, and only costs a few lines since `dashboard/loading.tsx` already does the heavier lifting.
+
+**Verified directly, not just type-checked or assumed from the hook's documented behavior**: built a temporary unauthenticated fixture page (same technique as 7o/7p/7s -- deleted immediately after) with a real server action carrying a 3-second artificial delay, then drove it with actual DOM clicks and polled the real button state at 50ms/300ms/1000ms/3200ms. Confirmed all four submit buttons disable and show a spinner together the instant the form starts submitting, a `type="button"` sibling in the same form never does either, and everything correctly clears the moment the action resolves.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

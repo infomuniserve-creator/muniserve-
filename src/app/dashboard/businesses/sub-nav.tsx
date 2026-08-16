@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NavLinkPendingHint } from "../pending-ui";
 
 /**
  * Second-level nav within the Businesses section -- Directory (the
@@ -18,6 +19,7 @@ export function BusinessesSubNav({ active }: { active: "directory" | "history" }
         }`}
       >
         Directory
+        <NavLinkPendingHint />
       </Link>
       <Link
         href="/dashboard/businesses/history"
@@ -26,6 +28,7 @@ export function BusinessesSubNav({ active }: { active: "directory" | "history" }
         }`}
       >
         Permit History
+        <NavLinkPendingHint />
       </Link>
     </div>
   );

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { BusinessProfile } from "@/lib/business-profile";
 import { ThemeToggle } from "./theme-toggle";
+import { GhostButton, MiniButton, NavLinkPendingHint, OutlineButton, PrimaryButton } from "./pending-ui";
 export type { BusinessProfile };
+export { GhostButton, MiniButton, OutlineButton, PrimaryButton };
 
 /**
  * Shared visual language for every staff dashboard (BPLO, department,
@@ -337,6 +339,7 @@ export function DashboardTopBar({
           }`}
         >
           Applications
+          <NavLinkPendingHint />
         </Link>
         <Link
           href="/dashboard/businesses"
@@ -345,6 +348,7 @@ export function DashboardTopBar({
           }`}
         >
           Businesses
+          <NavLinkPendingHint />
         </Link>
         {auditHref && (
           <Link
@@ -354,6 +358,7 @@ export function DashboardTopBar({
             }`}
           >
             Audit Trail
+            <NavLinkPendingHint />
           </Link>
         )}
         {statsHref && (
@@ -364,6 +369,7 @@ export function DashboardTopBar({
             }`}
           >
             Performance Stats
+            <NavLinkPendingHint />
           </Link>
         )}
       </nav>
@@ -395,61 +401,13 @@ export function DashboardTopBar({
 // ============================================================
 // Button variants -- shared so every "approve / condition / info / reject"
 // action row (BPLO's own review, department's own review, BPLO acting on
-// a department's behalf) looks and behaves identically.
+// a department's behalf) looks and behaves identically. Definitions live
+// in pending-ui.tsx now (2026-08-16) -- re-exported here unchanged so
+// every existing `import { PrimaryButton, ... } from "../ui"` call site
+// across the dashboard keeps working with no changes, but every one of
+// them now shows a spinner and goes inert while its form is submitting
+// (useFormStatus) instead of giving no feedback at all.
 // ============================================================
-
-const btnBase = "inline-flex items-center gap-1.5 rounded-full text-[13px] font-bold transition-transform active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-40 disabled:active:scale-100";
-
-export function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const { className = "", children, ...rest } = props;
-  return (
-    <button
-      {...rest}
-      className={`${btnBase} border border-good bg-good px-4.5 py-2.5 text-white shadow-[0_6px_14px_-4px_rgba(31,169,113,0.45)] hover:bg-[#188e5e] ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-export function OutlineButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone: "cond" | "info" | "bad" | "neutral" }) {
-  const { className = "", children, tone, ...rest } = props;
-  const toneClasses: Record<string, string> = {
-    cond: "border-cond text-cond hover:bg-cond-bg",
-    info: "border-info text-info hover:bg-info-bg",
-    bad: "border-bad text-bad hover:bg-bad-bg",
-    neutral: "border-border-strong text-ink-soft hover:bg-surface-2 hover:text-ink",
-  };
-  return (
-    <button {...rest} className={`${btnBase} border bg-surface px-4.5 py-2.5 ${toneClasses[tone]} ${className}`}>
-      {children}
-    </button>
-  );
-}
-
-export function MiniButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "good" | "info" | "bad" | "neutral" }) {
-  const { className = "", children, tone = "good", ...rest } = props;
-  const toneClasses: Record<string, string> = {
-    good: "border-brand-teal text-brand-teal hover:bg-good-bg",
-    info: "border-info text-info hover:bg-info-bg",
-    bad: "border-bad text-bad hover:bg-bad-bg",
-    neutral: "border-border-strong text-ink-soft hover:bg-surface-2",
-  };
-  return (
-    <button {...rest} className={`rounded-full border bg-surface px-3.5 py-1.5 text-[12px] font-bold transition-colors disabled:pointer-events-none disabled:opacity-40 ${toneClasses[tone]} ${className}`}>
-      {children}
-    </button>
-  );
-}
-
-export function GhostButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const { className = "", children, ...rest } = props;
-  return (
-    <button {...rest} className={`rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-bold text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink ${className}`}>
-      {children}
-    </button>
-  );
-}
 
 /**
  * The four decision buttons every review surface uses (BPLO initial
