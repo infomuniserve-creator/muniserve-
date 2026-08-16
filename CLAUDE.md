@@ -858,6 +858,18 @@ Kept the "sign in with your phone" link alongside Permit Number lookup rather th
 
 Re-verified live against the same real business after both fixes: the "Mobile phone" field now shows the real number immediately post-verification, the missing-fields list correctly dropped "phone" and the operation-address question once answered, and answering that question correctly revealed "Business premises ownership" as the next item on the list -- the cascade mechanism itself confirmed working exactly as intended, just properly surfaced now.
 
+## 7hh. Assessment overrides: a live-updating total, with a deliberate Save step (2026-08-16)
+
+Flagged directly by the project owner: BPLO could type an override amount and a reason on the assessment card, but "Total due online" never reflected it until the whole form was already submitted via "Finalize assessment" -- a real, one-shot action (writes `application_fee_lines`, moves the application to `pending_payment`) with no way to check the resulting number first.
+
+Discussed the exact interaction before building: agreed the total shouldn't update on every keystroke (a half-typed multi-digit override would flash a wrong number), so each override line gets its own **Save** button, enabled only once that line has a typed amount. Clicking Save is what makes that line's override count toward the live total shown on screen. Clearing an override back to blank reverts the total immediately, no Save needed -- a blank override is already unambiguous (`finalizeAssessment`'s own logic already treats `""` as "no override"), so there's nothing to confirm there.
+
+Checked `finalizeAssessment` (`bplo/actions.ts`) first to make sure the live preview and the real submission could never disagree: it already reads `overridden_amount ?? computed_amount` straight from whatever's in the form fields at the moment "Finalize assessment" is clicked, regardless of any client-side "Save" state. So Save is deliberately **only a preview affordance** -- it decides what the live total shows, not what actually gets submitted, and required zero changes to `finalizeAssessment` itself. The actual `<input name="override_...">`/`<input name="overrideReason_...">` elements are unchanged in name/shape; only made controlled client-side to drive the preview.
+
+Extracted `computedLines.map(...)` + the "Total due online" block + the (formerly separate) `AssessmentManualSection` into one new client component, `src/app/dashboard/bplo/assessment-line-items.tsx` (`AssessmentLineItems`) -- overrides and manual entries previously lived in two components each unaware of the other's contribution; now they combine into a single live total. `AssessmentManualSection` itself (assessment-manual-fields.tsx) is deleted as genuinely dead code once nothing renders it anymore -- only its `ManualFieldSpec` type export is still used.
+
+**Verified interactively** (temporary fixture, same technique as this project's other staff-auth-gated UI tests, deleted immediately after -- rendered `AssessmentLineItems` directly with the real fee-line shape/amounts from `MS-2026-00005`): confirmed Save starts disabled with no draft, becomes enabled once a value is typed, and the total only changes after clicking it (not while typing); confirmed clearing an override reverts the total immediately without a Save click; confirmed the Automated-Assessment-off case (manual fields + remaining override-able regulatory lines in the same card) combines both into one correct live total, and that two independent card instances don't leak state into each other.
+
 ---
 
 ## 8. UI reference

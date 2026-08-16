@@ -191,8 +191,8 @@ export async function getEngineeringAssessedAmount(applicationId: string): Promi
  * Permit Fee, when this LGU has that turned on. The primary guard is the
  * UI's Approve/Approve-with-condition buttons going inert without a
  * value (DepartmentReviewActions, a client component -- this needs to
- * react to live typing, the same reason AssessmentManualSection is a
- * client component); this is the defense-in-depth backstop against a
+ * react to live typing, the same reason bplo/assessment-line-items.tsx's
+ * AssessmentLineItems is a client component); this is the defense-in-depth backstop against a
  * stale form submitting anyway, same "check before any write, not after"
  * shape as requireLbtCategorySet. Checked via a separate read before the
  * real update, since the department name isn't known from the caller's

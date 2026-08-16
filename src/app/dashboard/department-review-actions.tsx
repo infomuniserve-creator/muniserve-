@@ -11,8 +11,8 @@ import { DecisionButtons, NotesField } from "./ui";
  * (2026-08-15, CLAUDE.md 7aa) specifically because Engineering's
  * Building Permit Fee amount field needs to react to live typing --
  * Approve/Approve-with-condition go inert until a value is entered, the
- * same reasoning AssessmentManualSection is a client component ("the one
- * piece that needed real interactivity"). Every other department's
+ * same reasoning AssessmentLineItems (bplo/assessment-line-items.tsx) is a
+ * client component ("the one piece that needed real interactivity"). Every other department's
  * review still renders exactly as before; the amount field only appears
  * at all when department === "Engineering" and the LGU has the fee
  * turned on.

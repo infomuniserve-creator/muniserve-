@@ -9,7 +9,7 @@ type Stage = { kind: "idle" } | { kind: "reading" } | { kind: "previewed"; csvTe
 
 /**
  * Business Tax & Mayor's Permit Fee Setup (2026-08-15) -- a client
- * component (like AssessmentManualSection) because this genuinely needs
+ * component (like bplo/assessment-line-items.tsx's AssessmentLineItems) because this genuinely needs
  * multi-step interaction: pick a file, see a plain-language preview of
  * what it will do, then explicitly confirm before anything touches live
  * rates. Nothing here writes to the database directly -- both

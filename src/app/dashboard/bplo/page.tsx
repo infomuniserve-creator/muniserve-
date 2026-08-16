@@ -9,15 +9,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, DecisionButtons, DocumentList,
-  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper, peso,
+  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper,
 } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
-import { AssessmentManualSection, type ManualFieldSpec } from "./assessment-manual-fields";
+import type { ManualFieldSpec } from "./assessment-manual-fields";
+import { AssessmentLineItems } from "./assessment-line-items";
 import { AwaitingPaymentSection } from "../payment-queue";
 import { signPermit } from "../mayor/actions";
 import { DepartmentReviewActions } from "../department-review-actions";
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * BPLO dashboard -- redesigned per the approved design concept (card-based
@@ -371,7 +370,7 @@ const CATEGORY_ORDER: Record<FeeLineResult["feeCategory"], number> = {
  *
  * A blocked result only still hides the form entirely when Automated
  * Assessment is ON -- off, the blocked reason becomes a warning and the
- * manual-entry section (AssessmentManualSection) renders anyway, since
+ * manual-entry section (AssessmentLineItems) renders anyway, since
  * the whole point of that toggle is a way through even when the engine
  * can't compute something.
  */
@@ -458,7 +457,6 @@ async function AssessmentCard({
   const warnings = result.ok ? result.warnings : [result.blockedReason];
 
   const computedLines = lines.filter((l) => automatedAssessmentEnabled || !l.isManualEligible);
-  const computedTotal = round2(computedLines.filter((l) => l.includedInTotal).reduce((sum, l) => sum + l.amount, 0));
 
   const manualFields: ManualFieldSpec[] = [];
   if (!automatedAssessmentEnabled) {
@@ -486,50 +484,8 @@ async function AssessmentCard({
 
       <form action={finalizeAssessment}>
         <input type="hidden" name="applicationId" value={applicationId} />
-        <div className="mb-3 divide-y divide-border rounded-2xl border border-border">
-          {computedLines.map((line) => (
-            <div key={line.feeRuleId ?? line.feeCategory} className="flex flex-wrap items-center gap-2 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-bold text-ink">{line.displayLabel}</p>
-                {!line.includedInTotal && <p className="text-[11px] text-ink-faint">Paid at a physical counter — not part of the online total.</p>}
-                {line.note && <p className="text-[11px] text-warn-ink">{line.note}</p>}
-              </div>
-              <span className="font-display text-[15px] font-bold tabular-nums text-brand-navy">{peso(line.amount)}</span>
-              {line.feeRuleId && (
-                <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <input
-                    type="number"
-                    step="0.01"
-                    name={`override_${line.feeRuleId}`}
-                    placeholder="Override (₱)"
-                    className="h-8 w-28 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
-                  />
-                  <input
-                    type="text"
-                    name={`overrideReason_${line.feeRuleId}`}
-                    placeholder="Reason for override"
-                    className="h-8 flex-1 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
 
-        {warnings.length > 0 && (
-          <div className="mb-3 flex flex-col gap-1 rounded-2xl bg-info-bg px-4 py-3 text-[12px] font-bold text-info-ink">
-            {warnings.map((w, i) => <span key={i}>{w}</span>)}
-          </div>
-        )}
-
-        {automatedAssessmentEnabled ? (
-          <div className="mb-4 flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
-            <span className="text-[12.5px] font-bold text-ink-soft">Total due online</span>
-            <span className="font-display text-[20px] font-bold tabular-nums text-ink">{peso(computedTotal)}</span>
-          </div>
-        ) : (
-          <AssessmentManualSection computedTotal={computedTotal} manualFields={manualFields} />
-        )}
+        <AssessmentLineItems lines={computedLines} warnings={warnings} automatedAssessmentEnabled={automatedAssessmentEnabled} manualFields={manualFields} />
 
         <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
       </form>
