@@ -239,7 +239,7 @@ export async function updateTreasurerName(formData: FormData) {
  * lgus.sender_name. Null until purchased/registered directly with
  * Semaphore (this form doesn't buy or register one, only records the
  * exact name once approved); notifications.ts uses it to pick Semaphore's
- * `sendername` param and to decide whether the fallback "MuniServe: "
+ * `sendername` param and to decide whether the fallback "BPLO: "
  * text prefix is still needed. Same RLS reasoning as updateTreasurerName/
  * updateMayorName -- migration 0027's general "bplo can update their own
  * lgu's settings" policy already covers this column, no new policy.

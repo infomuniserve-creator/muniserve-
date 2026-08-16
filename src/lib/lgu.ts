@@ -44,7 +44,7 @@ export type LguDisplay = {
   automatedAssessmentEnabled: boolean; // migration 0026 -- BPLO's own manual-override switch, off means the assessment card falls back to hand-entered amounts for the LBT/Mayor's Permit/graduated-regulatory lines
   cedulaIncludedOnline: boolean; // migration 0038 -- true when both of this LGU's CEDULA fee_rules rows have delivery_mode = 'online' (fee-engine.ts's own source of truth, not a separate lgus column); when true, CEDULA joins the online total and the application form skips the upload requirement, since there's no pre-existing document to upload
   treasurerName: string | null; // migration 0039 -- e.g. "Pablo R. Sarmiento", for the Order of Payment's "Reviewed & Recommended for Approval" line. Same "no generic fallback" reasoning as mayorName.
-  senderName: string | null; // migration 0040 -- this LGU's own approved Semaphore Sender Name (e.g. "SANMIGUELBPLO"), null until purchased/registered. notifications.ts uses this to decide both the Semaphore `sendername` param and whether the "MuniServe: " text prefix is still needed.
+  senderName: string | null; // migration 0040 -- this LGU's own approved Semaphore Sender Name (e.g. "SANMIGUELBPLO"), null until purchased/registered. notifications.ts uses this to decide both the Semaphore `sendername` param and whether the "BPLO: " fallback text prefix is still needed.
 };
 
 const LGU_SELECT_COLUMNS =

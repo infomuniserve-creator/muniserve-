@@ -290,8 +290,8 @@ export default async function SettingsPage() {
           </form>
           <p className="mt-3 text-[11.5px] text-ink-soft">
             {lgu.senderName
-              ? `Texts currently show "${lgu.senderName}" as the sender — no "MuniServe:" prefix is added, since the name itself already identifies who's texting.`
-              : "No custom Sender Name set yet — texts currently arrive under MuniServe's shared Semaphore sender, prefixed \"MuniServe:\" so recipients know who it's from."}{" "}
+              ? `Texts currently show "${lgu.senderName}" as the sender — no "BPLO:" prefix is added, since the name itself already identifies who's texting.`
+              : "No custom Sender Name set yet — texts currently arrive under MuniServe's shared Semaphore sender, prefixed \"BPLO:\" so recipients know who it's from."}{" "}
             A custom Sender Name has to be purchased and approved directly with Semaphore (MuniServe&rsquo;s SMS provider) first — enter the exact approved name here once that&rsquo;s done.
           </p>
         </Card>

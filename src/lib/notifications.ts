@@ -36,15 +36,16 @@ async function log(
  * Sender Name (migration 0040) sends under that name with no text prefix
  * at all -- the Sender Name itself is what the recipient sees as the
  * "From," so a redundant text prefix on top of it would just be noise.
- * An LGU without one (every LGU today) keeps the "MuniServe: " prefix, so
- * the message still identifies itself when it's arriving from the
- * account's shared default Sender Name.
+ * An LGU without one (every LGU today) keeps a "BPLO: " prefix (changed
+ * from "MuniServe: " per the project owner's request, 2026-08-16), so the
+ * message still identifies itself when it's arriving from the account's
+ * shared default Sender Name.
  */
 async function resolveSmsIdentity(lguId: string, message: string): Promise<{ finalMessage: string; senderName: string | null }> {
   const supabase = createServiceClient();
   const { data } = await supabase.from("lgus").select("sender_name").eq("id", lguId).maybeSingle();
   const senderName = data?.sender_name ?? null;
-  return { finalMessage: senderName ? message : `MuniServe: ${message}`, senderName };
+  return { finalMessage: senderName ? message : `BPLO: ${message}`, senderName };
 }
 
 /** Applicant-facing notifications are always SMS -- phone is the applicant's actual identity in this system (OTP-based), not email. */
