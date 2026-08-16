@@ -1,4 +1,4 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { getEngineeringAssessedAmount, getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
@@ -7,9 +7,8 @@ import { computeApplicationFees, type FeeComputationResult, type FeeLineResult }
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { SignOutButton } from "../sign-out-button";
 import {
-  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, DashboardTopBar, DecisionButtons, DocumentList,
+  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, DecisionButtons, DocumentList,
   EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper, peso,
 } from "../ui";
 import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
@@ -31,7 +30,6 @@ export default async function BploDashboardPage() {
   if (!staff) redirect("/login");
   if (staff.role !== "bplo") redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
   const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
@@ -116,18 +114,6 @@ export default async function BploDashboardPage() {
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="applications"
-        applicationsHref={office.homeHref}
-        settingsHref="/dashboard/settings"
-        auditHref="/dashboard/audit"
-        statsHref="/dashboard/stats"
-        rightSlot={<SignOutButton />}
-      />
-
       {/*
         Every stage of the pipeline gets a count here, not just the ones
         BPLO directly acts on (Treasurer approval and Mayor's signature

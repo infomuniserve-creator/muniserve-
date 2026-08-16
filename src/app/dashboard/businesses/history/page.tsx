@@ -1,10 +1,7 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
-import { getLguDisplay } from "@/lib/lgu";
+import { getCurrentStaff } from "@/lib/staff";
 import { fetchAllRows } from "@/lib/db-pagination";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../../sign-out-button";
-import { DashboardTopBar } from "../../ui";
 import { BusinessesSubNav } from "../sub-nav";
 import { PermitHistoryTable, type PermitRow } from "./permit-history-table";
 
@@ -12,9 +9,7 @@ export default async function PermitHistoryPage() {
   const staff = await getCurrentStaff();
   if (!staff) redirect("/login");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
-  const lgu = await getLguDisplay(supabase, staff.lgu_id);
   const raw = await fetchAllRows<Record<string, unknown>>((offset, limit) =>
     supabase
       .from("permit_history")
@@ -44,17 +39,6 @@ export default async function PermitHistoryPage() {
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="businesses"
-        applicationsHref={office.homeHref}
-        settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
-        auditHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/audit" : undefined}
-        statsHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/stats" : undefined}
-        rightSlot={<SignOutButton />}
-      />
       <BusinessesSubNav active="history" />
       <PermitHistoryTable rows={rows} />
     </>

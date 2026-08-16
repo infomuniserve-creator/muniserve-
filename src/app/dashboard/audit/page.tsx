@@ -1,10 +1,8 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
-import { getLguDisplay } from "@/lib/lgu";
+import { getCurrentStaff } from "@/lib/staff";
 import { fetchAllRows } from "@/lib/db-pagination";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../sign-out-button";
-import { DashboardTopBar, SectionHead } from "../ui";
+import { SectionHead } from "../ui";
 import { AuditTrailExplorer, type AuditAppInfo, type AuditLogRow } from "./audit-trail-table";
 
 /**
@@ -53,9 +51,7 @@ export default async function AuditTrailPage({
   if (!staff) redirect("/login");
   if (staff.role !== "bplo" && staff.role !== "mayor") redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
-  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const params = await searchParams;
   const now = new Date();
@@ -106,18 +102,6 @@ export default async function AuditTrailPage({
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="audit"
-        applicationsHref={office.homeHref}
-        settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
-        auditHref="/dashboard/audit"
-        statsHref="/dashboard/stats"
-        rightSlot={<SignOutButton />}
-      />
-
       <SectionHead
         title="Audit Trail"
         sub="Every application's full history, plus staff and account changes at your LGU. Useful for DILG reporting and internal review alike."

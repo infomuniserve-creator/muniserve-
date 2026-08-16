@@ -1,5 +1,4 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
-import { getLguDisplay } from "@/lib/lgu";
+import { getCurrentStaff } from "@/lib/staff";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { classifyBusinessStatus, BUSINESS_STATUS_LABEL, BUSINESS_STATUS_TONE, type BusinessStatus } from "@/lib/business-status";
 import { getLbtCategoryOptions, type LbtCategoryOption } from "@/lib/lbt-categories";
@@ -7,9 +6,8 @@ import { fetchAllRows } from "@/lib/db-pagination";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { SignOutButton } from "../sign-out-button";
 import {
-  BuildingIcon, ChevronRightIcon, ClockIcon, DashboardTopBar, EmptyState, InfoIcon, BusinessProfileBlock,
+  BuildingIcon, ChevronRightIcon, ClockIcon, EmptyState, InfoIcon, BusinessProfileBlock,
   MiniButton, PrimaryButton, SearchIcon, StatCard, StatGrid, TonePill, XIcon,
 } from "../ui";
 import { BusinessesSubNav } from "./sub-nav";
@@ -68,9 +66,7 @@ export default async function BusinessesPage({
   const q = (rawQ ?? "").trim();
   const statusFilter = (STATUS_FILTERS.some((f) => f.value === rawStatus) ? rawStatus : "all") as "all" | BusinessStatus;
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
-  const lgu = await getLguDisplay(supabase, staff.lgu_id);
   const lbtCategoryOptions = staff.role === "bplo" ? await getLbtCategoryOptions(staff.lgu_id) : [];
 
   // San Miguel alone already has 1,177 businesses -- more than PostgREST's
@@ -158,17 +154,6 @@ export default async function BusinessesPage({
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="businesses"
-        applicationsHref={office.homeHref}
-        settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
-        auditHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/audit" : undefined}
-        statsHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/stats" : undefined}
-        rightSlot={<SignOutButton />}
-      />
       <BusinessesSubNav active="directory" />
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">

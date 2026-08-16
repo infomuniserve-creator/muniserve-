@@ -1,9 +1,7 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
-import { getLguDisplay } from "@/lib/lgu";
+import { getCurrentStaff } from "@/lib/staff";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../sign-out-button";
-import { Card, CheckIcon, ClockIcon, DashboardTopBar, EmptyState, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso } from "../ui";
+import { Card, CheckIcon, ClockIcon, EmptyState, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, WorkflowStepper, peso } from "../ui";
 import { signPermit } from "./actions";
 
 /**
@@ -20,9 +18,7 @@ export default async function MayorDashboardPage() {
   if (!staff) redirect("/login");
   if (staff.role !== "mayor") redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
-  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: apps } = await supabase
     .from("applications")
@@ -54,17 +50,6 @@ export default async function MayorDashboardPage() {
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="applications"
-        applicationsHref={office.homeHref}
-        auditHref="/dashboard/audit"
-        statsHref="/dashboard/stats"
-        rightSlot={<SignOutButton />}
-      />
-
       <StatGrid>
         <StatCard label="Awaiting signature" value={queue.length} icon={<ClockIcon />} tone="warn" />
         <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />

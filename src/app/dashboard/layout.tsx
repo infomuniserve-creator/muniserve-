@@ -1,8 +1,9 @@
-import { getCurrentStaff } from "@/lib/staff";
+import { getCurrentStaff, officeIdentity } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { createClient } from "@/lib/supabase/server";
 import { exitViewAs } from "../admin/actions";
 import { PausedNotice } from "./paused-notice";
+import { PersistentTopBar } from "./persistent-top-bar";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -42,6 +43,13 @@ const ROLE_LABEL: Record<string, string> = {
  *    of which URL they land on. A platform admin's "view as" proxy row is
  *    deliberately exempt (`is_admin_proxy`), since they still need to be
  *    able to open a paused client's dashboard to check on it.
+ * 5. Renders the persistent top bar (2026-08-16, CLAUDE.md 7bb follow-up)
+ *    -- moved here from every individual page.tsx so it survives
+ *    navigation instead of being replaced by loading.tsx along with
+ *    everything else. settingsHref/auditHref/statsHref gating is the
+ *    exact same role check every page used to run individually (BPLO
+ *    gets Settings; BPLO and Mayor get Audit Trail/Performance Stats),
+ *    just centralized -- not a behavior change, ported verbatim.
  */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
@@ -50,6 +58,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   const staff = await getCurrentStaff();
   let adminBanner: ReactNode = null;
+  let topBar: ReactNode = null;
   if (staff) {
     const supabase = await createClient();
     const lgu = await getLguDisplay(supabase, staff.lgu_id);
@@ -57,6 +66,19 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     if (lgu.isPaused && !staff.is_admin_proxy) {
       return <PausedNotice />;
     }
+
+    const office = officeIdentity(staff);
+    topBar = (
+      <PersistentTopBar
+        officeLabel={office.label}
+        officeSub={`${lgu.name}, ${lgu.province}`}
+        initials={office.initials}
+        applicationsHref={office.homeHref}
+        settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
+        auditHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/audit" : undefined}
+        statsHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/stats" : undefined}
+      />
+    );
 
     if (staff.is_admin_proxy) {
       const roleLabel = staff.role === "department" ? `${staff.department} Department` : ROLE_LABEL[staff.role];
@@ -85,6 +107,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <div id="dashboard-shell" data-theme={dataTheme} className="min-h-screen bg-bg px-4 py-6 text-ink sm:px-6 sm:py-10">
       <div className="mx-auto max-w-7xl">
+        {topBar}
         {adminBanner}
         {children}
       </div>

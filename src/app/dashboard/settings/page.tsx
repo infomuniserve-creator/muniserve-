@@ -1,11 +1,10 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../sign-out-button";
-import { Card, DashboardTopBar, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
+import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
 import { addRegulatoryFee, setAutomatedAssessmentEnabled, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
@@ -26,7 +25,6 @@ export default async function SettingsPage() {
   if (!staff) redirect("/login");
   if (staff.role !== "bplo") redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
   const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
@@ -55,18 +53,6 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="settings"
-        applicationsHref={office.homeHref}
-        settingsHref="/dashboard/settings"
-        auditHref="/dashboard/audit"
-        statsHref="/dashboard/stats"
-        rightSlot={<SignOutButton />}
-      />
-
       <StaffManagementSection lguName={lgu.name} lguProvince={lgu.province} staffList={staffListRaw ?? []} departments={departmentsRaw ?? []} />
 
       <div className="mb-9">

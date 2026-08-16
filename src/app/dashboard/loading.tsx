@@ -10,7 +10,6 @@
 export default function DashboardLoading() {
   return (
     <div className="animate-pulse motion-reduce:animate-none">
-      <div className="mb-6 h-[68px] rounded-3xl bg-surface-2" />
       <div className="mb-8 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-[104px] rounded-3xl bg-surface-2" />

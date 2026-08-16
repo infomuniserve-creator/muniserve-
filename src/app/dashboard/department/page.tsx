@@ -1,11 +1,10 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
+import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../sign-out-button";
-import { BusinessProfileBlock, Card, ClockIcon, DashboardTopBar, DocumentList, EmptyState, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
+import { BusinessProfileBlock, Card, ClockIcon, DocumentList, EmptyState, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
 import { DepartmentReviewActions } from "../department-review-actions";
 import { getApplicationDocuments, submitOwnDepartmentDecision } from "./actions";
 
@@ -19,7 +18,6 @@ export default async function DepartmentDashboardPage() {
   if (!staff) redirect("/login");
   if (staff.role !== "department" || !staff.department) redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
   const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
@@ -52,15 +50,6 @@ export default async function DepartmentDashboardPage() {
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="applications"
-        applicationsHref={office.homeHref}
-        rightSlot={<SignOutButton />}
-      />
-
       <StatGrid>
         <StatCard label="Awaiting your review" value={rows.length} icon={<ClockIcon />} tone="warn" />
       </StatGrid>

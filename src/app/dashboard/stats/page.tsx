@@ -1,10 +1,8 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
-import { getLguDisplay } from "@/lib/lgu";
+import { getCurrentStaff } from "@/lib/staff";
 import { computePerformanceStats } from "@/lib/performance-stats";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../sign-out-button";
-import { Card, DashboardTopBar, EmptyState, SectionHead, StatCard, StatGrid, TonePill } from "../ui";
+import { Card, EmptyState, SectionHead, StatCard, StatGrid, TonePill } from "../ui";
 
 /**
  * Processing-speed and bottleneck report (CLAUDE.md 7o follow-up) -- the
@@ -32,9 +30,7 @@ export default async function PerformanceStatsPage({
   if (!staff) redirect("/login");
   if (staff.role !== "bplo" && staff.role !== "mayor") redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
-  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const params = await searchParams;
   const now = new Date();
@@ -56,18 +52,6 @@ export default async function PerformanceStatsPage({
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="stats"
-        applicationsHref={office.homeHref}
-        settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
-        auditHref="/dashboard/audit"
-        statsHref="/dashboard/stats"
-        rightSlot={<SignOutButton />}
-      />
-
       <SectionHead
         title="Performance Stats"
         sub="How fast applications actually move through the pipeline, and where they get stuck."

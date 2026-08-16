@@ -1,9 +1,7 @@
-import { getCurrentStaff, officeIdentity } from "@/lib/staff";
-import { getLguDisplay } from "@/lib/lgu";
+import { getCurrentStaff } from "@/lib/staff";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "../sign-out-button";
-import { ClockIcon, DashboardTopBar, SectionHead, StatCard, StatGrid } from "../ui";
+import { ClockIcon, SectionHead, StatCard, StatGrid } from "../ui";
 import { AwaitingPaymentSection } from "../payment-queue";
 
 /**
@@ -22,9 +20,7 @@ export default async function TreasuryDashboardPage() {
   if (!staff) redirect("/login");
   if (staff.role !== "treasury") redirect("/dashboard");
 
-  const office = officeIdentity(staff);
   const supabase = await createClient();
-  const lgu = await getLguDisplay(supabase, staff.lgu_id);
   const { count } = await supabase
     .from("applications")
     .select("id", { count: "exact", head: true })
@@ -33,15 +29,6 @@ export default async function TreasuryDashboardPage() {
 
   return (
     <>
-      <DashboardTopBar
-        officeLabel={office.label}
-        officeSub={`${lgu.name}, ${lgu.province}`}
-        initials={office.initials}
-        active="applications"
-        applicationsHref={office.homeHref}
-        rightSlot={<SignOutButton />}
-      />
-
       <StatGrid>
         <StatCard label="Awaiting payment" value={count ?? 0} icon={<ClockIcon />} tone="warn" />
       </StatGrid>
