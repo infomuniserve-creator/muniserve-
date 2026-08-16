@@ -12,7 +12,7 @@ import {
   MiniButton, PrimaryButton, SearchIcon, StatCard, StatGrid, TonePill, XIcon,
 } from "../ui";
 import { BusinessesSubNav } from "./sub-nav";
-import { setLbtCategory, startWalkInApplication, updateOwnerPhone } from "./actions";
+import { claimLegacyBusiness, setLbtCategory, startWalkInApplication, updateOwnerPhone } from "./actions";
 
 const STATUS_FILTERS: { value: "all" | BusinessStatus; label: string }[] = [
   { value: "all", label: "All" },
@@ -359,20 +359,35 @@ function RegistryRow({
           </p>
         )}
 
-        {canWalkIn && b.owner_id && (
-          <form action={updateOwnerPhone} className="mb-3.5 flex flex-wrap items-center gap-2 rounded-2xl bg-surface-2 p-3">
-            <input type="hidden" name="businessId" value={b.id} />
-            <span className="text-[11.5px] font-bold text-ink-soft">
-              Registered phone: {b.owner?.phone ? maskPhone(b.owner.phone) : "—"}
-            </span>
-            <input
-              name="newPhone"
-              type="tel"
-              placeholder="New mobile no. (verify in person first)"
-              className="h-8 w-56 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
-            />
-            <MiniButton type="submit" tone="neutral">Update</MiniButton>
-          </form>
+        {canWalkIn && (
+          b.owner_id ? (
+            <form action={updateOwnerPhone} className="mb-3.5 flex flex-wrap items-center gap-2 rounded-2xl bg-surface-2 p-3">
+              <input type="hidden" name="businessId" value={b.id} />
+              <span className="text-[11.5px] font-bold text-ink-soft">
+                Registered phone: {b.owner?.phone ? maskPhone(b.owner.phone) : "—"}
+              </span>
+              <input
+                name="newPhone"
+                type="tel"
+                placeholder="New mobile no. (verify in person first)"
+                className="h-8 w-56 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
+              />
+              <MiniButton type="submit" tone="neutral">Update</MiniButton>
+            </form>
+          ) : (
+            <form action={claimLegacyBusiness} className="mb-3.5 flex flex-wrap items-center gap-2 rounded-2xl bg-surface-2 p-3">
+              <input type="hidden" name="businessId" value={b.id} />
+              <span className="text-[11.5px] font-bold text-ink-soft">No account linked yet.</span>
+              <input
+                name="phone"
+                type="tel"
+                placeholder="Mobile no. (verify in person first)"
+                className="h-8 w-56 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
+              />
+              <MiniButton type="submit" tone="neutral">Attach number</MiniButton>
+              <span className="text-[11px] text-ink-faint">Doesn&rsquo;t file anything — just links their account for next time.</span>
+            </form>
+          )
         )}
 
         {apps.length > 0 && (

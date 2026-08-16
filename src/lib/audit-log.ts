@@ -40,7 +40,8 @@ export type AuditAction =
   | "mayor_name_updated"
   | "print_template_updated"
   | "building_permit_fee_updated"
-  | "owner_phone_updated";
+  | "owner_phone_updated"
+  | "legacy_business_claimed";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

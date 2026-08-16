@@ -85,13 +85,20 @@ export async function startWalkInApplication(formData: FormData) {
     const { data: existingOwner } = await supabase.from("owners").select("id").eq("phone", phone).maybeSingle();
     let ownerId = existingOwner?.id ?? business.owner_id ?? null;
     if (!ownerId) {
-      const { data: newOwner, error: ownerError } = await supabase
+      // Client-generated id, no .select() after insert (2026-08-16 follow-up,
+      // a real bug caught verifying claimLegacyBusiness below): `owners`'
+      // own SELECT policy only allows staff to see an owner already linked
+      // to one of their businesses, and Supabase's `.insert().select()` is
+      // `INSERT ... RETURNING` under the hood -- Postgres raises an RLS
+      // violation on RETURNING a row the SELECT policy would exclude, even
+      // though the INSERT itself was allowed. A brand-new owner isn't
+      // linked to anything yet at the moment it's created, so this insert
+      // was silently failing for every genuinely-new phone number.
+      ownerId = crypto.randomUUID();
+      const { error: ownerError } = await supabase
         .from("owners")
-        .insert({ full_name: business.legacy_owner_name || phone, phone, claimed_at: new Date().toISOString() })
-        .select("id")
-        .single();
-      if (ownerError || !newOwner) throw ownerError ?? new Error("Owner create failed");
-      ownerId = newOwner.id;
+        .insert({ id: ownerId, full_name: business.legacy_owner_name || phone, phone, claimed_at: new Date().toISOString() });
+      if (ownerError) throw ownerError;
     }
     businessUpdate.owner_id = ownerId;
     if (business.is_legacy_unclaimed) businessUpdate.is_legacy_unclaimed = false;
@@ -202,9 +209,10 @@ export async function setLbtCategory(formData: FormData) {
  * isn't a safe enough bar once a business is already claimed).
  *
  * Only meaningful for a business that already has an owner; a still-
- * legacy-unclaimed business should go through the walk-in form's own
- * phone field instead (that's a first claim, not an update), so this
- * throws rather than silently doing something unintended if called on one.
+ * legacy-unclaimed business should go through `claimLegacyBusiness` (or
+ * the walk-in form's own phone field, if filing at the same time) instead
+ * -- that's a first claim, not an update -- so this throws rather than
+ * silently doing something unintended if called on one.
  *
  * Blocks reassigning to a number already registered to a DIFFERENT
  * owner -- a genuine "this is actually the same real person, merge
@@ -253,6 +261,73 @@ export async function updateOwnerPhone(formData: FormData) {
     actorLabel: actorLabelFor(staff),
     action: "owner_phone_updated",
     summary: `Updated registered mobile number for ${business.business_name ?? "(business record missing)"} -- verified in person at the counter`,
+    details: { businessId },
+  });
+
+  revalidatePath("/dashboard/businesses");
+}
+
+/**
+ * BPLO attaches a real, verified mobile number to a still-legacy-unclaimed
+ * business, with no application involved -- the gap `startWalkInApplication`
+ * didn't cover: that form only ever links a phone as a side effect of
+ * filing a renewal/new application (requires an amount, submits a real
+ * application), so someone who just wants to be set up in the system --
+ * e.g. calls in, or stops by, without renewing that same visit -- had no
+ * way to do that alone (2026-08-16 follow-up, flagged directly by the
+ * project owner). Same claiming logic as that form's own phone branch
+ * (find-or-create an owner for the number, link it, clear
+ * is_legacy_unclaimed), just without anything else attached to it.
+ */
+export async function claimLegacyBusiness(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const businessId = String(formData.get("businessId") ?? "");
+  const phoneInput = String(formData.get("phone") ?? "").trim();
+  if (!businessId || !phoneInput) throw new Error("Invalid request");
+
+  const phone = normalizePhone(phoneInput);
+  if (!phone) throw new Error("That mobile number doesn't look right -- check it and try again.");
+
+  const supabase = await createClient();
+  const { data: business, error: fetchError } = await supabase
+    .from("businesses")
+    .select("business_name, owner_id, is_legacy_unclaimed, legacy_owner_name")
+    .eq("id", businessId)
+    .single();
+  if (fetchError || !business) throw fetchError ?? new Error("Business not found");
+  if (!business.is_legacy_unclaimed || business.owner_id) {
+    throw new Error("This business is already linked to an owner -- use the phone update above instead.");
+  }
+
+  const { data: existingOwner } = await supabase.from("owners").select("id").eq("phone", phone).maybeSingle();
+  let ownerId = existingOwner?.id ?? null;
+  if (!ownerId) {
+    // Client-generated id, no .select() after insert -- see the matching
+    // comment in startWalkInApplication above for why: `owners`' own
+    // SELECT policy only allows staff to see an owner already linked to
+    // one of their businesses, and a brand-new owner isn't linked to
+    // anything at the moment it's created.
+    ownerId = crypto.randomUUID();
+    const { error: ownerError } = await supabase
+      .from("owners")
+      .insert({ id: ownerId, full_name: business.legacy_owner_name || phone, phone, claimed_at: new Date().toISOString() });
+    if (ownerError) throw ownerError;
+  }
+
+  const { error: updateError } = await supabase
+    .from("businesses")
+    .update({ owner_id: ownerId, is_legacy_unclaimed: false })
+    .eq("id", businessId);
+  if (updateError) throw updateError;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "legacy_business_claimed",
+    summary: `Linked ${business.business_name ?? "(business record missing)"} to a mobile number at the counter -- no application filed`,
     details: { businessId },
   });
 
