@@ -1,5 +1,5 @@
 import { sendSms } from "@/lib/semaphore";
-import { sendEmail } from "@/lib/resend";
+import { sendEmail, type EmailAttachment } from "@/lib/resend";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -37,6 +37,25 @@ export async function notifyApplicantSms(applicationId: string, phone: string, m
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyApplicantSms failed", detail);
     await log(applicationId, "sms", phone, message, "failed", detail).catch(() => {});
+  }
+}
+
+/**
+ * Applicant-facing email -- a deliberate, one-off exception to the rule
+ * right above this (applicants are SMS-only). Exists solely to attach the
+ * Order of Payment PDF (CLAUDE.md), which SMS has no way to carry. Never
+ * the only notification for a given event -- finalizeAssessment still
+ * sends the existing SMS regardless of whether the owner has an email on
+ * file, since phone is guaranteed and email isn't.
+ */
+export async function notifyApplicantEmail(applicationId: string, email: string, subject: string, html: string, attachments?: EmailAttachment[]): Promise<void> {
+  try {
+    await sendEmail(email, subject, html, attachments);
+    await log(applicationId, "email", email, subject, "sent");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("notifyApplicantEmail failed", detail);
+    await log(applicationId, "email", email, subject, "failed", detail).catch(() => {});
   }
 }
 

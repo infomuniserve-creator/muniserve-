@@ -4,9 +4,10 @@ import { getCurrentStaff } from "@/lib/staff";
 import { getEngineeringAssessedAmount, openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { getLguDisplay } from "@/lib/lgu";
-import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
+import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
+import { generateOrderOfPaymentPdf } from "@/lib/order-of-payment-pdf";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -190,18 +191,23 @@ export async function resubmitToDepartments(formData: FormData) {
  * mechanism from manual entry, and only offered on lines that stayed
  * computed).
  */
+const MODE_OF_PAYMENT_VALUES = new Set(["Annual", "Semi-Annual", "Quarterly"]);
+
 export async function finalizeAssessment(formData: FormData) {
   const staff = await getCurrentStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
+  const modeOfPayment = String(formData.get("modeOfPayment") ?? "");
+  if (!MODE_OF_PAYMENT_VALUES.has(modeOfPayment)) throw new Error("Select a Mode of Payment before finalizing.");
+
   const supabase = await createClient();
   const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   const { data: application, error: fetchError } = await supabase
     .from("applications")
     .select(
-      `reference_number, application_type, form_inputs, business:businesses(nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, owner:owners(phone))`
+      `reference_number, application_type, form_inputs, business:businesses(business_name, trade_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, owner:owners(phone, email, full_name))`
     )
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment")
@@ -209,6 +215,14 @@ export async function finalizeAssessment(formData: FormData) {
   if (fetchError || !application) throw fetchError ?? new Error("Application not found or not awaiting assessment");
 
   const business = application.business as unknown as {
+    business_name: string;
+    trade_name: string | null;
+    unit_street: string | null;
+    city_town: string | null;
+    barangay: string | null;
+    province: string | null;
+    zip_code: string | null;
+    address: string | null;
     nature_of_business: string | null;
     lbt_category: string | null;
     organization_type: string | null;
@@ -224,7 +238,7 @@ export async function finalizeAssessment(formData: FormData) {
     animal_count: number | null;
     male_employee_count: number | null;
     female_employee_count: number | null;
-    owner: { phone: string | null } | null;
+    owner: { phone: string | null; email: string | null; full_name: string | null } | null;
   } | null;
   if (!business) throw new Error("Business record missing");
 
@@ -265,6 +279,7 @@ export async function finalizeAssessment(formData: FormData) {
     amount: number;
     includedInTotal: boolean;
     isManual: boolean;
+    acctCode: string | null;
   };
 
   function readManualAmount(key: string, label: string): number {
@@ -280,12 +295,12 @@ export async function finalizeAssessment(formData: FormData) {
 
   for (const line of computedLines) {
     if (lgu.automatedAssessmentEnabled || !line.isManualEligible) {
-      finalLines.push({ feeRuleId: line.feeRuleId, feeCategory: line.feeCategory, displayLabel: line.displayLabel, amount: line.amount, includedInTotal: line.includedInTotal, isManual: false });
+      finalLines.push({ feeRuleId: line.feeRuleId, feeCategory: line.feeCategory, displayLabel: line.displayLabel, amount: line.amount, includedInTotal: line.includedInTotal, isManual: false, acctCode: line.acctCode });
       continue;
     }
     const key = line.feeCategory === "regulatory" ? `manual_regulatory_${line.feeRuleId}` : `manual_${line.feeCategory}`;
     if (line.feeCategory === "lbt" || line.feeCategory === "mayors_permit") seenManualCategories.add(line.feeCategory);
-    finalLines.push({ feeRuleId: null, feeCategory: line.feeCategory, displayLabel: line.displayLabel, amount: readManualAmount(key, line.displayLabel), includedInTotal: true, isManual: true });
+    finalLines.push({ feeRuleId: null, feeCategory: line.feeCategory, displayLabel: line.displayLabel, amount: readManualAmount(key, line.displayLabel), includedInTotal: true, isManual: true, acctCode: null });
   }
 
   // Local Business Tax and Mayor's Permit Fee are mandatory manual entries
@@ -296,7 +311,7 @@ export async function finalizeAssessment(formData: FormData) {
   if (!lgu.automatedAssessmentEnabled) {
     for (const [category, label] of [["lbt", "Local Business Tax"], ["mayors_permit", "Mayor's Permit Fee"]] as const) {
       if (seenManualCategories.has(category)) continue;
-      finalLines.push({ feeRuleId: null, feeCategory: category, displayLabel: label, amount: readManualAmount(`manual_${category}`, label), includedInTotal: true, isManual: true });
+      finalLines.push({ feeRuleId: null, feeCategory: category, displayLabel: label, amount: readManualAmount(`manual_${category}`, label), includedInTotal: true, isManual: true, acctCode: null });
     }
   }
 
@@ -309,7 +324,7 @@ export async function finalizeAssessment(formData: FormData) {
   if (lgu.buildingPermitFeeEnabled) {
     const engineeringAmount = await getEngineeringAssessedAmount(applicationId);
     if (engineeringAmount != null) {
-      finalLines.push({ feeRuleId: null, feeCategory: "regulatory", displayLabel: lgu.buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManual: true });
+      finalLines.push({ feeRuleId: null, feeCategory: "regulatory", displayLabel: lgu.buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManual: true, acctCode: null });
     }
   }
 
@@ -335,6 +350,7 @@ export async function finalizeAssessment(formData: FormData) {
       overridden_by: overriddenAmount != null ? staff.id : null,
       overridden_at: overriddenAmount != null ? new Date().toISOString() : null,
       included_in_total: line.includedInTotal,
+      acct_code: line.acctCode,
     };
   });
 
@@ -350,7 +366,12 @@ export async function finalizeAssessment(formData: FormData) {
     // otherwise-complete stage-timestamp timeline -- Performance Stats
     // needs this moment to measure "how long did BPLO take to assess"
     // separately from "how long did the applicant take to pay after."
-    .update({ status: "pending_payment", assessment_finalized_at: new Date().toISOString() })
+    .update({
+      status: "pending_payment",
+      assessment_finalized_at: new Date().toISOString(),
+      mode_of_payment: modeOfPayment,
+      assessment_finalized_by: staff.id,
+    })
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment");
   if (statusError) throw statusError;
@@ -368,6 +389,43 @@ export async function finalizeAssessment(formData: FormData) {
       business.owner.phone,
       `MuniServe: your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. Pay at the Treasurer's Office to continue.`
     );
+  }
+
+  // Order of Payment email -- a deliberate exception to the "applicants
+  // are SMS-only" rule (notifications.ts's own comment on
+  // notifyApplicantEmail), since SMS has no way to carry a PDF attachment.
+  // Best-effort, same as every other notification here -- an email/PDF
+  // failure must never undo the assessment that was just finalized. Only
+  // sent when the owner actually has an email on file (not guaranteed,
+  // unlike phone).
+  if (business.owner?.email) {
+    try {
+      const structuredAddress = [business.unit_street, business.city_town, business.barangay, business.province, business.zip_code]
+        .filter(Boolean)
+        .join(", ");
+      const orderOfPaymentPdf = await generateOrderOfPaymentPdf({
+        referenceNumber: application.reference_number,
+        applicationType: application.application_type as "new" | "renewal",
+        businessName: business.trade_name || business.business_name,
+        ownerName: business.owner.full_name ?? "—",
+        address: structuredAddress || business.address || "",
+        modeOfPayment: modeOfPayment,
+        assessedByName: staff.full_name,
+        assessedOn: new Date(),
+        lines: lineRows.filter((l) => l.included_in_total).map((l) => ({ acctCode: l.acct_code, displayLabel: l.display_label ?? "", amount: l.overridden_amount ?? l.computed_amount })),
+        totalDue,
+        lgu,
+      });
+      await notifyApplicantEmail(
+        applicationId,
+        business.owner.email,
+        `Order of Payment -- ${application.reference_number}`,
+        `<p>Your application <strong>${application.reference_number}</strong> has been assessed. Total due: <strong>PHP ${totalDue.toLocaleString()}</strong>.</p><p>The attached Order of Payment lists the full breakdown -- bring it (printed or on your phone) to the Treasurer's Office to pay.</p>`,
+        [{ filename: `${application.reference_number}-order-of-payment.pdf`, content: Buffer.from(orderOfPaymentPdf).toString("base64") }]
+      );
+    } catch (err) {
+      console.error("Order of Payment email failed", err);
+    }
   }
 
   // CLAUDE.md 7w -- Treasury previously had no way to know a payment was

@@ -10,8 +10,14 @@
  * the project's Resend account (Domains tab) -- there's no way to
  * confirm that from code, so it's read from env rather than a guessed
  * domain baked in here. See .env.local's placeholder value/comment.
+ *
+ * `attachments` (added for the Order of Payment email, CLAUDE.md) uses
+ * Resend's own REST shape directly -- `content` is the file's raw bytes,
+ * base64-encoded, no separate upload step.
  */
-export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+export type EmailAttachment = { filename: string; content: string };
+
+export async function sendEmail(to: string, subject: string, html: string, attachments?: EmailAttachment[]): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error("RESEND_API_KEY is not set");
@@ -24,7 +30,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ from, to, subject, html }),
+    body: JSON.stringify({ from, to, subject, html, ...(attachments?.length ? { attachments } : {}) }),
   });
 
   if (!response.ok) {

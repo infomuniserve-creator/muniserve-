@@ -43,16 +43,17 @@ export type LguDisplay = {
   isPaused: boolean; // migration 0020 -- dashboard/layout.tsx blocks real staff (not a platform-admin proxy) when true
   automatedAssessmentEnabled: boolean; // migration 0026 -- BPLO's own manual-override switch, off means the assessment card falls back to hand-entered amounts for the LBT/Mayor's Permit/graduated-regulatory lines
   cedulaIncludedOnline: boolean; // migration 0038 -- true when both of this LGU's CEDULA fee_rules rows have delivery_mode = 'online' (fee-engine.ts's own source of truth, not a separate lgus column); when true, CEDULA joins the online total and the application form skips the upload requirement, since there's no pre-existing document to upload
+  treasurerName: string | null; // migration 0039 -- e.g. "Pablo R. Sarmiento", for the Order of Payment's "Reviewed & Recommended for Approval" line. Same "no generic fallback" reasoning as mayorName.
 };
 
 const LGU_SELECT_COLUMNS =
-  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled";
+  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name";
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
 function withFallback(row: {
   id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null; mayor_name: string | null;
   print_template_path: string | null; print_template_field_mapping: Record<string, string> | null;
-  building_permit_fee_enabled: boolean; building_permit_fee_label: string | null; is_paused: boolean; automated_assessment_enabled: boolean;
+  building_permit_fee_enabled: boolean; building_permit_fee_label: string | null; is_paused: boolean; automated_assessment_enabled: boolean; treasurer_name: string | null;
 }, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
@@ -69,6 +70,7 @@ function withFallback(row: {
     isPaused: row.is_paused,
     automatedAssessmentEnabled: row.automated_assessment_enabled,
     cedulaIncludedOnline,
+    treasurerName: row.treasurer_name,
   };
 }
 

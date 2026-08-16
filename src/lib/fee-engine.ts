@@ -45,6 +45,7 @@ export type FeeLineResult = {
   includedInTotal: boolean; // false for a reference_only regulatory fee, still shown with a "paid at the counter" note -- CEDULA is the one exception: a reference_only CEDULA rule isn't pushed as a line at all (2026-08-16 follow-up), so this is always true whenever a cedula-category line exists
   note?: string; // shown to BPLO -- e.g. "estimated, please confirm"
   isManual?: boolean;
+  acctCode: string | null; // migration 0039 -- the LGU's own revenue-code numbering (e.g. "605-1"), optional/blank by default, for the Order of Payment slip. null for a manually-entered line (Automated Assessment off), same as feeRuleId.
   /** Whether Automated Assessment being off swaps this line for a hand-entered amount. Always true for lbt/mayors_permit (the two the project owner named directly) and for any `regulatory` line computed from a non-flat shape (graduated/tier_matrix) -- a flat amount has nothing a bracket lookup can get wrong, so it stays automatic either way. */
   isManualEligible: boolean;
 };
@@ -71,6 +72,7 @@ type FeeRuleRow = {
   discount_target_fee_rule_ids: string[] | null;
   new_business_rate: number | null;
   delivery_mode: string;
+  acct_code: string | null;
 };
 
 type BracketRow = {
@@ -353,7 +355,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
   const { data: rulesRaw, error: rulesError } = await supabase
     .from("fee_rules")
     .select(
-      "id, name, fee_category, computation_type, applies_to, basis_field, flat_amount, per_unit_rate, per_unit_field, percentage_rate, formula_base_fee, formula_increment_amount, formula_increment_per, formula_cap, discount_target_fee_rule_ids, new_business_rate, delivery_mode"
+      "id, name, fee_category, computation_type, applies_to, basis_field, flat_amount, per_unit_rate, per_unit_field, percentage_rate, formula_base_fee, formula_increment_amount, formula_increment_per, formula_cap, discount_target_fee_rule_ids, new_business_rate, delivery_mode, acct_code"
     )
     .eq("lgu_id", input.lguId)
     .eq("is_active", true);
@@ -395,7 +397,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
     if (typeof result === "object") warnings.push(result.error);
     else {
       lbtAmount = round2(result);
-      lines.push({ feeRuleId: lbtRule.id, feeCategory: "lbt", displayLabel: CATEGORY_LABEL.lbt!, amount: lbtAmount, includedInTotal: lbtRule.delivery_mode === "online", isManualEligible: true });
+      lines.push({ feeRuleId: lbtRule.id, feeCategory: "lbt", displayLabel: CATEGORY_LABEL.lbt!, amount: lbtAmount, includedInTotal: lbtRule.delivery_mode === "online", isManualEligible: true, acctCode: lbtRule.acct_code });
     }
   }
 
@@ -407,7 +409,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
       const targets = discountRule.discount_target_fee_rule_ids ?? [];
       if (commodityList.includes(nature) && targets.includes(lbtRule.id)) {
         const discountAmount = -round2(lbtAmount * (discountRule.percentage_rate ?? 0));
-        lines.push({ feeRuleId: discountRule.id, feeCategory: "discount", displayLabel: discountRule.name, amount: discountAmount, includedInTotal: discountRule.delivery_mode === "online", isManualEligible: false });
+        lines.push({ feeRuleId: discountRule.id, feeCategory: "discount", displayLabel: discountRule.name, amount: discountAmount, includedInTotal: discountRule.delivery_mode === "online", isManualEligible: false, acctCode: discountRule.acct_code });
       }
     }
   }
@@ -433,7 +435,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
           const note = resolved.approximated
             ? "Business-size tier estimated from employee count only (no captured current asset value for a renewal) — confirm if the business's actual assets say otherwise."
             : undefined;
-          lines.push({ feeRuleId: categoryRule.id, feeCategory: "mayors_permit", displayLabel: CATEGORY_LABEL.mayors_permit!, amount: round2(cell.base_fee), includedInTotal: categoryRule.delivery_mode === "online", note, isManualEligible: true });
+          lines.push({ feeRuleId: categoryRule.id, feeCategory: "mayors_permit", displayLabel: CATEGORY_LABEL.mayors_permit!, amount: round2(cell.base_fee), includedInTotal: categoryRule.delivery_mode === "online", note, isManualEligible: true, acctCode: categoryRule.acct_code });
         }
       }
     }
@@ -453,7 +455,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
         if (typeof result === "object") warnings.push(result.error);
         else {
           const note = mayorsRule.basis_field === "preceding_year_lbt_paid" ? "Tier estimated from this year's business tax — confirm if the business's history says otherwise." : undefined;
-          lines.push({ feeRuleId: mayorsRule.id, feeCategory: "mayors_permit", displayLabel: CATEGORY_LABEL.mayors_permit!, amount: round2(result), includedInTotal: mayorsRule.delivery_mode === "online", note, isManualEligible: true });
+          lines.push({ feeRuleId: mayorsRule.id, feeCategory: "mayors_permit", displayLabel: CATEGORY_LABEL.mayors_permit!, amount: round2(result), includedInTotal: mayorsRule.delivery_mode === "online", note, isManualEligible: true, acctCode: mayorsRule.acct_code });
         }
       }
     }
@@ -486,7 +488,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
     }
     const result = computeRuleAmount(rule, bracketsByRule.get(rule.id) ?? [], basis, null, input.applicationType);
     if (typeof result === "object") warnings.push(result.error);
-    else lines.push({ feeRuleId: rule.id, feeCategory: "regulatory", displayLabel: name, amount: round2(result), includedInTotal: rule.delivery_mode === "online", isManualEligible: rule.computation_type !== "flat" });
+    else lines.push({ feeRuleId: rule.id, feeCategory: "regulatory", displayLabel: name, amount: round2(result), includedInTotal: rule.delivery_mode === "online", isManualEligible: rule.computation_type !== "flat", acctCode: rule.acct_code });
   }
 
   // ---- CEDULA ----
@@ -512,7 +514,7 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
     } else {
       const result = computeRuleAmount(cedulaRule, [], lbtBasis, null, input.applicationType);
       if (typeof result === "object") warnings.push(result.error);
-      else lines.push({ feeRuleId: cedulaRule.id, feeCategory: "cedula", displayLabel: cedulaRule.name, amount: round2(result), includedInTotal: true, isManualEligible: false });
+      else lines.push({ feeRuleId: cedulaRule.id, feeCategory: "cedula", displayLabel: cedulaRule.name, amount: round2(result), includedInTotal: true, isManualEligible: false, acctCode: cedulaRule.acct_code });
     }
   }
   // else: reference_only -- intentionally not surfaced here at all (see comment above).

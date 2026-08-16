@@ -33,6 +33,7 @@ export async function addRegulatoryFee(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const amount = Number(formData.get("amount"));
   const deliveryMode = String(formData.get("deliveryMode") ?? "online");
+  const acctCode = String(formData.get("acctCode") ?? "").trim() || null;
   if (!name || !Number.isFinite(amount) || amount < 0) throw new Error("Enter a fee name and a valid amount.");
   if (deliveryMode !== "online" && deliveryMode !== "reference_only") throw new Error("Invalid delivery mode.");
 
@@ -54,6 +55,7 @@ export async function addRegulatoryFee(formData: FormData) {
     computation_type: "flat",
     flat_amount: amount,
     delivery_mode: deliveryMode,
+    acct_code: acctCode,
     is_active: true,
     sort_order: nextSortOrder,
   });
@@ -65,7 +67,46 @@ export async function addRegulatoryFee(formData: FormData) {
     actorLabel: actorLabelFor(staff),
     action: "regulatory_fee_added",
     summary: `Added regulatory fee "${name}" (₱${amount.toLocaleString()}${deliveryMode === "reference_only" ? ", paid at the counter" : ""})`,
-    details: { name, amount, deliveryMode },
+    details: { name, amount, deliveryMode, acctCode },
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
+ * Acct Code (2026-08-16, Order of Payment) -- the LGU's own municipal
+ * revenue-code numbering, printed on the Order of Payment slip. Optional,
+ * blank by default (never invented here -- BPLO fills it in once they
+ * have the real codes). Regulatory fees only for now: each is already its
+ * own distinct fee_rules row (a natural 1:1 with a code), unlike LBT/
+ * Mayor's Permit, which have many bracket rows sharing one conceptual
+ * category and would need a different mechanism -- flagged in CLAUDE.md
+ * as a deliberate follow-up, not built here.
+ */
+export async function setRegulatoryFeeAcctCode(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const feeRuleId = String(formData.get("feeRuleId"));
+  const acctCode = String(formData.get("acctCode") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("fee_rules")
+    .update({ acct_code: acctCode })
+    .eq("id", feeRuleId)
+    .eq("lgu_id", staff.lgu_id)
+    .eq("fee_category", "regulatory")
+    .select("name")
+    .single();
+  if (error || !updated) throw error ?? new Error("Fee not found");
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "regulatory_fee_updated",
+    summary: acctCode ? `Acct Code for "${updated.name}" set to "${acctCode}"` : `Acct Code for "${updated.name}" cleared`,
   });
 
   revalidatePath("/dashboard/settings");
@@ -160,6 +201,34 @@ export async function updateMayorName(formData: FormData) {
     actorLabel: actorLabelFor(staff),
     action: "mayor_name_updated",
     summary: mayorName ? `Mayor's name set to "${mayorName}" for the print certificate` : "Mayor's name cleared",
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
+ * Sets the Treasurer's name shown on the Order of Payment's "Reviewed &
+ * Recommended for Approval" line (2026-08-16 follow-up) -- migration
+ * 0039's lgus.treasurer_name. A plain printed name, no approval workflow
+ * behind it (confirmed with the project owner, same as mayor_name has no
+ * signing gate of its own). Same RLS reasoning as updateMayorName.
+ */
+export async function updateTreasurerName(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const treasurerName = String(formData.get("treasurerName") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lgus").update({ treasurer_name: treasurerName }).eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "treasurer_name_updated",
+    summary: treasurerName ? `Treasurer's name set to "${treasurerName}" for the Order of Payment` : "Treasurer's name cleared",
   });
 
   revalidatePath("/dashboard/settings");

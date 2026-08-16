@@ -68,6 +68,15 @@ export async function AwaitingPaymentSection({ lguId }: { lguId: string }) {
             </p>
             <WorkflowStepper status={a.status} />
 
+            <a
+              href={`/api/dashboard/order-of-payment?applicationId=${a.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mb-3 inline-block rounded-full border border-info px-3.5 py-1.5 text-[12.5px] font-bold text-info hover:bg-info-bg"
+            >
+              Open Order of Payment
+            </a>
+
             {lines.length === 0 ? (
               <div className="mb-4 rounded-2xl bg-info-bg px-4 py-3 text-[12.5px] font-bold text-info-ink">
                 No assessed amount on file for this application — confirm with BPLO before recording payment.

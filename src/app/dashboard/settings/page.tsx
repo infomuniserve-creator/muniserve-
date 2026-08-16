@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addRegulatoryFee, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName } from "./actions";
+import { addRegulatoryFee, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -30,7 +30,7 @@ export default async function SettingsPage() {
 
   const { data: regulatoryFeesRaw } = await supabase
     .from("fee_rules")
-    .select("id, name, flat_amount, delivery_mode, is_active")
+    .select("id, name, flat_amount, delivery_mode, is_active, acct_code")
     .eq("lgu_id", staff.lgu_id)
     .eq("fee_category", "regulatory")
     .order("sort_order");
@@ -85,6 +85,16 @@ export default async function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-display text-[14px] font-bold tabular-nums text-ink">₱{Number(f.flat_amount ?? 0).toLocaleString()}</span>
+                    <form action={setRegulatoryFeeAcctCode} className="flex items-center gap-1.5">
+                      <input type="hidden" name="feeRuleId" value={f.id} />
+                      <input
+                        name="acctCode"
+                        defaultValue={f.acct_code ?? ""}
+                        placeholder="Acct Code"
+                        className="h-8 w-24 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
+                      />
+                      <MiniButton type="submit" tone="neutral">Save</MiniButton>
+                    </form>
                     <form action={setRegulatoryFeeActive}>
                       <input type="hidden" name="feeRuleId" value={f.id} />
                       <input type="hidden" name="isActive" value={(!f.is_active).toString()} />
@@ -111,6 +121,10 @@ export default async function SettingsPage() {
                 <option value="online">Online, with the rest of the total</option>
                 <option value="reference_only">At the physical counter</option>
               </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Acct Code (optional)</label>
+              <input name="acctCode" placeholder="e.g. 582-2" className="h-9 w-28 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
             </div>
             <PrimaryButton type="submit">Add a fee</PrimaryButton>
           </form>
@@ -228,6 +242,31 @@ export default async function SettingsPage() {
         <div className="mt-3">
           <PrintTemplateUpload hasTemplate={Boolean(lgu.printTemplatePath)} />
         </div>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="Order of Payment Details"
+          sub="Shown on the itemized assessment slip applicants bring to the Treasurer's counter to pay — available once BPLO finalizes an assessment."
+        />
+        <Card className="p-5">
+          <form action={updateTreasurerName} className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Treasurer&rsquo;s full name</span>
+              <input
+                name="treasurerName"
+                type="text"
+                defaultValue={lgu.treasurerName ?? ""}
+                placeholder="e.g. Pablo R. Sarmiento"
+                className="h-9 w-64 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <PrimaryButton type="submit">Save</PrimaryButton>
+          </form>
+          <p className="mt-3 text-[11.5px] text-ink-soft">
+            Acct Codes for each fee (shown on the same slip) are set per regulatory fee above — Local Business Tax and Mayor&rsquo;s Permit Fee codes aren&rsquo;t editable here yet.
+          </p>
+        </Card>
       </div>
 
       {lgu.subdomain ? (

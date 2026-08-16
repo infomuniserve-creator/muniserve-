@@ -87,7 +87,7 @@ export default async function BusinessesPage({
     fetchAllRows((offset, limit) =>
       supabase
         .from("applications")
-        .select("id, business_id, status, application_type, application_year, reference_number, submitted_at", { count: "exact" })
+        .select("id, business_id, status, application_type, application_year, reference_number, submitted_at, assessment_finalized_at", { count: "exact" })
         .eq("lgu_id", staff.lgu_id)
         .range(offset, offset + limit - 1)
     ),
@@ -100,7 +100,16 @@ export default async function BusinessesPage({
     ),
   ]);
 
-  type AppRow = { id: string; business_id: string; status: string; application_type: string; application_year: number | null; reference_number: string | null; submitted_at: string };
+  type AppRow = {
+    id: string;
+    business_id: string;
+    status: string;
+    application_type: string;
+    application_year: number | null;
+    reference_number: string | null;
+    submitted_at: string;
+    assessment_finalized_at: string | null;
+  };
   const appRows = (applications ?? []) as unknown as AppRow[];
   const appsByBusiness = new Map<string, AppRow[]>();
   for (const a of appRows) {
@@ -259,7 +268,15 @@ type BizRowType = Record<string, unknown> & {
   address: string | null;
   owner: { full_name: string; phone: string } | null;
 };
-type AppRowType = { id: string; status: string; application_type: string; application_year: number | null; reference_number: string | null; submitted_at: string };
+type AppRowType = {
+  id: string;
+  status: string;
+  application_type: string;
+  application_year: number | null;
+  reference_number: string | null;
+  submitted_at: string;
+  assessment_finalized_at: string | null;
+};
 
 function ownerLabel(b: BizRowType): string {
   if (b.owner?.full_name) return b.owner.full_name;
@@ -407,6 +424,14 @@ function RegistryRow({
                   >
                     Submitted form (PDF)
                   </a>
+                  {a.assessment_finalized_at && (
+                    <a
+                      href={`/api/dashboard/order-of-payment?applicationId=${a.id}`}
+                      className="shrink-0 text-[11.5px] font-bold text-info-ink underline underline-offset-2"
+                    >
+                      Order of Payment
+                    </a>
+                  )}
                 </div>
               ))}
             </div>

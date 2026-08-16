@@ -448,7 +448,7 @@ async function AssessmentCard({
   const engineeringAmount = buildingPermitFeeEnabled ? await getEngineeringAssessedAmount(applicationId) : null;
   const engineeringLine: FeeLineResult | null =
     engineeringAmount != null
-      ? { feeRuleId: null, feeCategory: "regulatory", displayLabel: buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManualEligible: false }
+      ? { feeRuleId: null, feeCategory: "regulatory", displayLabel: buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManualEligible: false, acctCode: null }
       : null;
 
   const baseLines = result.ok ? result.lines : [];
@@ -486,6 +486,22 @@ async function AssessmentCard({
         <input type="hidden" name="applicationId" value={applicationId} />
 
         <AssessmentLineItems lines={computedLines} warnings={warnings} automatedAssessmentEnabled={automatedAssessmentEnabled} manualFields={manualFields} />
+
+        <label className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-[12.5px] font-bold text-ink-soft">Mode of Payment</span>
+          <select
+            name="modeOfPayment"
+            required
+            defaultValue=""
+            className="h-9 rounded-xl border border-border-strong bg-surface px-2.5 text-[13px] text-ink"
+          >
+            <option value="" disabled>Select one</option>
+            <option value="Annual">Annual</option>
+            <option value="Semi-Annual">Semi-Annual</option>
+            <option value="Quarterly">Quarterly</option>
+          </select>
+          <span className="text-[11px] text-ink-faint">Printed on the Order of Payment.</span>
+        </label>
 
         <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
       </form>
