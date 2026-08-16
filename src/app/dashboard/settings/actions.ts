@@ -514,3 +514,83 @@ export async function getExportableFeeRules(feeType: FeeType): Promise<{ lbt: im
   }));
   return { mp };
 }
+
+/**
+ * Self-service barangay list (2026-08-16 follow-up) -- the only prior
+ * way to set this (`/admin`'s create-client form, CLAUDE.md 7o) only ran
+ * once, at client creation, and was optional -- there was no way for
+ * BPLO to add or fix their own list afterward short of a raw SQL insert.
+ * Migration 0042's new RLS policy is what actually authorizes this write
+ * (scoped to `option_type = 'barangay'` at BPLO's own LGU).
+ *
+ * Accepts either a single name or a comma/newline-separated batch in the
+ * same field, matching /admin's own bulk-paste UX -- useful both for a
+ * one-off correction and for a client catching up on their whole list
+ * from Settings for the first time. Silently skips any name that's
+ * already on file (case-insensitive) rather than erroring on the unique
+ * constraint -- re-pasting the same list back is a safe no-op.
+ */
+export async function addBarangays(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const raw = String(formData.get("barangays") ?? "");
+  const names = [...new Set(raw.split(/[,\n]/).map((s) => s.trim()).filter(Boolean))];
+  if (names.length === 0) return;
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("lgu_form_options")
+    .select("value, sort_order")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("option_type", "barangay");
+  const existingValues = new Set((existing ?? []).map((r) => r.value.toLowerCase()));
+  let nextSort = (existing ?? []).reduce((max, r) => Math.max(max, r.sort_order), -1) + 1;
+
+  const toInsert = names
+    .filter((n) => !existingValues.has(n.toLowerCase()))
+    .map((value) => ({ lgu_id: staff.lgu_id, option_type: "barangay" as const, value, sort_order: nextSort++ }));
+  if (toInsert.length === 0) return;
+
+  const { error } = await supabase.from("lgu_form_options").insert(toInsert);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "barangays_updated",
+    summary: `Added ${toInsert.length} barangay${toInsert.length === 1 ? "" : "s"}`,
+    details: { added: toInsert.map((r) => r.value) },
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/** Removes one barangay from the list -- a hard delete, not a soft one. Unlike fee_rules/staff_users, nothing else in this schema references lgu_form_options rows by FK (businesses.barangay is a free-text value, not a foreign key), so there's no history to preserve by keeping a deactivated row around. */
+export async function removeBarangay(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const id = String(formData.get("id") ?? "");
+  const supabase = await createClient();
+  const { data: deleted, error } = await supabase
+    .from("lgu_form_options")
+    .delete()
+    .eq("id", id)
+    .eq("lgu_id", staff.lgu_id)
+    .eq("option_type", "barangay")
+    .select("value")
+    .maybeSingle();
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "barangays_updated",
+    summary: `Removed barangay "${deleted?.value ?? id}"`,
+  });
+
+  revalidatePath("/dashboard/settings");
+}

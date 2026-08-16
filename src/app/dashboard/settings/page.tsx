@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addRegulatoryFee, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
+import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -50,6 +50,14 @@ export default async function SettingsPage() {
     .eq("lgu_id", staff.lgu_id)
     .eq("is_active", true)
     .order("name", { ascending: true });
+
+  const { data: barangaysRaw } = await supabase
+    .from("lgu_form_options")
+    .select("id, value")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("option_type", "barangay")
+    .order("sort_order", { ascending: true });
+  const barangays = barangaysRaw ?? [];
 
   return (
     <>
@@ -294,6 +302,42 @@ export default async function SettingsPage() {
               : "No custom Sender Name set yet — texts currently arrive under MuniServe's shared Semaphore sender, prefixed \"BPLO:\" so recipients know who it's from."}{" "}
             A custom Sender Name has to be purchased and approved directly with Semaphore (MuniServe&rsquo;s SMS provider) first — enter the exact approved name here once that&rsquo;s done.
           </p>
+        </Card>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="Barangays"
+          sub="Shown as a dropdown on your public application form. Without any listed here, applicants type their barangay in as free text instead."
+        />
+        <Card className="flex flex-col gap-4 p-5">
+          {barangays.length === 0 ? (
+            <p className="text-[13px] text-ink-soft">No barangays added yet — the application form currently shows a free-text field instead of a dropdown.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {barangays.map((b) => (
+                <form key={b.id} action={removeBarangay} className="flex items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-3 pr-1.5">
+                  <span className="text-[12.5px] font-bold text-ink">{b.value}</span>
+                  <input type="hidden" name="id" value={b.id} />
+                  <MiniButton type="submit" tone="bad">✕</MiniButton>
+                </form>
+              ))}
+            </div>
+          )}
+
+          <form action={addBarangays} className="flex flex-wrap items-end gap-2.5 border-t border-border pt-4">
+            <label className="flex flex-1 flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Add barangay(s)</span>
+              <input
+                name="barangays"
+                type="text"
+                placeholder="e.g. Poblacion, Sta. Rita Matanda, Batasan Bata"
+                className="h-9 w-full rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <PrimaryButton type="submit">Add</PrimaryButton>
+          </form>
+          <p className="text-[11px] text-ink-faint">One at a time, or paste a comma-separated list to add several at once.</p>
         </Card>
       </div>
 

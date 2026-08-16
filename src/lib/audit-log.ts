@@ -46,7 +46,8 @@ export type AuditAction =
   | "treasurer_name_updated"
   | "sender_name_updated"
   | "payment_info_requested"
-  | "info_request_resolved";
+  | "info_request_resolved"
+  | "barangays_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

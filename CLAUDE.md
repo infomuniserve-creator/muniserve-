@@ -964,6 +964,20 @@ Two design questions were confirmed with the project owner before building (both
 
 ---
 
+## 7mm. Self-service barangay list in Settings (2026-08-16)
+
+The project owner asked directly how a new client adds their barangay list -- the honest answer at the time was "they can't, not after onboarding": `/admin`'s create-client form (CLAUDE.md 7o) was the only place that ever wrote to `lgu_form_options`' barangay rows, it only ran once at creation, and it's optional (a client can be created with none, per the project owner's own "don't block onboarding on a detail that isn't always available yet" pattern). Offered to build a real Settings section for it; the project owner said yes.
+
+**Migration `0042_bplo_manage_barangays.sql`** (live in production): migration 0021 gave `lgu_form_options` exactly one RLS policy -- platform admins, full access, no scoping by `option_type` -- since a platform admin was the only one who'd ever touched this table. This adds a second, additive policy: BPLO can manage rows at their own LGU, but only `option_type = 'barangay'` -- the same "widen one category at a time" caution as migrations 0027/0028 (regulatory fees, then LBT/Mayor's Permit, never everything at once). `nature_of_business` is deliberately left out of this pass -- it already has a reasonable generic fallback and its own coupling to `application-form-logic.ts`'s hardcoded conditional rules that a barangay list doesn't share, so opening it up is a different, separately-scoped decision.
+
+**`addBarangays`/`removeBarangay`** (`settings/actions.ts`): `addBarangays` accepts either a single name or a comma/newline-separated batch in the same field -- matching `/admin`'s own bulk-paste UX, useful both for a one-off fix and for a client catching up on their whole list from Settings for the first time. Silently skips any name already on file (case-insensitive) rather than erroring on the table's unique constraint, so re-pasting the same list back is a safe no-op. `removeBarangay` is a real hard delete, not the schema's usual soft-delete convention -- deliberately: nothing else references an `lgu_form_options` row by foreign key (`businesses.barangay` is a free-text value, not a pointer to this table), so there's no history to lose by actually removing one.
+
+**Settings UI**: a new "Barangays" card, placed right before "Your public application form" (the section it most directly feeds) -- existing barangays as removable pills, an add field below, an empty-state message explicitly saying the applicant form currently shows free text instead of a dropdown when the list is empty. New `audit_log` action `barangays_updated` covers both add and remove.
+
+**Verified against real production data**: a rolled-back transaction confirmed a real BPLO session can insert and delete a barangay row at their own LGU; a second rolled-back transaction, run as a genuine non-admin department account (the only role available for a clean negative test, since San Miguel's only "bplo" session on file is also a platform admin with separate broader access), confirmed a role outside `bplo` is correctly denied entirely. Confirmed zero leftover test rows in production afterward. The new Settings card was also visually verified (temporary unauthenticated fixture, same technique as this project's other staff-auth-gated UI checks, deleted immediately after) in both the populated and empty states.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
