@@ -392,7 +392,7 @@ export async function POST(request: Request) {
     application.id,
     `New application: ${application.reference_number}`,
     `<p>New ${body.applicationType} application -- <strong>${body.businessName}</strong> (${application.reference_number}). Needs initial review.</p>`,
-    `MuniServe: New application ${application.reference_number} (${body.businessName}) needs initial review.`
+    `New application ${application.reference_number} (${body.businessName}) needs initial review.`
   );
 
   return NextResponse.json({ referenceNumber: application.reference_number });

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addRegulatoryFee, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateTreasurerName } from "./actions";
+import { addRegulatoryFee, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -265,6 +265,34 @@ export default async function SettingsPage() {
           </form>
           <p className="mt-3 text-[11.5px] text-ink-soft">
             Acct Codes for each fee (shown on the same slip) are set per regulatory fee above — Local Business Tax and Mayor&rsquo;s Permit Fee codes aren&rsquo;t editable here yet.
+          </p>
+        </Card>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="SMS Notifications"
+          sub="Every text MuniServe sends — OTP codes, status updates to applicants, alerts to staff."
+        />
+        <Card className="p-5">
+          <form action={updateSenderName} className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">SMS Sender Name</span>
+              <input
+                name="senderName"
+                type="text"
+                defaultValue={lgu.senderName ?? ""}
+                placeholder="e.g. SANMIGUELBPLO"
+                className="h-9 w-64 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <PrimaryButton type="submit">Save</PrimaryButton>
+          </form>
+          <p className="mt-3 text-[11.5px] text-ink-soft">
+            {lgu.senderName
+              ? `Texts currently show "${lgu.senderName}" as the sender — no "MuniServe:" prefix is added, since the name itself already identifies who's texting.`
+              : "No custom Sender Name set yet — texts currently arrive under MuniServe's shared Semaphore sender, prefixed \"MuniServe:\" so recipients know who it's from."}{" "}
+            A custom Sender Name has to be purchased and approved directly with Semaphore (MuniServe&rsquo;s SMS provider) first — enter the exact approved name here once that&rsquo;s done.
           </p>
         </Card>
       </div>

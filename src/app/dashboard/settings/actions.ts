@@ -235,6 +235,37 @@ export async function updateTreasurerName(formData: FormData) {
 }
 
 /**
+ * Sets this LGU's own approved Semaphore Sender Name -- migration 0040's
+ * lgus.sender_name. Null until purchased/registered directly with
+ * Semaphore (this form doesn't buy or register one, only records the
+ * exact name once approved); notifications.ts uses it to pick Semaphore's
+ * `sendername` param and to decide whether the fallback "MuniServe: "
+ * text prefix is still needed. Same RLS reasoning as updateTreasurerName/
+ * updateMayorName -- migration 0027's general "bplo can update their own
+ * lgu's settings" policy already covers this column, no new policy.
+ */
+export async function updateSenderName(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const senderName = String(formData.get("senderName") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lgus").update({ sender_name: senderName }).eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "sender_name_updated",
+    summary: senderName ? `SMS Sender Name set to "${senderName}"` : "SMS Sender Name cleared",
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
  * Turns the Engineering-assessed Building Permit Fee on/off, and sets its
  * display label (CLAUDE.md 7aa) -- migration 0035's lgus.building_permit_
  * fee_enabled/building_permit_fee_label. Off by default: no LGU sees the

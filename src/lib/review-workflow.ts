@@ -66,7 +66,7 @@ export async function openDepartmentReviewRound(
         applicationId,
         `New review needed: ${refNumber}`,
         `<p><strong>${businessName}</strong> (${refNumber}) needs ${d.name}'s review.</p>`,
-        `MuniServe: ${businessName} (${refNumber}) needs your department's review.`,
+        `${businessName} (${refNumber}) needs your department's review.`,
         d.name
       );
     }
@@ -307,7 +307,7 @@ export async function submitDepartmentDecision(params: {
         round.application_id,
         `Ready for assessment: ${updatedApp.reference_number}`,
         `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${updatedApp.reference_number}) cleared all departments -- ready for fee assessment.</p>`,
-        `MuniServe: ${biz?.business_name ?? "Application"} (${updatedApp.reference_number}) cleared all departments -- ready for assessment.`
+        `${biz?.business_name ?? "Application"} (${updatedApp.reference_number}) cleared all departments -- ready for assessment.`
       );
     }
   }
@@ -348,8 +348,9 @@ async function notifyDepartmentIssue(
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
+      lguId,
       business.owner.phone,
-      `MuniServe: your application ${application.reference_number} ${verbPast} ${department}. Check your application status page for details.`
+      `your application ${application.reference_number} ${verbPast} ${department}. Check your application status page for details.`
     );
   }
 

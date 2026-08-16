@@ -210,7 +210,7 @@ export async function signPermit(formData: FormData) {
       applicationId,
       `Ready for release: ${application.reference_number}`,
       `<p><strong>${application.reference_number}</strong> has been signed -- ready for release to the applicant.</p>`,
-      `MuniServe: ${application.reference_number} signed -- ready for release.`
+      `${application.reference_number} signed -- ready for release.`
     );
   }
 
@@ -220,8 +220,9 @@ export async function signPermit(formData: FormData) {
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
+      staff.lgu_id,
       business.owner.phone,
-      `MuniServe: your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.`
+      `your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.`
     );
   }
 

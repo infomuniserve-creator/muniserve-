@@ -96,7 +96,7 @@ async function notifyCurrentOwner(
 ) {
   const subject = `Document uploaded: ${application.reference_number}`;
   const emailHtml = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) -- applicant uploaded a new document (${documentType}).</p>`;
-  const smsMessage = `MuniServe: ${business?.business_name ?? "Applicant"} (${application.reference_number}) uploaded a new document (${documentType}).`;
+  const smsMessage = `${business?.business_name ?? "Applicant"} (${application.reference_number}) uploaded a new document (${documentType}).`;
 
   if (application.status === "pending_dept_review") {
     const { data: latestRound } = await supabase

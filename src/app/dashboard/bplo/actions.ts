@@ -75,8 +75,9 @@ export async function submitInitialReview(formData: FormData) {
     if (phone) {
       await notifyApplicantSms(
         applicationId,
+        staff.lgu_id,
         phone,
-        `MuniServe: your application ${updated.reference_number} was returned during initial review. Please contact the BPLO office for details on what to correct before resubmitting.`
+        `your application ${updated.reference_number} was returned during initial review. Please contact the BPLO office for details on what to correct before resubmitting.`
       );
     }
   }
@@ -151,7 +152,7 @@ export async function resubmitToDepartments(formData: FormData) {
       applicationId,
       `Resubmitted for review: ${refNumber}`,
       `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${refNumber}) was resubmitted -- needs ${department}'s re-review.</p>`,
-      `MuniServe: ${biz?.business_name ?? "Application"} (${refNumber}) was resubmitted -- needs your department's re-review.`,
+      `${biz?.business_name ?? "Application"} (${refNumber}) was resubmitted -- needs your department's re-review.`,
       department
     );
   }
@@ -386,8 +387,9 @@ export async function finalizeAssessment(formData: FormData) {
     // the applicant needs to know what they actually owe.
     await notifyApplicantSms(
       applicationId,
+      staff.lgu_id,
       business.owner.phone,
-      `MuniServe: your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. Pay at the Treasurer's Office to continue.`
+      `your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. Pay at the Treasurer's Office to continue.`
     );
   }
 
@@ -436,7 +438,7 @@ export async function finalizeAssessment(formData: FormData) {
     applicationId,
     `Payment due: ${application.reference_number}`,
     `<p><strong>${application.reference_number}</strong> has been assessed -- total due ₱${totalDue.toLocaleString()}. Awaiting payment.</p>`,
-    `MuniServe: ${application.reference_number} assessed -- total due PHP ${totalDue.toLocaleString()}, awaiting payment.`
+    `${application.reference_number} assessed -- total due PHP ${totalDue.toLocaleString()}, awaiting payment.`
   );
 
   const manualCount = lineRows.filter((l) => l.is_manual).length;
@@ -523,8 +525,9 @@ export async function markReleased(formData: FormData) {
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
+      staff.lgu_id,
       business.owner.phone,
-      `MuniServe: your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
+      `your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
     );
   }
 

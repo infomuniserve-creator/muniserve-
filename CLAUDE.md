@@ -901,6 +901,24 @@ CTC #/Issued On/Issued At, SSS No., and SEC/DTI Date Issued render as blank unde
 
 ---
 
+## 7jj. Per-LGU SMS Sender Name, and a centralized brand prefix (2026-08-16)
+
+The project owner flagged that every SMS starts with a hardcoded "MuniServe: " prefix and asked two things: should that change (maybe to "BPLO," maybe drop it entirely), and how would buying a custom Sender Name for an LGU actually work -- a separate API per LGU, or one API that knows which name to use? Researched the second question before answering either, since it's a real third-party API contract, not something to guess (this project's standing rule against guessing real-world facts) -- confirmed against Semaphore's own docs (semaphore.co/docs): one Semaphore account/API key can hold several approved Sender Names, and each `/api/v4/messages` call picks which one via a `sendername` parameter, defaulting to whichever Sender Name is marked default when omitted. So no second API key or account is needed per LGU -- Sender Names are a per-message parameter on the same account.
+
+That answer shaped the recommendation for the first question too: keep the "MuniServe: " prefix for any LGU that hasn't bought/registered its own Sender Name (otherwise a message just arrives from generic "Semaphore" with no identifying text at all), but drop the prefix entirely once an LGU has one -- the Sender Name itself is what the recipient's phone shows as the "From," so a text prefix on top of it duplicates information that's already there. The project owner agreed; built as described.
+
+**Migration `0040_lgu_sms_sender_name.sql`** (live in production): `lgus.sender_name`, nullable, no generic fallback -- same shape as `mayor_name`/`treasurer_name` (migrations 0033/0039). Records the exact Sender Name once purchased/approved directly with Semaphore; this migration/feature doesn't buy or register one itself. No new RLS policy needed -- migration 0027's general "bplo can update their own lgu's settings" policy already covers it (RLS bounds rows on `lgus`, not columns).
+
+**`sendSms()` (`src/lib/semaphore.ts`)** gained an optional `senderName` parameter, mapped straight to Semaphore's own `sendername` field.
+
+**Centralized the prefix decision** -- previously it wasn't centralized at all: "MuniServe: " was hand-typed into ~14 separate message-string literals across 6 files (`bplo/actions.ts`, `treasury/actions.ts`, `mayor/actions.ts`, `review-workflow.ts`, `submit-application/route.ts`, `upload-additional-document/route.ts`), so changing or conditioning it meant editing all 6 every time. New `resolveSmsIdentity(lguId, message)` in `src/lib/notifications.ts` is the one place that now decides: looks up the LGU's `sender_name`, and either sends the message as-is under that Sender Name, or prepends "MuniServe: " and sends under the account default. `notifyApplicantSms`/`notifyStaffSms` both gained a required `lguId` parameter to call it (`notifyStaffByRole` already had one, threaded straight through). Every one of the 6 call sites' message strings had their hardcoded "MuniServe: " stripped -- the prefix is applied exactly once now, not once per call site.
+
+**Settings**: a new "SMS Notifications" card (`updateSenderName`, `settings/actions.ts`) -- separate from "Order of Payment Details" (where `treasurer_name` lives) since Sender Name affects every SMS this app sends, not just the Order of Payment. Explanatory copy reflects which state the LGU is actually in (shows the live Sender Name and confirms no prefix is added, or explains the current MuniServe-prefixed fallback) rather than static instructions, and is explicit that a Sender Name has to be purchased/approved with Semaphore directly first -- this form only records the name once that's done, it doesn't provision one.
+
+**Verified against real production data**: confirmed San Miguel's `lgus.sender_name` is still null today, so every real applicant keeps getting the exact same "MuniServe: "-prefixed SMS as before -- zero behavior change for the live pilot until an LGU actually buys a Sender Name. Confirmed via a rolled-back SQL transaction that a real BPLO session can write `sender_name` under RLS. Verified the new Settings card visually (temporary unauthenticated fixture route, same technique as this project's other staff-auth-gated UI checks, deleted immediately after) in both states -- blank/fallback copy and a set Sender Name with its own copy and pre-filled input -- confirmed via `tsc`, a full `next build`, and reading the rendered page text and input values directly, not just the source.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

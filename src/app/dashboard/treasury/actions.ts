@@ -70,8 +70,9 @@ export async function recordPayment(formData: FormData) {
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
+      staff.lgu_id,
       business.owner.phone,
-      `MuniServe: we received your payment for application ${updated.reference_number}. Your permit is now being printed.`
+      `we received your payment for application ${updated.reference_number}. Your permit is now being printed.`
     );
   }
 
@@ -83,7 +84,7 @@ export async function recordPayment(formData: FormData) {
     applicationId,
     `Ready to print: ${updated.reference_number}`,
     `<p><strong>${updated.reference_number}</strong> -- payment received, ready to print.</p>`,
-    `MuniServe: ${updated.reference_number} payment received -- ready to print.`
+    `${updated.reference_number} payment received -- ready to print.`
   );
 
   await logAuditEvent(supabase, {

@@ -28,15 +28,35 @@ async function log(
   await supabase.from("notifications_log").insert({ application_id: applicationId, channel, recipient, message, status, error_detail: errorDetail ?? null });
 }
 
+/**
+ * The one place that decides what an outgoing SMS actually looks like on
+ * the recipient's phone -- previously duplicated as a hand-typed
+ * "MuniServe: " prefix baked into ~14 message strings across 6 files, with
+ * no way to ever turn it off. Now: an LGU with its own approved Semaphore
+ * Sender Name (migration 0040) sends under that name with no text prefix
+ * at all -- the Sender Name itself is what the recipient sees as the
+ * "From," so a redundant text prefix on top of it would just be noise.
+ * An LGU without one (every LGU today) keeps the "MuniServe: " prefix, so
+ * the message still identifies itself when it's arriving from the
+ * account's shared default Sender Name.
+ */
+async function resolveSmsIdentity(lguId: string, message: string): Promise<{ finalMessage: string; senderName: string | null }> {
+  const supabase = createServiceClient();
+  const { data } = await supabase.from("lgus").select("sender_name").eq("id", lguId).maybeSingle();
+  const senderName = data?.sender_name ?? null;
+  return { finalMessage: senderName ? message : `MuniServe: ${message}`, senderName };
+}
+
 /** Applicant-facing notifications are always SMS -- phone is the applicant's actual identity in this system (OTP-based), not email. */
-export async function notifyApplicantSms(applicationId: string, phone: string, message: string): Promise<void> {
+export async function notifyApplicantSms(applicationId: string, lguId: string, phone: string, message: string): Promise<void> {
+  const { finalMessage, senderName } = await resolveSmsIdentity(lguId, message);
   try {
-    await sendSms(phone, message);
-    await log(applicationId, "sms", phone, message, "sent");
+    await sendSms(phone, finalMessage, senderName);
+    await log(applicationId, "sms", phone, finalMessage, "sent");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyApplicantSms failed", detail);
-    await log(applicationId, "sms", phone, message, "failed", detail).catch(() => {});
+    await log(applicationId, "sms", phone, finalMessage, "failed", detail).catch(() => {});
   }
 }
 
@@ -80,14 +100,15 @@ export async function notifyStaffEmail(applicationId: string | null, email: stri
  * same as this function's own best-effort/never-throws shape for the
  * actual send.
  */
-export async function notifyStaffSms(applicationId: string | null, phone: string, message: string): Promise<void> {
+export async function notifyStaffSms(applicationId: string | null, lguId: string, phone: string, message: string): Promise<void> {
+  const { finalMessage, senderName } = await resolveSmsIdentity(lguId, message);
   try {
-    await sendSms(phone, message);
-    await log(applicationId, "sms", phone, message, "sent");
+    await sendSms(phone, finalMessage, senderName);
+    await log(applicationId, "sms", phone, finalMessage, "sent");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyStaffSms failed", detail);
-    await log(applicationId, "sms", phone, message, "failed", detail).catch(() => {});
+    await log(applicationId, "sms", phone, finalMessage, "failed", detail).catch(() => {});
   }
 }
 
@@ -135,6 +156,6 @@ export async function notifyStaffByRole(
   const { data: staffList } = await query;
   for (const s of staffList ?? []) {
     if (s.email) await notifyStaffEmail(applicationId, s.email, subject, emailHtml);
-    if (s.phone) await notifyStaffSms(applicationId, s.phone, smsMessage);
+    if (s.phone) await notifyStaffSms(applicationId, lguId, s.phone, smsMessage);
   }
 }
