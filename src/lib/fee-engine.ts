@@ -42,7 +42,7 @@ export type FeeLineResult = {
   feeCategory: "mayors_permit" | "lbt" | "cedula" | "regulatory" | "discount";
   displayLabel: string;
   amount: number; // negative for the discount line
-  includedInTotal: boolean; // false for reference_only rules like CEDULA
+  includedInTotal: boolean; // false for a reference_only regulatory fee, still shown with a "paid at the counter" note -- CEDULA is the one exception: a reference_only CEDULA rule isn't pushed as a line at all (2026-08-16 follow-up), so this is always true whenever a cedula-category line exists
   note?: string; // shown to BPLO -- e.g. "estimated, please confirm"
   isManual?: boolean;
   /** Whether Automated Assessment being off swaps this line for a hand-entered amount. Always true for lbt/mayors_permit (the two the project owner named directly) and for any `regulatory` line computed from a non-flat shape (graduated/tier_matrix) -- a flat amount has nothing a bracket lookup can get wrong, so it stays automatic either way. */
@@ -490,17 +490,32 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
   }
 
   // ---- CEDULA ----
+  // Only surfaced at all when this LGU has it set to `online` (Settings,
+  // CLAUDE.md 7ff) -- 2026-08-16 same-day follow-up, project owner's own
+  // direct call after seeing it live: a reference_only line still showing
+  // its amount (excluded from `total` but visible in `lines`, same
+  // pattern every reference_only regulatory fee already used) read as
+  // confusing rather than informative once CEDULA specifically had a
+  // live Settings toggle to turn it off. Treasury computes their own
+  // counter amount independently either way -- this was only ever a
+  // preview, not something downstream depends on.
   const isIndividual = (input.business.organizationType ?? "").toLowerCase() === "sole proprietorship";
   const cedulaRule = rules.find((r) => r.fee_category === "cedula" && r.applies_to === (isIndividual ? "individual" : "juridical"));
   if (!cedulaRule) {
+    // A genuine config gap (missing/deactivated row), not the reference_only
+    // case below -- still worth flagging, since it's an onboarding bug this
+    // Settings toggle isn't meant to silence.
     warnings.push("No active CEDULA rule found for this organization type.");
-  } else if (lbtBasis == null) {
-    warnings.push("CEDULA needs a basis amount this application doesn't have — assess it manually.");
-  } else {
-    const result = computeRuleAmount(cedulaRule, [], lbtBasis, null, input.applicationType);
-    if (typeof result === "object") warnings.push(result.error);
-    else lines.push({ feeRuleId: cedulaRule.id, feeCategory: "cedula", displayLabel: cedulaRule.name, amount: round2(result), includedInTotal: cedulaRule.delivery_mode === "online", isManualEligible: false });
+  } else if (cedulaRule.delivery_mode === "online") {
+    if (lbtBasis == null) {
+      warnings.push("CEDULA needs a basis amount this application doesn't have — assess it manually.");
+    } else {
+      const result = computeRuleAmount(cedulaRule, [], lbtBasis, null, input.applicationType);
+      if (typeof result === "object") warnings.push(result.error);
+      else lines.push({ feeRuleId: cedulaRule.id, feeCategory: "cedula", displayLabel: cedulaRule.name, amount: round2(result), includedInTotal: true, isManualEligible: false });
+    }
   }
+  // else: reference_only -- intentionally not surfaced here at all (see comment above).
 
   const total = round2(lines.filter((l) => l.includedInTotal).reduce((sum, l) => sum + l.amount, 0));
   return { ok: true, lines, total, warnings };
