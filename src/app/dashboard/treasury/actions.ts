@@ -3,6 +3,7 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
+import { createInfoRequest } from "@/lib/info-requests";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -95,6 +96,56 @@ export async function recordPayment(formData: FormData) {
     action: "payment_recorded",
     summary: `Payment of ₱${amount.toLocaleString()} recorded for ${updated.reference_number}${actedOnBehalf ? " (BPLO, on behalf of Treasury)" : ""}`,
     details: { amount, method, orNumber },
+  });
+
+  revalidatePath("/dashboard/treasury");
+  revalidatePath("/dashboard/bplo");
+}
+
+/**
+ * Treasury's own "request more info" (2026-08-16) -- the project owner's
+ * example was asking for a clearer copy of an attachment. Treasury never
+ * had any decision mechanism before this, only recordPayment. Deliberately
+ * non-blocking (the project owner's own call, weighing it against rule
+ * #5's existing precedent that one department's rejection/request-info
+ * doesn't halt anything else): applications.status stays at pending_payment
+ * -- the applicant can still pay while Treasury is also asking for
+ * something, matching how a department's own request never blocks the
+ * others either. Same BPLO-on-behalf shape as recordPayment (migration
+ * 0030's precedent) -- extended to info_requests' own INSERT policy
+ * (migration 0041) rather than a narrower Treasury-only one.
+ */
+export async function requestPaymentInfo(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || (staff.role !== "treasury" && staff.role !== "bplo")) throw new Error("Not authorized");
+  const actedOnBehalf = staff.role === "bplo";
+
+  const applicationId = String(formData.get("applicationId"));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { data: app } = await supabase.from("applications").select("reference_number").eq("id", applicationId).single();
+  const refNumber = app?.reference_number ?? applicationId;
+
+  await createInfoRequest(supabase, {
+    applicationId,
+    lguId: staff.lgu_id,
+    requestedByRole: "treasury",
+    notes,
+    requestedBy: staff.id,
+    actedOnBehalf,
+    isRejection: false,
+    roleLabel: "Treasury",
+  });
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "payment_info_requested",
+    summary: `Treasury requested more info for ${refNumber}${actedOnBehalf ? " (BPLO, on behalf of Treasury)" : ""}`,
+    details: { notes },
   });
 
   revalidatePath("/dashboard/treasury");

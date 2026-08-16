@@ -69,13 +69,8 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
     return (
       <Shell>
         <Head title={business.business_name} sub={`Reference ${reference}`} />
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Returned for corrections</p>
-          <p style={{ fontSize: 12, color: "#6b7280" }}>
-            BPLO returned your application during initial review. Please contact the BPLO office for details on what
-            needs to be corrected before resubmitting.
-          </p>
-        </Card>
+        <OpenInfoRequestsCard applicationId={application.id} fallbackTitle="Returned for corrections" />
+        <UploadCard applicationId={application.id} />
       </Shell>
     );
   }
@@ -111,7 +106,18 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
           );
         })}
       </div>
-      {application.status === "pending_dept_review" && <DeptReviewNote applicationId={application.id} />}
+      {application.status === "pending_dept_review" && (
+        <>
+          <OpenInfoRequestsCard applicationId={application.id} />
+          <UploadCard applicationId={application.id} />
+        </>
+      )}
+      {application.status === "pending_payment" && (
+        <>
+          <OpenInfoRequestsCard applicationId={application.id} />
+          <UploadCard applicationId={application.id} />
+        </>
+      )}
       {application.status === "released" && <ReleasedNote applicationId={application.id} />}
     </Shell>
   );
@@ -144,50 +150,75 @@ async function ReleasedNote({ applicationId }: { applicationId: string }) {
   );
 }
 
-async function DeptReviewNote({ applicationId }: { applicationId: string }) {
+/**
+ * Shows every still-open info_requests row for this application (2026-08-16
+ * -- closing the "request more info" loop, CLAUDE.md) -- one shared
+ * source across all three reviewing surfaces (BPLO's own initial review,
+ * any department, Treasury), replacing what used to be a department_
+ * reviews-only query that only ever covered one of the three. Uploading
+ * anything on this page (UploadCard, right below wherever this renders)
+ * auto-resolves and routes every one of these back to whoever asked --
+ * no "contact the BPLO office to let them know" step needed anymore.
+ *
+ * fallbackTitle covers the one status (returned_to_applicant) that used
+ * to render a hardcoded dead-end message even when, for some reason,
+ * there's no actual info_requests row on file (e.g. a pre-migration
+ * application returned before this table existed) -- still tells the
+ * applicant *something* useful rather than an empty page.
+ */
+async function OpenInfoRequestsCard({ applicationId, fallbackTitle }: { applicationId: string; fallbackTitle?: string }) {
   const supabase = createServiceClient();
-  const { data: round } = await supabase
-    .from("review_rounds")
-    .select("id")
+  const { data: requests } = await supabase
+    .from("info_requests")
+    .select("requested_by_role, department, notes")
     .eq("application_id", applicationId)
-    .order("round_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .is("resolved_at", null);
 
-  const { data: reviews } = round
-    ? await supabase
-        .from("department_reviews")
-        .select("department, decision, notes")
-        .eq("review_round_id", round.id)
-        .in("decision", ["rejected", "request_more_info"])
-    : { data: null };
+  const open = requests ?? [];
 
-  const flagged = reviews ?? [];
+  function roleLabel(r: { requested_by_role: string; department: string | null }): string {
+    if (r.requested_by_role === "department") return r.department ?? "A department";
+    if (r.requested_by_role === "treasury") return "Treasury";
+    return "BPLO";
+  }
+
+  if (open.length === 0) {
+    if (!fallbackTitle) return null;
+    return (
+      <Card>
+        <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{fallbackTitle}</p>
+        <p style={{ fontSize: 12, color: "#6b7280" }}>Please contact the BPLO office for details on what needs to be corrected.</p>
+      </Card>
+    );
+  }
 
   return (
-    <>
-      {flagged.length > 0 && (
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-            {flagged.map((r) => r.department).join(", ")} need{flagged.length === 1 ? "s" : ""} more information
-          </p>
-          {flagged.map((r) => r.notes && (
-            <p key={r.department} style={{ fontSize: 12, color: "#6b7280" }}>{r.department}: {r.notes}</p>
-          ))}
-          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8 }}>
-            Contact the BPLO office once you&rsquo;ve resolved this, so they can notify the department to take another
-            look. You can upload any requested document below in the meantime.
-          </p>
-        </Card>
-      )}
-      <Card>
-        <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Have a document to add?</p>
-        <p style={{ fontSize: 12, color: "#6b7280" }}>
-          If BFP asked you to pay on their own portal, upload your payment screenshot here so they can see it.
+    <Card>
+      <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+        {open.map(roleLabel).join(", ")} need{open.length === 1 ? "s" : ""} more information
+      </p>
+      {open.map((r, i) => (
+        <p key={i} style={{ fontSize: 12, color: "#6b7280" }}>
+          {roleLabel(r)}: {r.notes ?? "No additional details were given -- contact the BPLO office for more info."}
         </p>
-        <AdditionalDocumentUpload applicationId={applicationId} defaultLabel="BFP Payment Proof" />
-      </Card>
-    </>
+      ))}
+      <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8 }}>
+        Upload what&rsquo;s needed below and it&rsquo;ll go straight back for another look -- no need to call or visit in person.
+      </p>
+    </Card>
+  );
+}
+
+/** Generic "add a document" upload, always available on this page's relevant statuses -- not tied to a specific info_requests row, since the applicant might have something to add that nobody formally asked for (the BFP payment-proof case, CLAUDE.md section 7c, is the original motivating one). Uploading here also auto-resolves any open info_requests (upload-additional-document/route.ts). */
+function UploadCard({ applicationId }: { applicationId: string }) {
+  return (
+    <Card>
+      <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Have a document to add?</p>
+      <p style={{ fontSize: 12, color: "#6b7280" }}>
+        Upload it here -- if a department, BPLO, or Treasury asked for something specific, it&rsquo;ll be sent straight back to them.
+      </p>
+      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel="" />
+    </Card>
   );
 }
 

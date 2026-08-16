@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { notifyApplicantSms, notifyStaffByRole, notifyStaffEmail } from "@/lib/notifications";
+import { notifyStaffByRole, notifyStaffEmail } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
+import { createInfoRequest } from "@/lib/info-requests";
 import type { CurrentStaff } from "@/lib/staff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -272,6 +273,23 @@ export async function submitDepartmentDecision(params: {
       .single();
     if (round) {
       await notifyDepartmentIssue(service, round.application_id, staff.lgu_id, updated.department, decision, notes);
+      // Closes the "request more info" loop (2026-08-16) -- the applicant's
+      // status page now shows this note and an upload box, and uploading
+      // auto-requeues straight back to this same department
+      // (info-requests.ts's resolveOpenInfoRequests). Uses the caller's
+      // own RLS-scoped session (`supabase`, not `service`) -- migration
+      // 0041's INSERT policy is what actually authorizes this write.
+      await createInfoRequest(supabase, {
+        applicationId: round.application_id,
+        lguId: staff.lgu_id,
+        requestedByRole: "department",
+        department: updated.department,
+        notes,
+        requestedBy: staff.id,
+        actedOnBehalf,
+        isRejection: decision === "rejected",
+        roleLabel: updated.department,
+      });
     }
     return;
   }
@@ -316,13 +334,13 @@ export async function submitDepartmentDecision(params: {
 /**
  * CLAUDE.md section 6: "Immediate notification to both the applicant and
  * BPLO the moment any department sets decision to rejected or
- * request_more_info -- don't wait for the other departments." Applicant
- * gets an SMS (phone is their real identity in this system); BPLO gets
+ * request_more_info -- don't wait for the other departments." BPLO gets
  * an email to every active bplo staff_user at the LGU, since there's no
- * single "BPLO inbox" to address instead. Uses the service-role client
- * throughout -- the acting department's own RLS session has no reason to
- * be able to read full business/owner/other-staff details, so this
- * shouldn't lean on it even though the call site already has it.
+ * single "BPLO inbox" to address instead. The applicant's own
+ * notification (SMS + email) is handled by createInfoRequest, called
+ * alongside this at the same call site -- kept as two functions since
+ * they notify different audiences for different reasons, not because
+ * they need to happen at different times.
  */
 async function notifyDepartmentIssue(
   service: SupabaseClient,
@@ -334,25 +352,12 @@ async function notifyDepartmentIssue(
 ) {
   const { data: application } = await service
     .from("applications")
-    .select("reference_number, business:businesses(business_name, owner:owners(phone))")
+    .select("reference_number, business:businesses(business_name)")
     .eq("id", applicationId)
     .single();
   if (!application) return;
 
-  const business = application.business as unknown as {
-    business_name: string;
-    owner: { phone: string | null } | null;
-  } | null;
-  const verbPast = decision === "rejected" ? "was rejected by" : "needs more information from";
-
-  if (business?.owner?.phone) {
-    await notifyApplicantSms(
-      applicationId,
-      lguId,
-      business.owner.phone,
-      `your application ${application.reference_number} ${verbPast} ${department}. Check your application status page for details.`
-    );
-  }
+  const business = application.business as unknown as { business_name: string } | null;
 
   const { data: bploStaff } = await service
     .from("staff_users")

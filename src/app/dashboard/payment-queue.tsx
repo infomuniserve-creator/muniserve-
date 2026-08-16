@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { Card, EmptyState, PrimaryButton, WorkflowStepper, peso } from "./ui";
-import { recordPayment } from "./treasury/actions";
+import { Card, EmptyState, NotesField, OutlineButton, PrimaryButton, WorkflowStepper, peso } from "./ui";
+import { recordPayment, requestPaymentInfo } from "./treasury/actions";
 
 type FeeLine = { display_label: string; computed_amount: number; overridden_amount: number | null; included_in_total: boolean; is_manual: boolean };
 
@@ -120,6 +120,21 @@ export async function AwaitingPaymentSection({ lguId }: { lguId: string }) {
               <input name="orNumber" placeholder="OR number" required className="h-9 w-36 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
               <PrimaryButton type="submit">Record payment</PrimaryButton>
             </form>
+
+            {/* Treasury's own "request more info" (2026-08-16) -- e.g.
+                asking for a clearer copy of an attachment. Deliberately
+                non-blocking: the applicant can still pay while this is
+                open, matching how a department's own request never
+                blocks the others. Collapsed by default so it doesn't
+                compete visually with the primary "Record payment" action. */}
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[12px] font-bold text-ink-soft">Need something from the applicant first?</summary>
+              <form action={requestPaymentInfo} className="mt-2 flex flex-col gap-2">
+                <input type="hidden" name="applicationId" value={a.id} />
+                <NotesField name="notes" placeholder="What do you need, e.g. a clearer copy of the OR or receipt?" required />
+                <OutlineButton type="submit" tone="info" className="self-start">Request more info</OutlineButton>
+              </form>
+            </details>
           </Card>
         );
       })}

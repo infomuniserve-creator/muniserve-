@@ -8,6 +8,7 @@ import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/l
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { generateOrderOfPaymentPdf } from "@/lib/order-of-payment-pdf";
+import { createInfoRequest, reopenDepartmentRound } from "@/lib/info-requests";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -63,23 +64,29 @@ export async function submitInitialReview(formData: FormData) {
     })
     .eq("id", applicationId)
     .eq("status", "pending_bplo_initial")
-    .select("reference_number, business:businesses(owner:owners(phone))")
+    .select("reference_number")
     .single();
   if (updateError || !updated) throw updateError ?? new Error("Update failed");
 
   if (newStatus === "pending_dept_review") {
     await openDepartmentReviewRound(supabase, applicationId, staff.lgu_id);
   } else {
-    const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
-    const phone = business?.owner?.phone;
-    if (phone) {
-      await notifyApplicantSms(
-        applicationId,
-        staff.lgu_id,
-        phone,
-        `your application ${updated.reference_number} was returned during initial review. Please contact the BPLO office for details on what to correct before resubmitting.`
-      );
-    }
+    // Closes the "request more info" loop (2026-08-16 follow-up) --
+    // previously a dead-end generic SMS with no note shown to the
+    // applicant and no way back in short of a phone call. Now the
+    // applicant's status page shows this note and an upload box, and
+    // uploading auto-requeues straight back into this same queue
+    // (info-requests.ts's resolveOpenInfoRequests).
+    await createInfoRequest(supabase, {
+      applicationId,
+      lguId: staff.lgu_id,
+      requestedByRole: "bplo_initial",
+      notes,
+      requestedBy: staff.id,
+      actedOnBehalf: false,
+      isRejection: decision === "rejected",
+      roleLabel: "BPLO",
+    });
   }
 
   await logAuditEvent(supabase, {
@@ -104,9 +111,14 @@ export async function submitInitialReview(formData: FormData) {
  * new review round with fresh pending rows for just those departments.
  * Departments that already approved in an earlier round aren't touched;
  * their approval keeps counting via areAllDepartmentsCleared's
- * latest-decision-across-rounds logic. Notifies just the re-triggered
- * department(s), not every department -- same targeting rule #6 already
- * applies to the fan-out itself (CLAUDE.md 7w).
+ * latest-decision-across-rounds logic.
+ *
+ * A manual fallback/escape hatch, kept alongside the automatic version
+ * (info-requests.ts's resolveOpenInfoRequests, triggered the moment the
+ * applicant actually uploads a document, 2026-08-16) -- BPLO might still
+ * want to re-trigger a department for a reason that has nothing to do
+ * with an upload. Both call the same reopenDepartmentRound() so the two
+ * paths can't drift apart on what "resubmitted" actually does.
  */
 export async function resubmitToDepartments(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -117,45 +129,7 @@ export async function resubmitToDepartments(formData: FormData) {
   if (departments.length === 0) return;
 
   const supabase = await createClient();
-
-  const { data: rounds } = await supabase
-    .from("review_rounds")
-    .select("round_number")
-    .eq("application_id", applicationId)
-    .order("round_number", { ascending: false })
-    .limit(1);
-  const nextRoundNumber = (rounds?.[0]?.round_number ?? 0) + 1;
-
-  const { data: round, error: roundError } = await supabase
-    .from("review_rounds")
-    .insert({ application_id: applicationId, round_number: nextRoundNumber })
-    .select("id")
-    .single();
-  if (roundError || !round) throw roundError ?? new Error("Failed to create review round");
-
-  const { error: insertError } = await supabase
-    .from("department_reviews")
-    .insert(departments.map((department) => ({ review_round_id: round.id, department, decision: "pending" })));
-  if (insertError) throw insertError;
-
-  const { data: app } = await supabase
-    .from("applications")
-    .select("reference_number, business:businesses(business_name)")
-    .eq("id", applicationId)
-    .single();
-  const biz = app?.business as unknown as { business_name: string } | null;
-  const refNumber = app?.reference_number ?? applicationId;
-  for (const department of departments) {
-    await notifyStaffByRole(
-      staff.lgu_id,
-      "department",
-      applicationId,
-      `Resubmitted for review: ${refNumber}`,
-      `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${refNumber}) was resubmitted -- needs ${department}'s re-review.</p>`,
-      `${biz?.business_name ?? "Application"} (${refNumber}) was resubmitted -- needs your department's re-review.`,
-      department
-    );
-  }
+  await reopenDepartmentRound(supabase, applicationId, staff.lgu_id, departments);
 
   revalidatePath("/dashboard/bplo");
 }

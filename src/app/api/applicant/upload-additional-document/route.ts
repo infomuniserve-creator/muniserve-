@@ -1,6 +1,7 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { createServiceClient } from "@/lib/supabase/service";
-import { notifyStaffByRole } from "@/lib/notifications";
+import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
+import { resolveOpenInfoRequests } from "@/lib/info-requests";
 import { NextResponse } from "next/server";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -41,10 +42,10 @@ export async function POST(request: Request) {
 
   const { data: application, error: fetchError } = await supabase
     .from("applications")
-    .select("id, lgu_id, status, reference_number, business:businesses(business_name, owner_id)")
+    .select("id, lgu_id, status, reference_number, business:businesses(business_name, owner_id, owner:owners(phone))")
     .eq("id", applicationId)
     .maybeSingle();
-  const business = application?.business as unknown as { business_name: string; owner_id: string | null } | null;
+  const business = application?.business as unknown as { business_name: string; owner_id: string | null; owner: { phone: string | null } | null } | null;
   if (fetchError || !application || business?.owner_id !== ownerId) {
     return NextResponse.json({ error: "not_found_or_not_yours" }, { status: 403 });
   }
@@ -67,7 +68,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "record_failed" }, { status: 500 });
   }
 
-  await notifyCurrentOwner(supabase, application, business, documentType);
+  // Closes the "request more info" loop (2026-08-16) -- if this upload
+  // resolves any open info_requests, that already notified exactly the
+  // right people (info-requests.ts's resolveOpenInfoRequests), more
+  // precisely than the generic "notify whoever can currently act on this
+  // status" heuristic below. Only fall back to that heuristic when
+  // nothing was actually outstanding (e.g. the BFP payment-proof case --
+  // an unprompted upload nobody formally asked for).
+  const resolvedCount = await resolveOpenInfoRequests(supabase, application.id, application.lgu_id);
+  if (resolvedCount > 0) {
+    if (business.owner?.phone) {
+      await notifyApplicantSms(
+        application.id,
+        application.lgu_id,
+        business.owner.phone,
+        `your document for application ${application.reference_number} was received and sent back for review.`
+      );
+    }
+  } else {
+    await notifyCurrentOwner(supabase, application, business, documentType);
+  }
 
   return NextResponse.json({ ok: true });
 }

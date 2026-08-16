@@ -44,7 +44,9 @@ export type AuditAction =
   | "legacy_business_claimed"
   | "cedula_delivery_mode_updated"
   | "treasurer_name_updated"
-  | "sender_name_updated";
+  | "sender_name_updated"
+  | "payment_info_requested"
+  | "info_request_resolved";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --
