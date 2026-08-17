@@ -24,6 +24,10 @@ export function AdditionalDocumentUpload({ applicationId, defaultLabel }: { appl
     setUploading(true);
     setError(null);
     try {
+      if (!documentType.trim()) {
+        setError("Please describe what this document is before uploading.");
+        return;
+      }
       if (!ALLOWED_TYPES.includes(file.type)) {
         setError("Please upload a PDF or image (JPG, PNG, or WEBP).");
         return;

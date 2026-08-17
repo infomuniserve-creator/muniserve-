@@ -233,15 +233,41 @@ async function OpenInfoRequestsCard({ applicationId, fallbackTitle }: { applicat
   );
 }
 
-/** Generic "add a document" upload, always available on this page's relevant statuses -- not tied to a specific info_requests row, since the applicant might have something to add that nobody formally asked for (the BFP payment-proof case, CLAUDE.md section 7c, is the original motivating one). Uploading here also auto-resolves any open info_requests (upload-additional-document/route.ts). */
-function UploadCard({ applicationId }: { applicationId: string }) {
+/**
+ * Generic "add a document" upload, always available on this page's relevant
+ * statuses -- not tied to a specific info_requests row, since the applicant
+ * might have something to add that nobody formally asked for (the BFP
+ * payment-proof case, CLAUDE.md section 7c, is the original motivating
+ * one). Uploading here also auto-resolves any open info_requests
+ * (upload-additional-document/route.ts).
+ *
+ * defaultLabel is pre-filled from the most recent open request's own note
+ * (2026-08-17) rather than left blank -- "documentType" is a required
+ * field server-side (upload-additional-document/route.ts), and an
+ * applicant who picks a file without typing anything into a blank text
+ * field first got a generic "Could not save that upload" with no
+ * indication why. Pre-filling with what was actually asked for fixes the
+ * common case outright; the field stays editable for the unprompted-upload
+ * case, which has nothing sensible to pre-fill.
+ */
+async function UploadCard({ applicationId }: { applicationId: string }) {
+  const supabase = createServiceClient();
+  const { data: openRequest } = await supabase
+    .from("info_requests")
+    .select("notes")
+    .eq("application_id", applicationId)
+    .is("resolved_at", null)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <Card>
       <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Have a document to add?</p>
       <p style={{ fontSize: 12, color: "#6b7280" }}>
         Upload it here -- if a department, BPLO, or Treasury asked for something specific, it&rsquo;ll be sent straight back to them.
       </p>
-      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel="" />
+      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel={openRequest?.notes ?? ""} />
     </Card>
   );
 }
