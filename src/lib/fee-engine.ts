@@ -39,7 +39,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type FeeLineResult = {
   feeRuleId: string | null; // null for a manually-entered line (Automated Assessment off)
-  feeCategory: "mayors_permit" | "lbt" | "cedula" | "regulatory" | "discount";
+  feeCategory: "mayors_permit" | "lbt" | "cedula" | "regulatory" | "discount" | "barangay_clearance";
   displayLabel: string;
   amount: number; // negative for the discount line
   includedInTotal: boolean; // false for a reference_only regulatory fee, still shown with a "paid at the counter" note -- CEDULA is the one exception: a reference_only CEDULA rule isn't pushed as a line at all (2026-08-16 follow-up), so this is always true whenever a cedula-category line exists
@@ -57,7 +57,7 @@ export type FeeComputationResult =
 type FeeRuleRow = {
   id: string;
   name: string;
-  fee_category: "mayors_permit" | "lbt" | "cedula" | "regulatory" | "discount";
+  fee_category: "mayors_permit" | "lbt" | "cedula" | "regulatory" | "discount" | "barangay_clearance";
   computation_type: string;
   applies_to: string | null;
   basis_field: string | null;
@@ -107,6 +107,8 @@ export type FeeComputationInput = {
     animalCount: number | null;
     maleEmployeeCount: number | null;
     femaleEmployeeCount: number | null;
+    barangay: string | null;
+    hasBarangayClearance: string | null; // "Yes" or "No, generate my Brgy. clearance" -- the applicant form's own field, san-miguel-form-options.ts's BARANGAY_CLEARANCE_OPTIONS
   };
 };
 
@@ -116,6 +118,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const CATEGORY_LABEL: Partial<Record<FeeRuleRow["fee_category"], string>> = {
   mayors_permit: "Mayor's Permit Fee",
   lbt: "Local Business Tax",
+  barangay_clearance: "Barangay Clearance",
 };
 
 function bracketFor(basis: number, brackets: BracketRow[]): BracketRow | null {
@@ -489,6 +492,45 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
     const result = computeRuleAmount(rule, bracketsByRule.get(rule.id) ?? [], basis, null, input.applicationType);
     if (typeof result === "object") warnings.push(result.error);
     else lines.push({ feeRuleId: rule.id, feeCategory: "regulatory", displayLabel: name, amount: round2(result), includedInTotal: rule.delivery_mode === "online", isManualEligible: rule.computation_type !== "flat", acctCode: rule.acct_code });
+  }
+
+  // ---- Barangay Clearance (2026-08-17) ----
+  // Only charged when the applicant chose "No, generate my Brgy.
+  // clearance" on the application form -- someone who already has their
+  // own (uploaded, "Yes") isn't paying MuniServe for a second one. Pre-
+  // feature applications where this was never asked (has_barangay_
+  // clearance null) aren't affected either.
+  //
+  // A missing rate here is a WARNING, not a hard {ok:false} block like a
+  // missing LBT category -- traced through deliberately, not by default:
+  // a hard block gets silently bypassed once Automated Assessment is off
+  // (that toggle's own fallback treats ANY blocked result as "fall
+  // through to manual entry"), which would let exactly the gap this is
+  // meant to catch slip through unnoticed. finalizeAssessment (bplo/
+  // actions.ts) has its own direct, toggle-independent guard instead --
+  // it refuses to finalize when this line is required but missing,
+  // regardless of Automated Assessment's state.
+  if (input.business.hasBarangayClearance === "No, generate my Brgy. clearance") {
+    const barangayRules = rules.filter((r) => r.fee_category === "barangay_clearance");
+    // A specific per-barangay row wins over the uniform "all" fallback --
+    // same "specific match, else a designated default" convention as
+    // Mayor's Permit's own catalog (findMayorsPermitCatalogRule). Lets an
+    // LGU be "mostly uniform, a couple barangays are different" without
+    // an all-or-nothing mode switch (see migration 0043's own comment).
+    const rule =
+      (input.business.barangay ? barangayRules.find((r) => r.applies_to === input.business.barangay) : null) ??
+      barangayRules.find((r) => r.applies_to === "all");
+    if (!rule) {
+      warnings.push(
+        input.business.barangay
+          ? `No Barangay Clearance rate is configured for "${input.business.barangay}" — set it in Settings before this application can be assessed.`
+          : `No Barangay Clearance rate is configured — set it in Settings before this application can be assessed.`
+      );
+    } else {
+      const result = computeRuleAmount(rule, [], null, null, input.applicationType);
+      if (typeof result === "object") warnings.push(result.error);
+      else lines.push({ feeRuleId: rule.id, feeCategory: "barangay_clearance", displayLabel: CATEGORY_LABEL.barangay_clearance!, amount: round2(result), includedInTotal: rule.delivery_mode === "online", isManualEligible: false, acctCode: rule.acct_code });
+    }
   }
 
   // ---- CEDULA ----

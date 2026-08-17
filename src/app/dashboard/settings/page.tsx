@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
-import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
+import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -58,6 +58,15 @@ export default async function SettingsPage() {
     .eq("option_type", "barangay")
     .order("sort_order", { ascending: true });
   const barangays = barangaysRaw ?? [];
+
+  const { data: barangayClearanceRulesRaw } = await supabase
+    .from("fee_rules")
+    .select("applies_to, flat_amount, acct_code")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("fee_category", "barangay_clearance")
+    .eq("is_active", true);
+  const barangayClearanceByAppliesTo = new Map((barangayClearanceRulesRaw ?? []).map((r) => [r.applies_to, r]));
+  const uniformBarangayClearance = barangayClearanceByAppliesTo.get("all") ?? null;
 
   return (
     <>
@@ -136,6 +145,80 @@ export default async function SettingsPage() {
             </div>
             <PrimaryButton type="submit">Add a fee</PrimaryButton>
           </form>
+        </Card>
+      </div>
+
+      <div className="mb-9">
+        <SectionHead
+          title="Barangay Clearance"
+          sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below -- an override always wins over the uniform rate for that barangay."
+        />
+        <Card className="flex flex-col gap-4 p-5">
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Uniform rate (applies to every barangay unless overridden below)</p>
+            <form action={setBarangayClearanceRate} className="flex flex-wrap items-end gap-2.5">
+              <input type="hidden" name="barangay" value="" />
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Amount (₱)</label>
+                <input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={uniformBarangayClearance?.flat_amount ?? ""}
+                  placeholder="Not set yet"
+                  className="h-9 w-32 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Acct Code (optional)</label>
+                <input
+                  name="acctCode"
+                  defaultValue={uniformBarangayClearance?.acct_code ?? ""}
+                  placeholder="e.g. 605-3"
+                  className="h-9 w-28 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+                />
+              </div>
+              <MiniButton type="submit" tone="neutral">Save</MiniButton>
+            </form>
+          </div>
+
+          {barangays.length === 0 ? (
+            <p className="border-t border-border pt-4 text-[12px] text-ink-soft">
+              Add your barangays above to set different rates per barangay.
+            </p>
+          ) : (
+            <div className="border-t border-border pt-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Per-barangay overrides (optional)</p>
+              <div className="flex flex-col divide-y divide-border">
+                {barangays.map((b) => {
+                  const override = barangayClearanceByAppliesTo.get(b.value);
+                  return (
+                    <form key={b.id} action={setBarangayClearanceRate} className="flex flex-wrap items-end gap-2.5 py-2">
+                      <input type="hidden" name="barangay" value={b.value} />
+                      <span className="min-w-32 text-[12.5px] font-bold text-ink">{b.value}</span>
+                      <input
+                        name="amount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={override?.flat_amount ?? ""}
+                        placeholder="Uses uniform rate"
+                        className="h-8 w-32 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
+                      />
+                      <input
+                        name="acctCode"
+                        defaultValue={override?.acct_code ?? ""}
+                        placeholder="Acct Code"
+                        className="h-8 w-24 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
+                      />
+                      <MiniButton type="submit" tone="neutral">Save</MiniButton>
+                    </form>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 

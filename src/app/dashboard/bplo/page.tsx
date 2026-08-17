@@ -352,12 +352,17 @@ export default async function BploDashboardPage() {
 // paid at the counter, so it reads naturally as a trailing note rather
 // than part of the online total above it). Discount sits right under LBT
 // since it's a straight reduction of that line, not its own concept.
+// Barangay Clearance (2026-08-17) sits right before CEDULA -- both are
+// only sometimes present (CEDULA when reference_only isn't hiding it;
+// Barangay Clearance when the applicant asked MuniServe to generate one),
+// so grouping them at the tail keeps the always-present lines together up top.
 const CATEGORY_ORDER: Record<FeeLineResult["feeCategory"], number> = {
   mayors_permit: 0,
   lbt: 1,
   discount: 2,
   regulatory: 3,
-  cedula: 4,
+  barangay_clearance: 4,
+  cedula: 5,
 };
 
 /**
@@ -408,6 +413,8 @@ async function AssessmentCard({
           animalCount: (business.animal_count as number | null) ?? null,
           maleEmployeeCount: (business.male_employee_count as number | null) ?? null,
           femaleEmployeeCount: (business.female_employee_count as number | null) ?? null,
+          barangay: (business.barangay as string | null) ?? null,
+          hasBarangayClearance: (business.has_barangay_clearance as string | null) ?? null,
         },
       })
     : { ok: false, blockedReason: "Business record missing." };

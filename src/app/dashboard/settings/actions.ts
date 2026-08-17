@@ -594,3 +594,82 @@ export async function removeBarangay(formData: FormData) {
 
   revalidatePath("/dashboard/settings");
 }
+
+/**
+ * Sets the Barangay Clearance rate -- migration 0043, CLAUDE.md. One row
+ * per `applies_to` value: `barangay` blank means the uniform fallback
+ * (`applies_to = 'all'`); a specific barangay name overrides it just for
+ * that barangay (fee-engine.ts's own "specific match wins over the
+ * uniform fallback" rule -- no separate mode flag needed, see migration
+ * 0043's comment). Clearing the amount on a per-barangay override deletes
+ * that row outright, falling back to the uniform rate again; clearing the
+ * uniform row's own amount is a no-op (a blank "not configured yet" state
+ * has nothing to delete).
+ */
+export async function setBarangayClearanceRate(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const barangay = String(formData.get("barangay") ?? "").trim();
+  const appliesTo = barangay || "all";
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  const acctCode = String(formData.get("acctCode") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("fee_rules")
+    .select("id")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("fee_category", "barangay_clearance")
+    .eq("applies_to", appliesTo)
+    .maybeSingle();
+
+  if (amountRaw === "") {
+    if (existing && barangay) {
+      await supabase.from("fee_rules").delete().eq("id", existing.id);
+      await logAuditEvent(supabase, {
+        lguId: staff.lgu_id,
+        actorRole: staff.role,
+        actorLabel: actorLabelFor(staff),
+        action: "barangay_clearance_rate_updated",
+        summary: `Removed the Barangay Clearance override for "${barangay}" -- back to the uniform rate`,
+      });
+    }
+    revalidatePath("/dashboard/settings");
+    return;
+  }
+
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("Invalid amount");
+
+  if (existing) {
+    const { error } = await supabase.from("fee_rules").update({ flat_amount: amount, acct_code: acctCode }).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("fee_rules").insert({
+      lgu_id: staff.lgu_id,
+      name: barangay ? `Barangay Clearance -- ${barangay}` : "Barangay Clearance",
+      fee_category: "barangay_clearance",
+      computation_type: "flat",
+      applies_to: appliesTo,
+      flat_amount: amount,
+      delivery_mode: "online",
+      acct_code: acctCode,
+      is_active: true,
+    });
+    if (error) throw error;
+  }
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "barangay_clearance_rate_updated",
+    summary: barangay
+      ? `Barangay Clearance rate for "${barangay}" set to ₱${amount.toLocaleString()}`
+      : `Uniform Barangay Clearance rate set to ₱${amount.toLocaleString()}`,
+    details: { barangay: barangay || null, amount, acctCode },
+  });
+
+  revalidatePath("/dashboard/settings");
+}

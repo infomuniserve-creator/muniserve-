@@ -182,7 +182,7 @@ export async function finalizeAssessment(formData: FormData) {
   const { data: application, error: fetchError } = await supabase
     .from("applications")
     .select(
-      `reference_number, application_type, form_inputs, business:businesses(business_name, trade_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, owner:owners(phone, email, full_name))`
+      `reference_number, application_type, form_inputs, business:businesses(business_name, trade_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, has_barangay_clearance, owner:owners(phone, email, full_name))`
     )
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment")
@@ -213,6 +213,7 @@ export async function finalizeAssessment(formData: FormData) {
     animal_count: number | null;
     male_employee_count: number | null;
     female_employee_count: number | null;
+    has_barangay_clearance: string | null;
     owner: { phone: string | null; email: string | null; full_name: string | null } | null;
   } | null;
   if (!business) throw new Error("Business record missing");
@@ -240,6 +241,8 @@ export async function finalizeAssessment(formData: FormData) {
       animalCount: business.animal_count,
       maleEmployeeCount: business.male_employee_count,
       femaleEmployeeCount: business.female_employee_count,
+      barangay: business.barangay,
+      hasBarangayClearance: business.has_barangay_clearance,
     },
   });
   // A blocked result is only ever recoverable through manual entry -- with
@@ -301,6 +304,21 @@ export async function finalizeAssessment(formData: FormData) {
     if (engineeringAmount != null) {
       finalLines.push({ feeRuleId: null, feeCategory: "regulatory", displayLabel: lgu.buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManual: true, acctCode: null });
     }
+  }
+
+  // Barangay Clearance's own guard (2026-08-17) -- direct and toggle-
+  // independent, unlike fee-engine.ts's blockedReason mechanism (which a
+  // missing Automated Assessment toggle would otherwise let bypass, see
+  // fee-engine.ts's own comment on this). Applies regardless of whether
+  // Automated Assessment is on or off, since every path through this
+  // function (computed, manual fallback, or Engineering) has already run
+  // by this point and finalLines is the true final answer.
+  if (business.has_barangay_clearance === "No, generate my Brgy. clearance" && !finalLines.some((l) => l.feeCategory === "barangay_clearance")) {
+    throw new Error(
+      business.barangay
+        ? `No Barangay Clearance rate is configured for "${business.barangay}". Set it in Settings before finalizing.`
+        : "No Barangay Clearance rate is configured. Set it in Settings before finalizing."
+    );
   }
 
   const lineRows = finalLines.map((line) => {
