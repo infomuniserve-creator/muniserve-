@@ -589,3 +589,71 @@ export async function getApplicationDocuments(applicationId: string) {
     .order("uploaded_at", { ascending: false });
   return data ?? [];
 }
+
+/**
+ * Closes out a "Returned to applicant" application that's never coming
+ * back (2026-08-17, migration 0044) -- the project owner flagged that
+ * this queue had no way out except the applicant actually responding, so
+ * it just grows forever otherwise (bplo/page.tsx's own query has no date
+ * filter). A manual action rather than an auto-expiry timeout -- this
+ * project's standing rule against inventing an unconfirmed real-world
+ * number (same reasoning the department-reminder escalation tier is
+ * still left unset, CLAUDE.md section 10). No applicant notification --
+ * archiving only happens once BPLO has already confirmed by phone or in
+ * person that they're not proceeding, so a notification would be
+ * redundant.
+ */
+export async function archiveApplication(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const applicationId = String(formData.get("applicationId"));
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("applications")
+    .update({ status: "archived" })
+    .eq("id", applicationId)
+    .eq("status", "returned_to_applicant")
+    .select("reference_number")
+    .single();
+  if (error || !updated) throw error ?? new Error("Update failed");
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "application_archived",
+    summary: `Archived ${updated.reference_number} -- confirmed the applicant isn't proceeding`,
+  });
+
+  revalidatePath("/dashboard/bplo");
+}
+
+/** Undoes archiveApplication -- not a one-way door, in case it was archived by mistake or the applicant comes back after all. */
+export async function reopenApplication(formData: FormData) {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const applicationId = String(formData.get("applicationId"));
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("applications")
+    .update({ status: "returned_to_applicant" })
+    .eq("id", applicationId)
+    .eq("status", "archived")
+    .select("reference_number")
+    .single();
+  if (error || !updated) throw error ?? new Error("Update failed");
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "application_reopened",
+    summary: `Reopened ${updated.reference_number}`,
+  });
+
+  revalidatePath("/dashboard/bplo");
+}

@@ -26,7 +26,14 @@
 
 export type BusinessStatus = "active" | "needs_renewal" | "legacy" | "inactive" | "in_progress";
 
-const TERMINAL_STATUSES = new Set(["released", "rejected"]);
+// "archived" (2026-08-17, migration 0044) is terminal too -- BPLO has
+// already confirmed the applicant isn't proceeding, so a business whose
+// only application is archived shouldn't stay stuck as "in_progress"
+// forever, the same problem this whole feature exists to fix one level
+// up (bplo/page.tsx's own "Returned to applicant" queue). Left
+// unarchived ("returned_to_applicant" alone) still correctly counts as
+// in-progress -- that's the live, unresolved case.
+const TERMINAL_STATUSES = new Set(["released", "rejected", "archived"]);
 
 export function classifyBusinessStatus(params: {
   isLegacyUnclaimed: boolean;

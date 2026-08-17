@@ -48,7 +48,9 @@ export type AuditAction =
   | "payment_info_requested"
   | "info_request_resolved"
   | "barangays_updated"
-  | "barangay_clearance_rate_updated";
+  | "barangay_clearance_rate_updated"
+  | "application_archived"
+  | "application_reopened";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

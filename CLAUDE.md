@@ -1000,6 +1000,26 @@ The project owner's own proposal -- a Settings choice between "Uniform Rate" and
 
 ---
 
+## 7oo. Archiving "Returned to applicant" (2026-08-17)
+
+The project owner saw a real, live application ("3D-EXTREME CAR WASH") sitting in the BPLO dashboard's "Returned to applicant" section and asked whether it stays there forever, and asked the same about "Rejected". Research confirmed both halves of the concern were real, but different in kind: the "Returned to applicant" query has no date filter and nothing ever moves an application out of that status except an applicant re-submitting, so yes, it accumulates forever -- but "Rejected" turned out not to be a live problem at all, since `status = 'rejected'` is a valid CHECK-constraint value that no code path in the app ever actually sets (dead, unreachable in practice, confirmed via grep). Proposed two fixes together: collapse the section for display, and add a manual BPLO Archive/Reopen action to actually close the workflow gap. Deliberately not an auto-expiry timeout -- that would mean inventing a "how many days is too long" number with no real-world basis, which this project's standing rule is to never guess. The project owner said yes to both.
+
+**Migration `0044_archived_application_status.sql`** (live in production): adds `'archived'` to `applications.status`'s CHECK constraint. No new RLS policy needed -- migration 0002's existing "BPLO can update applications at their own LGU" UPDATE policy already covers any status transition on a row BPLO already has access to.
+
+**`archiveApplication`/`reopenApplication`** (`bplo/actions.ts`): BPLO-only, `returned_to_applicant` &harr; `archived` in either direction, each guarded by `.eq("status", ...)` on the expected starting state so a stale/double click is a no-op rather than a silent overwrite. Both log to `audit_log` (`application_archived`/`application_reopened`). No applicant notification on archive -- by the time BPLO archives something, they've already confirmed by phone or in person that the applicant isn't proceeding, so there's nothing new to tell them.
+
+**`bplo/page.tsx`**: "Returned to applicant" is now wrapped in the existing `CollapsibleSection` (CLAUDE.md 7nn), collapsed by default, with an "Archive" button per row. A new "Archived" `CollapsibleSection` (only rendered when non-empty) lists archived applications with a neutral "Archived" pill and a "Reopen" button per row.
+
+**Applicant-facing status page** (`/status/[reference]`): a new `archived` branch, matching the existing `rejected` branch's shape -- "Application closed... please visit the BPLO office" rather than the normal stage tracker.
+
+**Business Registry fix caught proactively, not asked for**: `business-status.ts`'s `classifyBusinessStatus()` treats a business as `in_progress` (blocking it from being cleanly classified as active/needs-renewal/legacy/inactive) unless *every* application on file has a terminal status. `archived` wasn't in that `TERMINAL_STATUSES` set, which would have silently reproduced the exact same "stuck forever" bug this whole feature exists to fix, one layer up -- a business whose only application got archived would have stayed "in progress" indefinitely on the Business Registry. Added `archived` to `TERMINAL_STATUSES` alongside `released`/`rejected`. `WorkflowStepper` needed no change -- it already returns `null` for any status outside its known step list.
+
+Also added `archived: "Archived (not proceeding)"` to the Business Registry's `APP_STATUS_LABEL` map so the status shows up readable there too, instead of falling through to a raw value.
+
+**Verified against real production data**: a rolled-back transaction confirmed a real BPLO session can move the actual "3D-EXTREME CAR WASH" application between `returned_to_applicant` and `archived` (RLS proven, nothing persisted -- deliberately not a real write, to avoid adding test rows to this specific real client's real audit trail). A separate temporary, self-cleaning fixture route ran the real `archiveApplication`/`reopenApplication` functions end-to-end against a fully synthetic application: archive succeeded, a second archive attempt was correctly a no-op (guard held), reopen succeeded, both `audit_log` entries were written with the right `action`/`summary`, and `classifyBusinessStatus()` correctly returned non-`in_progress` while archived. All synthetic rows deleted afterward -- confirmed zero leftover data in production. The new UI (both collapsible sections, the Archive/Reopen buttons, the neutral "Archived" pill) was also visually verified against mock data matching the real business name (temporary fixture, deleted immediately after).
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

@@ -8,10 +8,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, DecisionButtons, DocumentList,
+  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, CollapsibleSection, DecisionButtons, DocumentList,
   EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper,
 } from "../ui";
-import { finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
+import { archiveApplication, finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, reopenApplication, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 import type { ManualFieldSpec } from "./assessment-manual-fields";
 import { AssessmentLineItems } from "./assessment-line-items";
 import { AwaitingPaymentSection } from "../payment-queue";
@@ -51,6 +51,7 @@ export default async function BploDashboardPage() {
   const awaitingSignature = all.filter((a) => a.status === "pending_mayor");
   const forRelease = all.filter((a) => a.status === "pending_release");
   const returned = all.filter((a) => a.status === "returned_to_applicant");
+  const archived = all.filter((a) => a.status === "archived");
   const released = all.filter((a) => a.status === "released");
 
   const deptReviewIds = inDeptReview.map((a) => a.id);
@@ -327,8 +328,7 @@ export default async function BploDashboardPage() {
       )}
 
       {returned.length > 0 && (
-        <div className="mb-9">
-          <SectionHead title="Returned to applicant" />
+        <CollapsibleSection title="Returned to applicant" sub={`${returned.length} waiting on the applicant`}>
           <Card>
             {returned.map((a) => (
               <div key={a.id} className="flex items-center gap-3 border-b border-border px-4.5 py-3 last:border-b-0">
@@ -337,10 +337,34 @@ export default async function BploDashboardPage() {
                   <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
                 </div>
                 <TonePill label="Returned" tone="bad" />
+                <form action={archiveApplication}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+                </form>
               </div>
             ))}
           </Card>
-        </div>
+        </CollapsibleSection>
+      )}
+
+      {archived.length > 0 && (
+        <CollapsibleSection title="Archived" sub={`${archived.length} closed -- applicant confirmed not proceeding`}>
+          <Card>
+            {archived.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 border-b border-border px-4.5 py-3 last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+                </div>
+                <TonePill label="Archived" tone="neutral" />
+                <form action={reopenApplication}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit" tone="neutral">Reopen</MiniButton>
+                </form>
+              </div>
+            ))}
+          </Card>
+        </CollapsibleSection>
       )}
     </>
   );

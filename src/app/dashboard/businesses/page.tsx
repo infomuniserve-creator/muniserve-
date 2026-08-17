@@ -35,6 +35,7 @@ const APP_STATUS_LABEL: Record<string, string> = {
   pending_release: "Pending release",
   released: "Released",
   rejected: "Rejected",
+  archived: "Archived (not proceeding)",
 };
 
 const DISPLAY_CAP = 60;

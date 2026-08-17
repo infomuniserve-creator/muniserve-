@@ -87,6 +87,20 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
     );
   }
 
+  if (application.status === "archived") {
+    return (
+      <Shell>
+        <Head title={business.business_name} sub={`Reference ${reference}`} />
+        <Card>
+          <p style={{ fontSize: 13, fontWeight: 500 }}>Application closed</p>
+          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+            This application was closed by BPLO. If you&rsquo;d still like to proceed, please visit the BPLO office.
+          </p>
+        </Card>
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <Head title={business.business_name} sub={`Reference ${reference}`} />
