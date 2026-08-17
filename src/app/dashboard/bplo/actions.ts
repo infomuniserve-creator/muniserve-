@@ -37,10 +37,21 @@ export async function submitInitialReview(formData: FormData) {
 
   const supabase = await createClient();
 
+  // Audit finding (2026-08-17): "Reject" and "Request info" used to be
+  // status-identical -- both just sent the application to
+  // returned_to_applicant, which loops back for resubmission either way.
+  // There was no single action that actually, permanently closed an
+  // application at this stage; BPLO had to click Reject, then separately
+  // find it and click Archive. A real "Reject" decision now goes straight
+  // to archived (the same terminal status/applicant messaging the manual
+  // Archive action already established) -- reachable directly from here,
+  // not just as a two-step manual follow-up.
   const newStatus =
     decision === "approved" || decision === "approved_with_condition"
       ? "pending_dept_review"
-      : "returned_to_applicant";
+      : decision === "rejected"
+        ? "archived"
+        : "returned_to_applicant";
 
   // Gate, not just at Assessment three stages later (2026-08-14 follow-up,
   // after live testing hit exactly that dead end) -- an application can't
@@ -70,7 +81,7 @@ export async function submitInitialReview(formData: FormData) {
 
   if (newStatus === "pending_dept_review") {
     await openDepartmentReviewRound(supabase, applicationId, staff.lgu_id);
-  } else {
+  } else if (newStatus === "returned_to_applicant") {
     // Closes the "request more info" loop (2026-08-16 follow-up) --
     // previously a dead-end generic SMS with no note shown to the
     // applicant and no way back in short of a phone call. Now the
@@ -84,9 +95,40 @@ export async function submitInitialReview(formData: FormData) {
       notes,
       requestedBy: staff.id,
       actedOnBehalf: false,
-      isRejection: decision === "rejected",
+      isRejection: false,
       roleLabel: "BPLO",
     });
+  } else {
+    // newStatus === "archived" (decision === "rejected") -- genuinely
+    // terminal now, so no info_requests row: there's nothing left to ask
+    // for, and the applicant's status page shows the same "Application
+    // closed" message the manual Archive action already uses for this
+    // status, not an upload prompt. A direct notification instead of
+    // createInfoRequest's own (which assumes there's something to
+    // resubmit).
+    const { data: app } = await supabase
+      .from("applications")
+      .select("reference_number, business:businesses(owner:owners(phone, email))")
+      .eq("id", applicationId)
+      .single();
+    const owner = (app?.business as unknown as { owner: { phone: string | null; email: string | null } | null } | null)?.owner;
+    const ref = app?.reference_number ?? updated.reference_number;
+    if (owner?.phone) {
+      await notifyApplicantSms(
+        applicationId,
+        staff.lgu_id,
+        owner.phone,
+        `your application ${ref} was rejected by BPLO and is now closed. Visit the BPLO office if you'd like to proceed.`
+      );
+    }
+    if (owner?.email) {
+      await notifyApplicantEmail(
+        applicationId,
+        owner.email,
+        `Application rejected: ${ref}`,
+        `<p>Your application <strong>${ref}</strong> was rejected by BPLO and is now closed.</p>${notes ? `<p>Reason: ${notes}</p>` : ""}<p>Please visit the BPLO office if you&rsquo;d like to proceed.</p>`
+      );
+    }
   }
 
   await logAuditEvent(supabase, {
@@ -94,11 +136,18 @@ export async function submitInitialReview(formData: FormData) {
     applicationId,
     actorRole: staff.role,
     actorLabel: actorLabelFor(staff),
-    action: newStatus === "pending_dept_review" ? "initial_review_approved" : "initial_review_returned",
+    action:
+      newStatus === "pending_dept_review"
+        ? "initial_review_approved"
+        : newStatus === "archived"
+          ? "initial_review_rejected"
+          : "initial_review_returned",
     summary:
       newStatus === "pending_dept_review"
         ? `Initial review approved (${decision}) for ${updated.reference_number}`
-        : `Application ${updated.reference_number} returned to applicant during initial review`,
+        : newStatus === "archived"
+          ? `Application ${updated.reference_number} rejected and closed during initial review`
+          : `Application ${updated.reference_number} returned to applicant during initial review`,
     details: { decision, notes },
   });
 

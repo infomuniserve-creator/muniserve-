@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { otpMessage, sendSms } from "@/lib/semaphore";
 
 const OTP_TTL_MINUTES = 5;
+const MAX_VERIFY_ATTEMPTS = 5;
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -30,16 +31,26 @@ export async function createOtp(phoneOrEmail: string): Promise<string> {
 /**
  * Verifies a submitted code against the most recent unexpired, unverified
  * OTP for that phone/email. Marks it verified on success so it can't be
- * replayed. Returns false on any mismatch, expiry, or already-used code.
+ * replayed. Returns false on any mismatch, expiry, already-used code, or
+ * a code that's been guessed wrong MAX_VERIFY_ATTEMPTS times already.
+ *
+ * Looks up the latest active row by phone alone (not by matching the
+ * submitted code in the query, like the original version did) so a wrong
+ * guess can be counted against that specific row -- attempts only ever
+ * accrue against the one code actually in play, not spread across
+ * whatever a client happens to submit. A real side effect worth noting:
+ * this also means only the most-recently-sent code is ever checkable, not
+ * any still-unexpired earlier one -- the correct behavior (there should
+ * only ever be one "the code I just got"), and a prerequisite for
+ * attempt-counting to mean anything at all.
  */
 export async function verifyOtp(phoneOrEmail: string, code: string): Promise<boolean> {
   const supabase = createServiceClient();
 
   const { data, error } = await supabase
     .from("otp_codes")
-    .select("id, expires_at")
+    .select("id, code, attempts")
     .eq("phone_or_email", phoneOrEmail)
-    .eq("code", code)
     .is("verified_at", null)
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
@@ -47,6 +58,12 @@ export async function verifyOtp(phoneOrEmail: string, code: string): Promise<boo
     .maybeSingle();
 
   if (error || !data) return false;
+  if (data.attempts >= MAX_VERIFY_ATTEMPTS) return false;
+
+  if (data.code !== code) {
+    await supabase.from("otp_codes").update({ attempts: data.attempts + 1 }).eq("id", data.id);
+    return false;
+  }
 
   const { error: updateError } = await supabase
     .from("otp_codes")

@@ -1,0 +1,13 @@
+-- Audit finding (2026-08-17): verifyOtp() had no limit on failed verify
+-- attempts -- sendOtpCode()'s 30s cooldown only throttles how fast a new
+-- code can be requested, not how many guesses can be thrown at an
+-- already-sent code. A 6-digit code, live for 5 minutes, with zero
+-- attempt limiting is realistically brute-forceable by a scripted loop.
+--
+-- attempts tracks failed guesses against THIS specific code row.
+-- verifyOtp() locks a code out (treats it as invalid, regardless of
+-- what's typed) once attempts reaches its own limit, forcing a fresh
+-- send (which already resets attempts to 0 on the new row) rather than
+-- letting the same code be guessed against indefinitely within its
+-- 5-minute window.
+alter table otp_codes add column attempts integer not null default 0;

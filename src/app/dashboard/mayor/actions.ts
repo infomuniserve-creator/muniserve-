@@ -83,6 +83,17 @@ export async function signPermit(formData: FormData) {
   const applicationId = String(formData.get("applicationId"));
 
   const supabase = await createClient();
+  // Guard checked first, before any of this function's real side effects
+  // (permit issuance, the public PDF, the "ready for pickup" SMS) --
+  // audit finding (2026-08-17): this used to only get checked at the very
+  // end, via the applications status UPDATE, by which point everything
+  // above it had already happened unconditionally. It was only ever saved
+  // by permits.permit_number's own unique constraint colliding on a
+  // re-sign -- an application that was never at pending_mayor at all
+  // (still mid-department-review, say) had nothing stopping it from
+  // sailing straight through and getting a real, publicly-verifiable
+  // permit issued. Matches the same guarded-fetch pattern markPrinted/
+  // markReleased (bplo/actions.ts) already use correctly.
   const { data: application, error: fetchError } = await supabase
     .from("applications")
     .select(
@@ -90,8 +101,9 @@ export async function signPermit(formData: FormData) {
        business:businesses(business_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, organization_type, business_tax_payment, legacy_license_no, legacy_owner_name, owner:owners(full_name, gender, phone))`
     )
     .eq("id", applicationId)
+    .eq("status", "pending_mayor")
     .single();
-  if (fetchError || !application) throw fetchError ?? new Error("Application not found");
+  if (fetchError || !application) throw fetchError ?? new Error("Application not found or not ready to sign");
 
   const issuedAt = new Date();
   const validUntil = `${application.application_year}-12-31`;

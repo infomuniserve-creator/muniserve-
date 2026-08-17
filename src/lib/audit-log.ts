@@ -19,6 +19,7 @@ export type AuditAction =
   | "walkin_application_started"
   | "initial_review_approved"
   | "initial_review_returned"
+  | "initial_review_rejected"
   | "department_decision"
   | "assessment_finalized"
   | "payment_recorded"
