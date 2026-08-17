@@ -1,7 +1,9 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
+import { maskPhone } from "@/lib/mask";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
 import { AdditionalDocumentUpload } from "./upload-form";
+import { VerifyPhoneCard } from "./verify-phone-form";
 
 /**
  * Status tracker (reference/MuniServe_Applicant_Flow_Prototype.html's
@@ -27,24 +29,32 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
   const { data: application } = await supabase
     .from("applications")
     .select(
-      "id, status, submitted_at, business:businesses(business_name, owner_id)"
+      "id, status, submitted_at, business:businesses(business_name, owner_id, owner:owners(phone))"
     )
     .eq("reference_number", reference)
     .maybeSingle();
 
   if (!application) notFound();
 
-  const business = application.business as unknown as { business_name: string; owner_id: string | null } | null;
+  const business = application.business as unknown as {
+    business_name: string;
+    owner_id: string | null;
+    owner: { phone: string | null } | null;
+  } | null;
 
   if (!ownerId || !business || business.owner_id !== ownerId) {
+    const phone = business?.owner?.phone ?? null;
     return (
       <Shell>
         <Head title="Can't verify this application here" sub={`Reference ${reference}`} />
         <Card>
           <p style={{ fontSize: 13 }}>
-            We can&rsquo;t confirm this application belongs to you in this browser. Please check its status from the
-            device and browser you used to submit it, or contact the BPLO office for help.
+            We can&rsquo;t confirm this application belongs to you in this browser.{" "}
+            {phone
+              ? "Verify with the phone on file below, or check its status from the device and browser you used to submit it."
+              : "Please check its status from the device and browser you used to submit it, or contact the BPLO office for help."}
           </p>
+          {phone && <VerifyPhoneCard applicationId={application.id} maskedPhone={maskPhone(phone)} />}
         </Card>
       </Shell>
     );

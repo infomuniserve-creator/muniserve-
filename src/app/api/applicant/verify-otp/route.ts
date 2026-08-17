@@ -45,12 +45,22 @@ import { NextResponse } from "next/server";
  * number, only ever a masked hint for display (lookup-license/route.ts).
  * Everything after that resolves identically to the phone-sign-in path,
  * since by construction this business's owner already exists.
+ *
+ * `applicationId` (2026-08-17, status page re-verification): same shape as
+ * `businessId` above, but resolved from an application instead -- pairs
+ * with send-status-otp/route.ts for status/[reference]'s "Can't verify this
+ * application here" branch (a different browser/device than the one that
+ * submitted, so no applicant_session cookie). Owner always already exists
+ * here too (an application implies a claimed business), so this hits the
+ * same `existingOwner` branch below as every other path -- no new identity
+ * logic needed, just a new way to resolve which phone to check.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const code = String(body?.code ?? "");
   const legacyBusinessId: string | undefined = body?.legacyBusinessId || undefined;
   const renewalBusinessId: string | undefined = body?.businessId || undefined;
+  const statusApplicationId: string | undefined = body?.applicationId || undefined;
 
   const supabase = createServiceClient();
 
@@ -64,6 +74,18 @@ export async function POST(request: Request) {
     const owner = business?.owner as unknown as { phone: string | null } | null;
     if (!owner?.phone) {
       return NextResponse.json({ error: "business_not_found" }, { status: 400 });
+    }
+    phone = owner.phone;
+  }
+  if (statusApplicationId) {
+    const { data: application } = await supabase
+      .from("applications")
+      .select("business:businesses(owner:owners(phone))")
+      .eq("id", statusApplicationId)
+      .maybeSingle();
+    const owner = (application?.business as unknown as { owner: { phone: string | null } | null } | null)?.owner ?? null;
+    if (!owner?.phone) {
+      return NextResponse.json({ error: "application_not_found" }, { status: 400 });
     }
     phone = owner.phone;
   }
