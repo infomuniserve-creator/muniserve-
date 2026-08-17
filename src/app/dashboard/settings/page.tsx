@@ -4,7 +4,7 @@ import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
-import { Card, MiniButton, PrimaryButton, SectionHead, TonePill } from "../ui";
+import { Card, CollapsibleSection, MiniButton, PrimaryButton, TonePill } from "../ui";
 import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
@@ -19,6 +19,11 @@ import { PrintTemplateUpload } from "./print-template-upload";
  * everything else here, not a primary day-to-day section like
  * Applications or Businesses. This page is meant to keep growing: more
  * LGU-level settings land here going forward.
+ *
+ * Every section is collapsed by default (2026-08-17, CollapsibleSection
+ * in ui.tsx) -- eleven sections' worth of forms/cards all expanded at
+ * once was the project owner's own flagged complaint ("taking a lot of
+ * space"), not just Barangays/Barangay Clearance specifically.
  */
 export default async function SettingsPage() {
   const staff = await getCurrentStaff();
@@ -72,22 +77,20 @@ export default async function SettingsPage() {
     <>
       <StaffManagementSection lguName={lgu.name} lguProvince={lgu.province} staffList={staffListRaw ?? []} departments={departmentsRaw ?? []} />
 
-      <div className="mb-9">
-        <SectionHead
-          title="Business Tax & Mayor's Permit Fee Setup"
-          sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed."
-        />
+      <CollapsibleSection
+        title="Business Tax & Mayor's Permit Fee Setup"
+        sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed."
+      >
         <div className="flex flex-col gap-3">
           <FeeRuleImportCard feeType="lbt" label="Local Business Tax" />
           <FeeRuleImportCard feeType="mayors_permit" label="Mayor's Permit Fee" />
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="Regulatory Fee Flat Amounts"
-          sub="Flat, always-included fees on top of Local Business Tax and Mayor's Permit Fee -- CNC, Health Permit Fee, Inspection Fee, Plate Fee, Sanitary Fee, whatever your LGU charges. Every fee here is added to every assessment automatically."
-        />
+      <CollapsibleSection
+        title="Regulatory Fee Flat Amounts"
+        sub="Flat, always-included fees on top of Local Business Tax and Mayor's Permit Fee -- CNC, Health Permit Fee, Inspection Fee, Plate Fee, Sanitary Fee, whatever your LGU charges. Every fee here is added to every assessment automatically."
+      >
         <Card className="flex flex-col gap-4 p-5">
           {regulatoryFees.length === 0 ? (
             <p className="text-[13px] text-ink-soft">No regulatory fees added yet.</p>
@@ -146,13 +149,47 @@ export default async function SettingsPage() {
             <PrimaryButton type="submit">Add a fee</PrimaryButton>
           </form>
         </Card>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="Barangay Clearance"
-          sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below -- an override always wins over the uniform rate for that barangay."
-        />
+      <CollapsibleSection
+        title="Barangays"
+        sub="Shown as a dropdown on your public application form. Without any listed here, applicants type their barangay in as free text instead."
+      >
+        <Card className="flex flex-col gap-4 p-5">
+          {barangays.length === 0 ? (
+            <p className="text-[13px] text-ink-soft">No barangays added yet — the application form currently shows a free-text field instead of a dropdown.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {barangays.map((b) => (
+                <form key={b.id} action={removeBarangay} className="flex items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-3 pr-1.5">
+                  <span className="text-[12.5px] font-bold text-ink">{b.value}</span>
+                  <input type="hidden" name="id" value={b.id} />
+                  <MiniButton type="submit" tone="bad">✕</MiniButton>
+                </form>
+              ))}
+            </div>
+          )}
+
+          <form action={addBarangays} className="flex flex-wrap items-end gap-2.5 border-t border-border pt-4">
+            <label className="flex flex-1 flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Add barangay(s)</span>
+              <input
+                name="barangays"
+                type="text"
+                placeholder="e.g. Poblacion, Sta. Rita Matanda, Batasan Bata"
+                className="h-9 w-full rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <PrimaryButton type="submit">Add</PrimaryButton>
+          </form>
+          <p className="text-[11px] text-ink-faint">One at a time, or paste a comma-separated list to add several at once.</p>
+        </Card>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Barangay Clearance"
+        sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below -- an override always wins over the uniform rate for that barangay."
+      >
         <Card className="flex flex-col gap-4 p-5">
           <div>
             <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Uniform rate (applies to every barangay unless overridden below)</p>
@@ -220,13 +257,12 @@ export default async function SettingsPage() {
             </div>
           )}
         </Card>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="Automated Assessment"
-          sub="A safe fallback if the automated Local Business Tax or Mayor's Permit Fee computation is ever wrong for your LGU."
-        />
+      <CollapsibleSection
+        title="Automated Assessment"
+        sub="A safe fallback if the automated Local Business Tax or Mayor's Permit Fee computation is ever wrong for your LGU."
+      >
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
             <p className="text-[13px] font-bold text-ink">{lgu.automatedAssessmentEnabled ? "On -- computing automatically" : "Off -- manual entry required"}</p>
@@ -243,13 +279,12 @@ export default async function SettingsPage() {
             </MiniButton>
           </form>
         </Card>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="Building Permit Fee (Engineering)"
-          sub="When on, Engineering enters their own computed amount during department review, and it's included in the applicant's total once approved."
-        />
+      <CollapsibleSection
+        title="Building Permit Fee (Engineering)"
+        sub="When on, Engineering enters their own computed amount during department review, and it's included in the applicant's total once approved."
+      >
         <Card className="flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -283,13 +318,12 @@ export default async function SettingsPage() {
             <PrimaryButton type="submit">Save label</PrimaryButton>
           </form>
         </Card>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="CEDULA (Community Tax Certificate)"
-          sub="CEDULA's own amount is fixed by national law and never changes here -- this only controls how it's collected."
-        />
+      <CollapsibleSection
+        title="CEDULA (Community Tax Certificate)"
+        sub="CEDULA's own amount is fixed by national law and never changes here -- this only controls how it's collected."
+      >
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
             <p className="text-[13px] font-bold text-ink">
@@ -308,13 +342,12 @@ export default async function SettingsPage() {
             </MiniButton>
           </form>
         </Card>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="Permit Certificate Details"
-          sub="Shown on the pre-signature certificate printed at the 'For Printing' stage — see the Applications tab."
-        />
+      <CollapsibleSection
+        title="Permit Certificate Details"
+        sub="Shown on the pre-signature certificate printed at the 'For Printing' stage — see the Applications tab."
+      >
         <Card className="p-5">
           <form action={updateMayorName} className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1.5">
@@ -333,13 +366,12 @@ export default async function SettingsPage() {
         <div className="mt-3">
           <PrintTemplateUpload hasTemplate={Boolean(lgu.printTemplatePath)} />
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="Order of Payment Details"
-          sub="Shown on the itemized assessment slip applicants bring to the Treasurer's counter to pay — available once BPLO finalizes an assessment."
-        />
+      <CollapsibleSection
+        title="Order of Payment Details"
+        sub="Shown on the itemized assessment slip applicants bring to the Treasurer's counter to pay — available once BPLO finalizes an assessment."
+      >
         <Card className="p-5">
           <form action={updateTreasurerName} className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1.5">
@@ -358,13 +390,12 @@ export default async function SettingsPage() {
             Acct Codes for each fee (shown on the same slip) are set per regulatory fee above — Local Business Tax and Mayor&rsquo;s Permit Fee codes aren&rsquo;t editable here yet.
           </p>
         </Card>
-      </div>
+      </CollapsibleSection>
 
-      <div className="mb-9">
-        <SectionHead
-          title="SMS Notifications"
-          sub="Every text MuniServe sends — OTP codes, status updates to applicants, alerts to staff."
-        />
+      <CollapsibleSection
+        title="SMS Notifications"
+        sub="Every text MuniServe sends — OTP codes, status updates to applicants, alerts to staff."
+      >
         <Card className="p-5">
           <form action={updateSenderName} className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1.5">
@@ -386,47 +417,10 @@ export default async function SettingsPage() {
             A custom Sender Name has to be purchased and approved directly with Semaphore (MuniServe&rsquo;s SMS provider) first — enter the exact approved name here once that&rsquo;s done.
           </p>
         </Card>
-      </div>
-
-      <div className="mb-9">
-        <SectionHead
-          title="Barangays"
-          sub="Shown as a dropdown on your public application form. Without any listed here, applicants type their barangay in as free text instead."
-        />
-        <Card className="flex flex-col gap-4 p-5">
-          {barangays.length === 0 ? (
-            <p className="text-[13px] text-ink-soft">No barangays added yet — the application form currently shows a free-text field instead of a dropdown.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {barangays.map((b) => (
-                <form key={b.id} action={removeBarangay} className="flex items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-3 pr-1.5">
-                  <span className="text-[12.5px] font-bold text-ink">{b.value}</span>
-                  <input type="hidden" name="id" value={b.id} />
-                  <MiniButton type="submit" tone="bad">✕</MiniButton>
-                </form>
-              ))}
-            </div>
-          )}
-
-          <form action={addBarangays} className="flex flex-wrap items-end gap-2.5 border-t border-border pt-4">
-            <label className="flex flex-1 flex-col gap-1.5">
-              <span className="text-[11.5px] font-bold text-ink-soft">Add barangay(s)</span>
-              <input
-                name="barangays"
-                type="text"
-                placeholder="e.g. Poblacion, Sta. Rita Matanda, Batasan Bata"
-                className="h-9 w-full rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
-              />
-            </label>
-            <PrimaryButton type="submit">Add</PrimaryButton>
-          </form>
-          <p className="text-[11px] text-ink-faint">One at a time, or paste a comma-separated list to add several at once.</p>
-        </Card>
-      </div>
+      </CollapsibleSection>
 
       {lgu.subdomain ? (
-        <div className="mb-9">
-          <SectionHead title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL." />
+        <CollapsibleSection title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL.">
           <Card className="flex flex-col gap-4 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <a
@@ -448,12 +442,11 @@ export default async function SettingsPage() {
               <EmbedCodeBox code={buildApplyEmbedSnippet(lgu.subdomain)} />
             </div>
           </Card>
-        </div>
+        </CollapsibleSection>
       ) : (
-        <div className="mb-9">
-          <SectionHead title="Your public application form" />
+        <CollapsibleSection title="Your public application form">
           <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact MuniServe support.</p>
-        </div>
+        </CollapsibleSection>
       )}
     </>
   );

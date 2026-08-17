@@ -1,4 +1,4 @@
-import { Card, EmptyState, MiniButton, PrimaryButton, Row, SectionHead, TonePill } from "../ui";
+import { Card, CollapsibleSection, EmptyState, MiniButton, PrimaryButton, Row, SectionLabel, TonePill } from "../ui";
 import { addStaffMember, setStaffActive, updateStaffPhone } from "./staff-actions";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -22,8 +22,7 @@ type DepartmentOption = { name: string; display_name: string | null };
  */
 export function StaffManagementSection({ lguName, lguProvince, staffList, departments }: { lguName: string; lguProvince: string | null; staffList: StaffRow[]; departments: DepartmentOption[] }) {
   return (
-    <div className="mb-9">
-      <SectionHead title="Add/Remove Staff" sub="They'll be able to sign in with Google once you add them here -- no password to set up." />
+    <CollapsibleSection title="Add/Remove Staff" sub="They'll be able to sign in with Google once you add them here -- no password to set up.">
       <Card className="mb-4 p-5">
         <form action={addStaffMember} className="flex flex-wrap items-end gap-3">
           <Field label="Full name">
@@ -56,7 +55,7 @@ export function StaffManagementSection({ lguName, lguProvince, staffList, depart
         </form>
       </Card>
 
-      <SectionHead title={`All staff at ${lguName}${lguProvince ? `, ${lguProvince}` : ""}`} />
+      <SectionLabel>{`All staff at ${lguName}${lguProvince ? `, ${lguProvince}` : ""}`}</SectionLabel>
       {staffList.length === 0 ? (
         <EmptyState>No staff accounts yet.</EmptyState>
       ) : (
@@ -90,7 +89,7 @@ export function StaffManagementSection({ lguName, lguProvince, staffList, depart
           ))}
         </Card>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 

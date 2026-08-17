@@ -276,6 +276,32 @@ export function SectionHead({ title, sub }: { title: string; sub?: string }) {
   );
 }
 
+/**
+ * A collapsed-by-default section wrapper (2026-08-17) -- Settings grew to
+ * ~11 sections (staff, fees, barangays, CEDULA, ...), and the project
+ * owner flagged the page as taking up too much space with everything
+ * always expanded. `<details>`/`<summary>` rather than a "use client"
+ * toggle -- no client state needed, and this page's own forms already
+ * work the same way without JS. `summary::-webkit-details-marker` is
+ * already hidden globally (globals.css) and `.chev`'s rotation-on-open
+ * rule already exists (the Business Registry's own expand rows, CLAUDE.md
+ * 7dd, use the identical pattern) -- reused here rather than a new rule.
+ */
+export function CollapsibleSection({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <details className="mb-9">
+      <summary className="mb-3.5 flex cursor-pointer flex-wrap items-baseline justify-between gap-3">
+        <span className="flex items-center gap-2">
+          <ChevronRightIcon className="chev size-3.5 shrink-0 text-ink-faint" />
+          <h2 className="font-display text-[18px] font-bold text-ink">{title}</h2>
+        </span>
+        {sub && <span className="text-[12.5px] text-ink-faint">{sub}</span>}
+      </summary>
+      {children}
+    </details>
+  );
+}
+
 /** Kept for the few spots that just need a plain label, not a full section head. */
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="mb-2 mt-6 text-[13px] font-bold text-ink-soft">{children}</p>;
