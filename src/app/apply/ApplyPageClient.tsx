@@ -7,6 +7,8 @@ import {
   YES_NO_OPTIONS, BARANGAY_CLEARANCE_OPTIONS,
 } from "@/lib/san-miguel-form-options";
 import { isFieldVisible, REQUIRED_FIELDS, type FieldKey } from "@/lib/application-form-logic";
+import { ALLOWED_TYPES, DOCUMENT_BUCKET, MAX_FILE_BYTES, MAX_FILE_MB } from "@/lib/document-upload";
+import { createClient } from "@/lib/supabase/client";
 import type { LguDisplay } from "@/lib/lgu";
 import type { LguFormOptions } from "@/lib/lgu-form-options";
 
@@ -595,16 +597,50 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     setUploadingDoc(key);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("documentType", label);
-      const res = await fetch("/api/applicant/upload-document", { method: "POST", body: fd });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error === "file_too_large" ? "That file is too large (10MB max)." : "Could not upload that file — try a PDF or image under 10MB.");
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setError("Please upload a PDF or image (JPG, PNG, or WEBP).");
         return;
       }
-      const data = await res.json();
+      if (file.size > MAX_FILE_BYTES) {
+        setError(`That file is too large (${MAX_FILE_MB}MB max).`);
+        return;
+      }
+
+      // Uploads straight to Supabase Storage via a signed URL (2026-08-17)
+      // rather than through our own server -- a real scanned government
+      // document routinely exceeds Vercel's ~4.5MB function request-body
+      // ceiling, confirmed empirically, which no declared limit on our
+      // own route was ever going to change.
+      const urlRes = await fetch("/api/applicant/request-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: file.type, fileName: file.name }),
+      });
+      if (!urlRes.ok) {
+        setError("Could not start that upload — try again in a moment.");
+        return;
+      }
+      const { path, token } = await urlRes.json();
+
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage
+        .from(DOCUMENT_BUCKET)
+        .uploadToSignedUrl(path, token, file, { contentType: file.type });
+      if (uploadError) {
+        setError("Could not upload that file — check your connection and try again.");
+        return;
+      }
+
+      const registerRes = await fetch("/api/applicant/upload-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, documentType: label }),
+      });
+      if (!registerRes.ok) {
+        setError("Could not save that upload — try again.");
+        return;
+      }
+      const data = await registerRes.json();
       setDocuments((prev) => ({ ...prev, [key]: data.documentId }));
     } finally {
       setUploadingDoc(null);
