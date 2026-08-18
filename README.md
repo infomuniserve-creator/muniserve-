@@ -76,6 +76,7 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] BPLO could act on a department's behalf using a stale, superseded review round; Treasury and Mayor had no read access to department_reviews at all — see CLAUDE.md section 7qq's same-day follow-up. Both closed, plus the new RLS policy for department_reviews.
 - [x] Applicants now have a real sign-out — "Start over" and a new "Not you? Sign out" on the status page actually revoke the session, not just reset the form. See CLAUDE.md section 7qq's same-day follow-up.
 - [x] verify-otp now rejects ambiguous request shapes and checks a legacy-business claim's own LGU before allowing it, instead of trusting a different route's scoping. See CLAUDE.md section 7qq's same-day follow-up.
+- [x] BPLO can now regenerate a signed permit's PDF/QR from the Business Registry — before this, a failed generation at signing time was permanent with no way to retry. See CLAUDE.md section 7qq's same-day follow-up.
 - [ ] Whatever's next — see CLAUDE.md section 10 for what's still open (mostly blocked on legal/LGU confirmation, not code)
 
 ## What needs to happen before development continues

@@ -7,7 +7,10 @@ import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import type { FieldKey } from "@/lib/application-form-logic";
+import { getLguDisplay } from "@/lib/lgu";
+import { generatePermitAssets } from "@/lib/permit-pdf";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -329,6 +332,115 @@ export async function claimLegacyBusiness(formData: FormData) {
     action: "legacy_business_claimed",
     summary: `Linked ${business.business_name ?? "(business record missing)"} to a mobile number at the counter -- no application filed`,
     details: { businessId },
+  });
+
+  revalidatePath("/dashboard/businesses");
+}
+
+/**
+ * Re-renders and re-uploads a signed permit's PDF/QR without touching
+ * anything else about it. signPermit's own generation (mayor/actions.ts)
+ * is deliberately best-effort -- a renderer/upload failure there must
+ * never undo or block a real signature -- which means pdf_url/qr_code_url
+ * can stay null forever with no way to retry once that happens. Before
+ * this, the applicant's own /status page just permanently fell back to
+ * "pick up at the BPLO counter" with no path to ever fix it, and there
+ * was no way to regenerate a corrected PDF either (e.g. after fixing a
+ * `lgus` display-text typo that had already been baked into the file).
+ *
+ * BPLO-only. Reuses the exact same generatePermitAssets() call and
+ * storage paths signPermit already uses -- `upsert: true` overwrites the
+ * existing object at the same path, so this is a true re-render, not a
+ * second copy or a new URL to reconcile. Deliberately doesn't touch
+ * permit_history (a record of issuance, not of rendering), issued_at, or
+ * valid_until -- nothing about the real permit changes, only the artifact.
+ * The final permits UPDATE uses the service-role client, matching
+ * signPermit's own choice there -- permits has INSERT policies (mayor,
+ * migration 0002; bplo-on-behalf, migration 0032) but no staff-scoped
+ * UPDATE policy at all.
+ */
+export async function regeneratePermitPdf(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const applicationId = String(formData.get("applicationId"));
+
+  const supabase = await createClient();
+  const { data: application, error: fetchError } = await supabase
+    .from("applications")
+    .select(
+      `reference_number, application_type,
+       business:businesses(business_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, legacy_owner_name, owner:owners(full_name))`
+    )
+    .eq("id", applicationId)
+    .eq("lgu_id", staff.lgu_id)
+    .single();
+  if (fetchError || !application) throw fetchError ?? new Error("Application not found");
+
+  const service = createServiceClient();
+  const { data: permit, error: permitFetchError } = await service
+    .from("permits")
+    .select("id, issued_at, valid_until")
+    .eq("application_id", applicationId)
+    .maybeSingle();
+  if (permitFetchError || !permit) throw permitFetchError ?? new Error("This application hasn't been signed yet -- nothing to regenerate.");
+
+  const business = application.business as unknown as {
+    business_name: string;
+    unit_street: string | null;
+    city_town: string | null;
+    barangay: string | null;
+    province: string | null;
+    zip_code: string | null;
+    address: string | null;
+    nature_of_business: string | null;
+    legacy_owner_name: string | null;
+    owner: { full_name: string } | null;
+  } | null;
+
+  const structuredAddress = [business?.unit_street, business?.city_town, business?.barangay, business?.province, business?.zip_code]
+    .filter(Boolean)
+    .join(", ");
+  const address = structuredAddress || business?.address || "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const verifyUrl = `${appUrl}/verify/${application.reference_number}`;
+
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
+  const { pdf, qrPng } = await generatePermitAssets({
+    referenceNumber: application.reference_number,
+    businessName: business?.business_name ?? "(business record missing)",
+    ownerName: business?.owner?.full_name ?? business?.legacy_owner_name ?? "—",
+    applicationType: application.application_type as "new" | "renewal",
+    natureOfBusiness: business?.nature_of_business ?? null,
+    address,
+    issuedAt: new Date(permit.issued_at),
+    validUntil: permit.valid_until,
+    verifyUrl,
+    lgu,
+  });
+
+  const pdfPath = `${applicationId}/permit.pdf`;
+  const qrPath = `${applicationId}/qr.png`;
+  const [pdfUpload, qrUpload] = await Promise.all([
+    service.storage.from("permit-pdfs").upload(pdfPath, pdf, { contentType: "application/pdf", upsert: true }),
+    service.storage.from("permit-pdfs").upload(qrPath, qrPng, { contentType: "image/png", upsert: true }),
+  ]);
+  if (pdfUpload.error) throw pdfUpload.error;
+  if (qrUpload.error) throw qrUpload.error;
+
+  const pdfUrl = service.storage.from("permit-pdfs").getPublicUrl(pdfPath).data.publicUrl;
+  const qrCodeUrl = service.storage.from("permit-pdfs").getPublicUrl(qrPath).data.publicUrl;
+
+  const { error: updateError } = await service.from("permits").update({ pdf_url: pdfUrl, qr_code_url: qrCodeUrl }).eq("id", permit.id);
+  if (updateError) throw updateError;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    applicationId,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "permit_pdf_regenerated",
+    summary: `Permit PDF regenerated for ${application.reference_number}`,
   });
 
   revalidatePath("/dashboard/businesses");

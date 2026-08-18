@@ -51,7 +51,8 @@ export type AuditAction =
   | "barangays_updated"
   | "barangay_clearance_rate_updated"
   | "application_archived"
-  | "application_reopened";
+  | "application_reopened"
+  | "permit_pdf_regenerated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

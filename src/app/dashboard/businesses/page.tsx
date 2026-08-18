@@ -12,7 +12,7 @@ import {
   MiniButton, PrimaryButton, SearchIcon, StatCard, StatGrid, TonePill, XIcon,
 } from "../ui";
 import { BusinessesSubNav } from "./sub-nav";
-import { claimLegacyBusiness, setLbtCategory, startWalkInApplication, updateOwnerPhone } from "./actions";
+import { claimLegacyBusiness, regeneratePermitPdf, setLbtCategory, startWalkInApplication, updateOwnerPhone } from "./actions";
 
 const STATUS_FILTERS: { value: "all" | BusinessStatus; label: string }[] = [
   { value: "all", label: "All" },
@@ -432,6 +432,12 @@ function RegistryRow({
                     >
                       Order of Payment
                     </a>
+                  )}
+                  {canWalkIn && (a.status === "pending_release" || a.status === "released") && (
+                    <form action={regeneratePermitPdf} className="shrink-0">
+                      <input type="hidden" name="applicationId" value={a.id} />
+                      <MiniButton type="submit" tone="neutral">Regenerate permit PDF</MiniButton>
+                    </form>
                   )}
                 </div>
               ))}
