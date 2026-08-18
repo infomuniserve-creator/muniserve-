@@ -4,7 +4,7 @@ import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
-import { Card, CollapsibleSection, MiniButton, PrimaryButton, TonePill } from "../ui";
+import { Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
 import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
@@ -75,8 +75,16 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <StaffManagementSection lguName={lgu.name} lguProvince={lgu.province} staffList={staffListRaw ?? []} departments={departmentsRaw ?? []} />
+      <div className="mb-7">
+        <h1 className="font-display text-[26px] font-bold text-ink">Settings</h1>
+        <p className="mt-1.5 max-w-lg text-[14px] text-ink-soft">Everything that governs how {lgu.name} runs on MuniServe -- who has access, what things cost, and what applicants and staff see.</p>
+      </div>
 
+      <SettingsGroup icon={<UserIcon className="size-4" />} title="Staff & Access" description="Who can sign in, and what they can do.">
+        <StaffManagementSection lguName={lgu.name} lguProvince={lgu.province} staffList={staffListRaw ?? []} departments={departmentsRaw ?? []} />
+      </SettingsGroup>
+
+      <SettingsGroup icon={<span className="text-[15px] leading-none">₱</span>} title="Fee Rates" description="How much each fee actually costs.">
       <CollapsibleSection
         title="Business Tax & Mayor's Permit Fee Setup"
         sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed."
@@ -150,7 +158,9 @@ export default async function SettingsPage() {
           </form>
         </Card>
       </CollapsibleSection>
+      </SettingsGroup>
 
+      <SettingsGroup icon={<PinIcon className="size-3.5" />} title="Barangays" description="The barangay list, and what MuniServe charges to generate a clearance.">
       <CollapsibleSection
         title="Barangays"
         sub="Shown as a dropdown on your public application form. Without any listed here, applicants type their barangay in as free text instead."
@@ -258,7 +268,9 @@ export default async function SettingsPage() {
           )}
         </Card>
       </CollapsibleSection>
+      </SettingsGroup>
 
+      <SettingsGroup icon={<SettingsIcon className="size-4" />} title="Assessment Rules" description="How assessment behaves, not how much things cost.">
       <CollapsibleSection
         title="Automated Assessment"
         sub="A safe fallback if the automated Local Business Tax or Mayor's Permit Fee computation is ever wrong for your LGU."
@@ -343,7 +355,9 @@ export default async function SettingsPage() {
           </form>
         </Card>
       </CollapsibleSection>
+      </SettingsGroup>
 
+      <SettingsGroup icon={<BellIcon className="size-4" />} title="Documents & Alerts" description="What gets printed, and what MuniServe texts out.">
       <CollapsibleSection
         title="Permit Certificate Details"
         sub="Shown on the pre-signature certificate printed at the 'For Printing' stage — see the Applications tab."
@@ -418,7 +432,9 @@ export default async function SettingsPage() {
           </p>
         </Card>
       </CollapsibleSection>
+      </SettingsGroup>
 
+      <SettingsGroup icon={<FileIcon className="size-3.5" />} title="Public Application Form" description="The link and embed code applicants actually use.">
       {lgu.subdomain ? (
         <CollapsibleSection title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL.">
           <Card className="flex flex-col gap-4 p-5">
@@ -448,6 +464,7 @@ export default async function SettingsPage() {
           <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact MuniServe support.</p>
         </CollapsibleSection>
       )}
+      </SettingsGroup>
     </>
   );
 }

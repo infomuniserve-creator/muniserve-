@@ -130,6 +130,14 @@ export function SettingsIcon({ className }: IconProps) {
     </svg>
   );
 }
+export function BellIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`${iconBase} ${className ?? "size-4"}`}>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
 
 // ============================================================
 // Status → color mapping. Literal Tailwind class strings throughout
@@ -299,6 +307,49 @@ export function CollapsibleSection({ title, sub, children }: { title: string; su
       </summary>
       {children}
     </details>
+  );
+}
+
+/**
+ * Groups related CollapsibleSections under one labeled, bordered card
+ * (Settings page redesign, 2026-08-18 -- the project owner's own
+ * complaint: eleven-plus sections in one flat, undifferentiated list
+ * read as "messy, scattered, unorganized"). Doesn't touch
+ * CollapsibleSection itself -- that stays exactly as it already is for
+ * every other caller (bplo/page.tsx's Returned/Archived sections) -- this
+ * only adds a visual container + header around however many
+ * CollapsibleSection children are passed in. The divide-y + child-margin
+ * override below turns each item's own `mb-9` into a shared divider
+ * between rows inside one card, instead of stacked free-floating blocks.
+ */
+export function SettingsGroup({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mb-8">
+      <div className="mb-3 flex items-start gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface-3 font-display text-[13px] font-bold text-brand-navy dark:text-brand-teal">
+          {icon}
+        </span>
+        <div className="pt-0.5">
+          <h2 className="font-display text-[15.5px] font-bold text-ink">{title}</h2>
+          {description && <p className="text-[12px] text-ink-soft">{description}</p>}
+        </div>
+      </div>
+      <div className="rounded-3xl border border-border bg-surface shadow-[0_1px_2px_rgba(23,33,66,0.05),0_10px_28px_-12px_rgba(23,33,66,0.14)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_28px_-14px_rgba(0,0,0,0.5)]">
+        <div className="divide-y divide-border px-5 [&>details]:mb-0 [&>details]:py-4 [&>details:first-child]:pt-4.5 [&>details:last-child]:pb-4.5">
+          {children}
+        </div>
+      </div>
+    </div>
   );
 }
 
