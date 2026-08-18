@@ -1,6 +1,7 @@
 import { applicantSessionCookieOptions, createApplicantSession } from "@/lib/applicant-session";
 import { normalizePhone } from "@/lib/phone";
 import { verifyOtp } from "@/lib/otp";
+import { resolveLguId } from "@/lib/lgu";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -62,6 +63,29 @@ export async function POST(request: Request) {
   const renewalBusinessId: string | undefined = body?.businessId || undefined;
   const statusApplicationId: string | undefined = body?.applicationId || undefined;
 
+  // A code is always exactly 6 digits (otp.ts's sendOtpCode -- never any
+  // other shape), and exactly one of {a client-typed phone, businessId,
+  // applicationId} should ever resolve who this OTP is being checked
+  // against -- three different mechanisms for the same one decision, only
+  // ever one active per real screen this route is called from. Without
+  // this, sending more than one silently let whichever branch ran last
+  // (applicationId, then businessId) win with no error at all, rather than
+  // rejecting a request shape that should never happen. legacyBusinessId
+  // is orthogonal (what to claim once identity resolves, not how identity
+  // resolves) but only ever makes sense on the plain-phone first-claim
+  // screen -- never alongside an already-resolved businessId/applicationId
+  // path, so that combination is rejected too.
+  if (!/^\d{6}$/.test(code)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const resolutionParamsProvided = [Boolean(body?.phone), Boolean(renewalBusinessId), Boolean(statusApplicationId)].filter(Boolean).length;
+  if (resolutionParamsProvided !== 1) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  if (legacyBusinessId && (renewalBusinessId || statusApplicationId)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
   const supabase = createServiceClient();
 
   let phone = normalizePhone(body?.phone ?? "");
@@ -101,10 +125,20 @@ export async function POST(request: Request) {
 
   let legacyBusiness: { id: string; legacy_owner_name: string | null } | null = null;
   if (legacyBusinessId) {
+    // lookup-license/route.ts (the only normal way a client ever learns a
+    // legacyBusinessId) already scopes its own search to the current
+    // request's own LGU via resolveLguId(host) -- but nothing here
+    // re-checked that before claiming, trusting that scoping had already
+    // happened somewhere upstream. A crafted request could otherwise pass
+    // an arbitrary legacyBusinessId regardless of which LGU it actually
+    // belongs to. Checked here too, the same "don't trust a different
+    // route's own scoping" principle as every RLS policy in this schema.
+    const lguId = await resolveLguId(request.headers.get("host"));
     const { data: business, error: businessError } = await supabase
       .from("businesses")
       .select("id, legacy_owner_name")
       .eq("id", legacyBusinessId)
+      .eq("lgu_id", lguId)
       .eq("is_legacy_unclaimed", true)
       .maybeSingle();
     if (businessError || !business) {

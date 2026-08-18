@@ -75,6 +75,7 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] Pausing a client now actually stops them — see CLAUDE.md section 7qq's same-day follow-up. Pause previously only blocked a fresh page load and new applicant submissions; a staff member with a tab already open could keep approving, paying, and signing through it indefinitely, since nothing at the action level ever checked. Every state-changing action across BPLO, Treasury, Mayor, department, and Settings now checks for real.
 - [x] BPLO could act on a department's behalf using a stale, superseded review round; Treasury and Mayor had no read access to department_reviews at all — see CLAUDE.md section 7qq's same-day follow-up. Both closed, plus the new RLS policy for department_reviews.
 - [x] Applicants now have a real sign-out — "Start over" and a new "Not you? Sign out" on the status page actually revoke the session, not just reset the form. See CLAUDE.md section 7qq's same-day follow-up.
+- [x] verify-otp now rejects ambiguous request shapes and checks a legacy-business claim's own LGU before allowing it, instead of trusting a different route's scoping. See CLAUDE.md section 7qq's same-day follow-up.
 - [ ] Whatever's next — see CLAUDE.md section 10 for what's still open (mostly blocked on legal/LGU confirmation, not code)
 
 ## What needs to happen before development continues
