@@ -83,6 +83,27 @@ export async function recordPayment(formData: FormData) {
     throw paymentError;
   }
 
+  // Audit finding (2026-08-17): Treasury's own "request more info" is
+  // deliberately non-blocking (applications.status never moves for it),
+  // which meant a still-open Treasury request could quietly outlive its
+  // own relevance -- the application advances past pending_payment (as
+  // it just did, above) and the applicant's status page stops showing
+  // the info-request UI for any status past pending_payment, so the open
+  // request just sits there forever with no path to close it. Payment
+  // actually being recorded is Treasury's own explicit call to proceed
+  // regardless of whatever they'd asked for -- auto-resolve any of
+  // Treasury's own still-open requests here rather than leaving them
+  // orphaned. Deliberately scoped to `requested_by_role = "treasury"`
+  // only -- a department's or BPLO-initial's open request (which
+  // shouldn't coexist with pending_payment anyway, but just in case)
+  // is never touched by this.
+  await service
+    .from("info_requests")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("application_id", applicationId)
+    .eq("requested_by_role", "treasury")
+    .is("resolved_at", null);
+
   const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
   if (business?.owner?.phone) {
     await notifyApplicantSms(

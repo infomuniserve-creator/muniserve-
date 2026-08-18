@@ -35,7 +35,7 @@ export default async function BploDashboardPage() {
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      `id, application_type, status, submitted_at, archived_from_status, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
+      `id, application_type, status, submitted_at, archived_from_status, initial_review_decision, initial_review_notes, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
     )
     .eq("lgu_id", staff.lgu_id)
     .order("submitted_at", { ascending: true });
@@ -58,7 +58,7 @@ export default async function BploDashboardPage() {
   const roundsByApp = new Map<string, { id: string; round_number: number }>();
   const reviewsByRound = new Map<
     string,
-    { id: string; department: string; decision: string; acted_on_behalf: boolean }[]
+    { id: string; department: string; decision: string; acted_on_behalf: boolean; notes: string | null }[]
   >();
 
   if (deptReviewIds.length > 0) {
@@ -78,7 +78,7 @@ export default async function BploDashboardPage() {
     if (latestRoundIds.length > 0) {
       const { data: reviews } = await supabase
         .from("department_reviews")
-        .select("id, review_round_id, department, decision, acted_on_behalf")
+        .select("id, review_round_id, department, decision, acted_on_behalf, notes")
         .in("review_round_id", latestRoundIds);
 
       for (const rv of reviews ?? []) {
@@ -182,6 +182,7 @@ export default async function BploDashboardPage() {
                 ownerName={ownerName(a)}
                 applicationType={a.application_type}
                 status={a.status}
+                conditionNote={a.initial_review_decision === "approved_with_condition" ? a.initial_review_notes : null}
                 business={biz(a)}
                 formInputs={a.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null}
                 lguId={staff.lgu_id}
@@ -211,17 +212,30 @@ export default async function BploDashboardPage() {
                     {businessName(a)} <span className="font-sans text-[12.5px] font-normal text-ink-soft">· Owner: {ownerName(a)}</span>
                   </p>
                   <WorkflowStepper status={a.status} />
-                  <div className="mb-3 flex flex-wrap gap-2">
+
+                  {/* Audit finding (2026-08-17): "approved with condition"'s
+                      own condition text used to vanish the moment
+                      department review opened -- visible nowhere except
+                      buried as unstructured JSON in the audit log. */}
+                  {a.initial_review_decision === "approved_with_condition" && a.initial_review_notes && (
+                    <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
+                      BPLO&rsquo;s condition: {a.initial_review_notes}
+                    </div>
+                  )}
+
+                  <div className="mb-3 flex flex-col gap-1.5">
                     {reviews.length === 0 ? (
                       <span className="text-[12.5px] text-ink-faint">Waiting for department assignment.</span>
                     ) : (
                       reviews.map((r) => (
-                        <TonePill
-                          key={r.department}
-                          dot
-                          tone={r.decision === "approved" || r.decision === "approved_with_condition" ? "good" : r.decision === "rejected" ? "bad" : r.decision === "request_more_info" ? "info" : "neutral"}
-                          label={`${r.department} · ${r.decision.replace(/_/g, " ")}${r.acted_on_behalf ? " (BPLO)" : ""}`}
-                        />
+                        <div key={r.department} className="flex flex-wrap items-center gap-2">
+                          <TonePill
+                            dot
+                            tone={r.decision === "approved" || r.decision === "approved_with_condition" ? "good" : r.decision === "rejected" ? "bad" : r.decision === "request_more_info" ? "info" : "neutral"}
+                            label={`${r.department} · ${r.decision.replace(/_/g, " ")}${r.acted_on_behalf ? " (BPLO)" : ""}`}
+                          />
+                          {r.notes && <span className="text-[12px] text-ink-soft">{r.notes}</span>}
+                        </div>
                       ))
                     )}
                   </div>
@@ -434,9 +448,10 @@ const CATEGORY_ORDER: Record<FeeLineResult["feeCategory"], number> = {
  * can't compute something.
  */
 async function AssessmentCard({
-  applicationId, businessName, ownerName, applicationType, status, business, formInputs, lguId, supabase, automatedAssessmentEnabled, buildingPermitFeeEnabled, buildingPermitFeeLabel,
+  applicationId, businessName, ownerName, applicationType, status, conditionNote, business, formInputs, lguId, supabase, automatedAssessmentEnabled, buildingPermitFeeEnabled, buildingPermitFeeLabel,
 }: {
   applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
+  conditionNote: string | null;
   business: (Record<string, unknown> & { id: string }) | null;
   formInputs: { capital_investment?: number | null; gross_sales?: number | null } | null;
   lguId: string;
@@ -483,6 +498,11 @@ async function AssessmentCard({
           Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
         </p>
         <WorkflowStepper status={status} />
+        {conditionNote && (
+          <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
+            BPLO&rsquo;s condition: {conditionNote}
+          </div>
+        )}
         <div className="mb-1 flex items-start gap-2 rounded-2xl bg-warn-bg px-4 py-3 text-[12.5px] font-bold text-warn-ink">
           <InfoIcon className="mt-0.5 size-4 shrink-0" />
           <span>
@@ -542,6 +562,12 @@ async function AssessmentCard({
         Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
       </p>
       <WorkflowStepper status={status} />
+
+      {conditionNote && (
+        <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
+          BPLO&rsquo;s condition: {conditionNote}
+        </div>
+      )}
 
       <form action={finalizeAssessment}>
         <input type="hidden" name="applicationId" value={applicationId} />

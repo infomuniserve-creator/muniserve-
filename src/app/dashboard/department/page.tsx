@@ -24,7 +24,7 @@ export default async function DepartmentDashboardPage() {
   const { data: pending } = await supabase
     .from("department_reviews")
     .select(
-      `id, decision, review_round:review_rounds(application:applications(id, application_type, status, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))))`
+      `id, decision, review_round:review_rounds(application:applications(id, application_type, status, form_inputs, initial_review_decision, initial_review_notes, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))))`
     )
     .eq("decision", "pending")
     .eq("department", staff.department);
@@ -37,6 +37,8 @@ export default async function DepartmentDashboardPage() {
         application_type: string;
         status: string;
         form_inputs: { capital_investment?: number | null; gross_sales?: number | null } | null;
+        initial_review_decision: string | null;
+        initial_review_notes: string | null;
         business: (Record<string, unknown> & {
           business_name: string;
           legacy_owner_name: string | null;
@@ -75,6 +77,7 @@ export default async function DepartmentDashboardPage() {
                 legacyAddress={biz?.address ?? null}
                 profile={biz ? mapBusinessProfile(biz) : null}
                 basisAmount={app?.form_inputs?.capital_investment ?? app?.form_inputs?.gross_sales ?? null}
+                conditionNote={app?.initial_review_decision === "approved_with_condition" ? app.initial_review_notes : null}
                 department={staff.department ?? ""}
                 buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
                 buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
@@ -88,10 +91,11 @@ export default async function DepartmentDashboardPage() {
 }
 
 async function DepartmentReviewCard({
-  departmentReviewId, applicationId, businessName, ownerName, applicationType, status, legacyAddress, profile, basisAmount, department, buildingPermitFeeEnabled, buildingPermitFeeLabel,
+  departmentReviewId, applicationId, businessName, ownerName, applicationType, status, legacyAddress, profile, basisAmount, conditionNote, department, buildingPermitFeeEnabled, buildingPermitFeeLabel,
 }: {
   departmentReviewId: string; applicationId: string; businessName: string; ownerName: string; applicationType: string; status: string;
   legacyAddress: string | null; profile: import("../ui").BusinessProfile | null; basisAmount: number | null;
+  conditionNote: string | null;
   department: string; buildingPermitFeeEnabled: boolean; buildingPermitFeeLabel: string;
 }) {
   const documents = applicationId ? await getApplicationDocuments(applicationId) : [];
@@ -104,6 +108,15 @@ async function DepartmentReviewCard({
         Owner: {ownerName} · {applicationType === "new" ? "New" : "Renewal"}
       </p>
       <WorkflowStepper status={status} />
+      {/* Audit finding (2026-08-17): a condition BPLO attached at initial
+          review used to vanish the moment department review opened --
+          departments never saw why an application was only conditionally
+          approved. */}
+      {conditionNote && (
+        <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
+          BPLO&rsquo;s condition: {conditionNote}
+        </div>
+      )}
       <BusinessProfileBlock legacyAddress={legacyAddress} profile={profile} applicationType={applicationType} basisAmount={basisAmount} />
 
       <DocumentList documents={documents} signedUrls={signedUrls} />

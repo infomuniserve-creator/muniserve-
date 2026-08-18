@@ -40,6 +40,11 @@ const STATUS_LABEL: Record<string, string> = {
   pending_printing: "For printing",
   pending_mayor: "Mayor's signature",
   pending_release: "For release",
+  // Audit finding (2026-08-17): missing entirely, so returned_to_applicant
+  // never appeared in the "currently stuck" table below -- the exact
+  // status the manual Archive action (bplo/page.tsx) exists to close out,
+  // silently excluded from the one dashboard meant to surface it.
+  returned_to_applicant: "Returned to applicant",
 };
 
 /**
@@ -90,6 +95,20 @@ export async function computePerformanceStats(
       .range(offset, offset + limit - 1)
   );
 
+  // ---- Currently stuck (live, not historical) -- deliberately its own
+  // UNBOUNDED query, computed before and independent of everything below.
+  // Audit finding (2026-08-17): this used to reuse the same range-filtered
+  // `applications` array as every other (genuinely historical) stat in
+  // this function -- meaning an application open longer than the selected
+  // window (90 days by default) silently fell out of view entirely, for
+  // exactly the worst case: the longest-stuck applications were the ones
+  // most likely to predate the window. "Stuck" is inherently a
+  // live-right-now question, not a historical-range one, so it can't
+  // share the range-bound fetch -- and it has to run even when the range
+  // itself has zero applications in it, which is exactly when the old
+  // code's early-return below would have skipped it entirely.
+  const stuckApplications = await computeStuckApplications(supabase, lguId);
+
   const appIds = applications.map((a) => a.id);
   if (appIds.length === 0) {
     return {
@@ -100,7 +119,7 @@ export async function computePerformanceStats(
       byType: { new: { count: 0, avgDays: null }, renewal: { count: 0, avgDays: null } },
       stageAverages: [],
       departmentTurnaround: [],
-      stuckApplications: [],
+      stuckApplications,
     };
   }
 
@@ -234,14 +253,82 @@ export async function computePerformanceStats(
     }))
     .sort((a, b) => (b.avgDays ?? -1) - (a.avgDays ?? -1));
 
-  // ---- Currently stuck (live, not historical) -- "days stuck" uses the
-  // best available "entered this stage" timestamp, falling back to
-  // submitted_at when a more specific one isn't captured (see module
-  // comment).
-  const OPEN_STATUSES = new Set(Object.keys(STATUS_LABEL));
+  return {
+    totalApplications: applications.length,
+    releasedCount: released.length,
+    avgDaysSubmittedToReleased: average(releaseDurations),
+    medianDaysSubmittedToReleased: median(releaseDurations),
+    byType: { new: byTypeStats("new"), renewal: byTypeStats("renewal") },
+    stageAverages,
+    departmentTurnaround,
+    stuckApplications,
+  };
+}
+
+/**
+ * "Days stuck" uses the best available "entered this stage" timestamp,
+ * falling back to submitted_at when a more specific one isn't captured
+ * (see module comment) -- unchanged reasoning from before this was split
+ * out, only the fetch itself is new (unbounded by any date range, see the
+ * call site's own comment on why).
+ */
+async function computeStuckApplications(supabase: SupabaseClient, lguId: string): Promise<PerformanceStats["stuckApplications"]> {
+  const openStatuses = Object.keys(STATUS_LABEL);
+
+  const stuckRaw = await fetchAllRows<{
+    id: string;
+    reference_number: string | null;
+    status: string;
+    submitted_at: string;
+    initial_review_at: string | null;
+    assessment_finalized_at: string | null;
+    printed_at: string | null;
+    business: { business_name: string } | { business_name: string }[] | null;
+  }>((offset, limit) =>
+    supabase
+      .from("applications")
+      .select(
+        "id, reference_number, status, submitted_at, initial_review_at, assessment_finalized_at, printed_at, business:businesses(business_name)",
+        { count: "exact" }
+      )
+      .eq("lgu_id", lguId)
+      .in("status", openStatuses)
+      .range(offset, offset + limit - 1)
+  );
+  if (stuckRaw.length === 0) return [];
+
+  const stuckAppIds = stuckRaw.map((a) => a.id);
+  const [rounds, payments, permits] = await Promise.all([
+    fetchAllRows<{ application_id: string; round_number: number; opened_at: string }>((offset, limit) =>
+      supabase
+        .from("review_rounds")
+        .select("application_id, round_number, opened_at", { count: "exact" })
+        .in("application_id", stuckAppIds)
+        .range(offset, offset + limit - 1)
+    ),
+    fetchAllRows<{ application_id: string; received_at: string }>((offset, limit) =>
+      supabase.from("payments").select("application_id, received_at", { count: "exact" }).in("application_id", stuckAppIds).range(offset, offset + limit - 1)
+    ),
+    fetchAllRows<{ application_id: string; issued_at: string | null }>((offset, limit) =>
+      supabase.from("permits").select("application_id, issued_at", { count: "exact" }).in("application_id", stuckAppIds).range(offset, offset + limit - 1)
+    ),
+  ]);
+
+  const roundsByApp = new Map<string, typeof rounds>();
+  for (const r of rounds) {
+    const list = roundsByApp.get(r.application_id) ?? [];
+    list.push(r);
+    roundsByApp.set(r.application_id, list);
+  }
+  const firstPaymentByApp = new Map<string, string>();
+  for (const p of payments) {
+    const existing = firstPaymentByApp.get(p.application_id);
+    if (!existing || p.received_at < existing) firstPaymentByApp.set(p.application_id, p.received_at);
+  }
+  const permitByApp = new Map(permits.filter((p) => p.issued_at).map((p) => [p.application_id, p.issued_at as string]));
+
   const now = Date.now();
-  const stuckApplications = applications
-    .filter((a) => OPEN_STATUSES.has(a.status))
+  return stuckRaw
     .map((a) => {
       const firstRound = (roundsByApp.get(a.id) ?? []).find((r) => r.round_number === 1);
       const enteredAt: string =
@@ -255,7 +342,9 @@ export async function computePerformanceStats(
                 ? (a.printed_at ?? a.submitted_at)
                 : a.status === "pending_release"
                   ? (permitByApp.get(a.id) ?? a.submitted_at)
-                  : a.submitted_at;
+                  : a.status === "returned_to_applicant"
+                    ? (a.initial_review_at ?? a.submitted_at)
+                    : a.submitted_at;
       const business = Array.isArray(a.business) ? a.business[0] : a.business;
       return {
         id: a.id,
@@ -266,15 +355,4 @@ export async function computePerformanceStats(
       };
     })
     .sort((a, b) => b.daysStuck - a.daysStuck);
-
-  return {
-    totalApplications: applications.length,
-    releasedCount: released.length,
-    avgDaysSubmittedToReleased: average(releaseDurations),
-    medianDaysSubmittedToReleased: median(releaseDurations),
-    byType: { new: byTypeStats("new"), renewal: byTypeStats("renewal") },
-    stageAverages,
-    departmentTurnaround,
-    stuckApplications,
-  };
 }
