@@ -71,15 +71,63 @@ export async function openDepartmentReviewRound(
         d.name
       );
     }
+    return;
+  }
+
+  // Audit finding (2026-08-17): zero active departments used to leave this
+  // review_rounds row with no department_reviews children at all --
+  // nothing but a real department decision ever calls
+  // areAllDepartmentsCleared, and with no departments left to decide
+  // anything, nothing would ever trigger that check. The application sat
+  // at pending_dept_review forever with literally no path forward. If an
+  // LGU genuinely has zero active reviewing departments, there's nothing
+  // to wait for -- advance straight through to the same place a normal
+  // round lands once every department actually clears.
+  const service = createServiceClient();
+  const { data: updatedApp } = await service
+    .from("applications")
+    .update({ status: "pending_bplo_assessment" })
+    .eq("id", applicationId)
+    .eq("status", "pending_dept_review")
+    .select("reference_number, business:businesses(business_name)")
+    .single();
+  if (updatedApp) {
+    const biz = updatedApp.business as unknown as { business_name: string } | null;
+    await notifyStaffByRole(
+      lguId,
+      "bplo",
+      applicationId,
+      `Ready for assessment: ${updatedApp.reference_number}`,
+      `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${updatedApp.reference_number}) -- no active departments to review, ready for fee assessment.</p>`,
+      `${biz?.business_name ?? "Application"} (${updatedApp.reference_number}) -- no active departments to review, ready for assessment.`
+    );
   }
 }
 
 /**
- * Whether every active department for an LGU has, as of its MOST RECENT
- * decision for this application (which may span multiple review_rounds --
+ * Whether every department THIS APPLICATION HAS ACTUALLY BEEN THROUGH has,
+ * as of its MOST RECENT decision (which may span multiple review_rounds --
  * rule #6: a department that already approved in an earlier round isn't
  * re-triggered on resubmission, so its approval has to keep counting),
  * approved or approved_with_condition.
+ *
+ * Audit finding (2026-08-17): used to re-derive "who must decide" from a
+ * LIVE query of lgu_departments.is_active at check-time instead of the
+ * department_reviews rows actually created when each round opened -- two
+ * real structural dead-ends followed. A department deactivated after a
+ * round opened had its still-pending row silently excluded from this
+ * check (the round "cleared" without it ever actually deciding, with no
+ * trace anything was skipped). A department activated AFTER a round
+ * opened was required by the live check despite having no row in that
+ * round at all -- and nothing anywhere ever creates one for an
+ * already-open round, so that application could never clear again, full
+ * stop. Checking every department this function has ever seen a ROW for
+ * (latestByDept's own keys, not a live lgu_departments query) fixes both:
+ * a department with no row in any round for this application was never
+ * asked and isn't required; one that DID get a row keeps being required
+ * for real even if later deactivated -- visibly stuck rather than
+ * silently skipped, recoverable via the widened Archive action
+ * (bplo/actions.ts) if it's truly a dead end.
  *
  * Uses the service-role client deliberately: this check runs as a
  * system-driven side effect after a department (or BPLO on their behalf)
@@ -87,15 +135,8 @@ export async function openDepartmentReviewRound(
  * applications.status is not something the acting department has (or
  * should have) direct UPDATE rights to do themselves.
  */
-export async function areAllDepartmentsCleared(applicationId: string, lguId: string): Promise<boolean> {
+export async function areAllDepartmentsCleared(applicationId: string): Promise<boolean> {
   const supabase = createServiceClient();
-
-  const { data: departments } = await supabase
-    .from("lgu_departments")
-    .select("name")
-    .eq("lgu_id", lguId)
-    .eq("is_active", true);
-  if (!departments || departments.length === 0) return false;
 
   const { data: rounds } = await supabase
     .from("review_rounds")
@@ -126,10 +167,13 @@ export async function areAllDepartmentsCleared(applicationId: string, lguId: str
     }
   }
 
-  return departments.every((d) => {
-    const decision = latestByDept.get(d.name);
-    return decision === "approved" || decision === "approved_with_condition";
-  });
+  // No department has ever had a row for this application (the
+  // zero-active-departments case, handled proactively by
+  // openDepartmentReviewRound below -- this is a defensive fallback, not
+  // the only place that case is covered) -- vacuously nothing left to wait for.
+  if (latestByDept.size === 0) return true;
+
+  return Array.from(latestByDept.values()).every((decision) => decision === "approved" || decision === "approved_with_condition");
 }
 
 /**
@@ -303,7 +347,7 @@ export async function submitDepartmentDecision(params: {
     .single();
   if (!round) return;
 
-  const cleared = await areAllDepartmentsCleared(round.application_id, staff.lgu_id);
+  const cleared = await areAllDepartmentsCleared(round.application_id);
   if (cleared) {
     const { data: updatedApp } = await service
       .from("applications")
