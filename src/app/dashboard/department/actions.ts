@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { submitDepartmentDecision } from "@/lib/review-workflow";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -9,7 +9,7 @@ type Decision = "approved" | "approved_with_condition" | "request_more_info" | "
 
 /** A department reviewer acting on their own queue. */
 export async function submitOwnDepartmentDecision(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "department") throw new Error("Not authorized");
 
   const assessedAmountRaw = String(formData.get("assessedAmount") ?? "").trim();

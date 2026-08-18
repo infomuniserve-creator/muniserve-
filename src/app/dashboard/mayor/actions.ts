@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
 import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
@@ -76,7 +76,7 @@ const PAY_FREQUENCY_TO_HISTORY: Record<string, string> = {
  * physical hand-off.
  */
 export async function signPermit(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || (staff.role !== "mayor" && staff.role !== "bplo")) throw new Error("Not authorized");
   const actedOnBehalf = staff.role === "bplo";
 

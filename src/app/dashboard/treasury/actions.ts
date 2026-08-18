@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createInfoRequest } from "@/lib/info-requests";
@@ -36,7 +36,7 @@ import { revalidatePath } from "next/cache";
  * the real actor's own staff_users row either way).
  */
 export async function recordPayment(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || (staff.role !== "treasury" && staff.role !== "bplo")) throw new Error("Not authorized");
   const actedOnBehalf = staff.role === "bplo";
 
@@ -153,7 +153,7 @@ export async function recordPayment(formData: FormData) {
  * (migration 0041) rather than a narrower Treasury-only one.
  */
 export async function requestPaymentInfo(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || (staff.role !== "treasury" && staff.role !== "bplo")) throw new Error("Not authorized");
   const actedOnBehalf = staff.role === "bplo";
 

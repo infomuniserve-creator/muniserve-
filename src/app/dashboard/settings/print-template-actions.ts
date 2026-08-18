@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -21,7 +21,7 @@ export type PreviewResult = { ok: true; fields: TemplateFieldInfo[] } | { ok: fa
 
 /** Parse-only, no writes -- reads the uploaded file's real field names so the mapping UI can show them instead of requiring a guessed naming convention. */
 export async function previewPrintTemplate(formData: FormData): Promise<PreviewResult> {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const file = formData.get("file");
@@ -41,7 +41,7 @@ export async function previewPrintTemplate(formData: FormData): Promise<PreviewR
  * the path + mapping on this LGU's own row.
  */
 export async function publishPrintTemplate(formData: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const file = formData.get("file");
@@ -89,7 +89,7 @@ export async function publishPrintTemplate(formData: FormData): Promise<{ ok: tr
 
 /** Reverts to the generated fallback certificate -- soft, matching this schema's standing convention (clears the reference, doesn't need to delete the storage object for correctness, though it does so best-effort to avoid an orphaned file). */
 export async function removePrintTemplate(): Promise<void> {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const supabase = await createClient();

@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { getEngineeringAssessedAmount, openDepartmentReviewRound } from "@/lib/review-workflow";
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { getLguDisplay } from "@/lib/lgu";
@@ -28,7 +28,7 @@ type Decision = "approved" | "approved_with_condition" | "request_more_info" | "
  * approve until it separately sees proof of payment (CLAUDE.md section 7c).
  */
 export async function submitInitialReview(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
@@ -170,7 +170,7 @@ export async function submitInitialReview(formData: FormData) {
  * paths can't drift apart on what "resubmitted" actually does.
  */
 export async function resubmitToDepartments(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
@@ -218,7 +218,7 @@ export async function resubmitToDepartments(formData: FormData) {
 const MODE_OF_PAYMENT_VALUES = new Set(["Annual", "Semi-Annual", "Quarterly"]);
 
 export async function finalizeAssessment(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
@@ -550,7 +550,7 @@ export async function finalizeAssessment(formData: FormData) {
  * BPLO's own RLS-scoped session, same as submitInitialReview above.
  */
 export async function markPrinted(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
@@ -589,7 +589,7 @@ export async function markPrinted(formData: FormData) {
  * this is just the status flip plus who/when for the audit trail.
  */
 export async function markReleased(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
@@ -630,7 +630,7 @@ export async function markReleased(formData: FormData) {
 
 /** BPLO can act on any department's behalf (rule #9) -- same shape as a department's own decision, tagged acted_on_behalf. */
 export async function submitDepartmentDecisionAsBplo(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const assessedAmountRaw = String(formData.get("assessedAmount") ?? "").trim();
@@ -658,7 +658,7 @@ export async function submitDepartmentDecisionAsBplo(formData: FormData) {
  * relies on (businesses previously had no staff write policy at all).
  */
 export async function setLbtCategory(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const businessId = String(formData.get("businessId"));
@@ -728,7 +728,7 @@ const ARCHIVABLE_STATUSES = new Set([
  * never actually saw.
  */
 export async function archiveApplication(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
@@ -771,7 +771,7 @@ export async function archiveApplication(formData: FormData) {
  * archived before this column existed.
  */
 export async function reopenApplication(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));

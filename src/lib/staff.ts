@@ -56,6 +56,43 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
 }
 
 /**
+ * Same as getCurrentStaff(), plus an is_paused check -- for every STATE-
+ * CHANGING server action, not for pages/layouts. Audit finding
+ * (2026-08-17): Pause (CLAUDE.md 7o) only ever blocked a fresh page load
+ * (dashboard/layout.tsx's own render-time check) and new applicant
+ * submissions -- every actual server action had no runtime pause check
+ * at all, so a staff member with an already-open tab from before the
+ * pause could keep approving/paying/signing indefinitely through it,
+ * since neither RLS nor any action file ever looks at is_paused.
+ *
+ * Deliberately NOT folded into getCurrentStaff() itself -- that function
+ * is also what dashboard/layout.tsx calls to decide whether to render
+ * PausedNotice in the first place; if it silently returned null for a
+ * paused real staff member, the layout's own `if (staff) {...}` branch
+ * (where the PausedNotice check lives) would never run, and a paused
+ * visitor would fall through to whatever a page's own getCurrentStaff()
+ * call does next (usually a redirect to /login) instead of ever seeing
+ * "Your account is currently Paused." A second, narrower function for
+ * actions specifically avoids that regression while still closing the
+ * real gap -- every state-changing action swaps its `getCurrentStaff()`
+ * call for this one, a mechanical one-line change per action.
+ *
+ * Exempts a platform admin's "view as" proxy row, same reasoning as
+ * dashboard/layout.tsx's own exemption -- they still need to be able to
+ * act on a paused client's behalf while troubleshooting it.
+ */
+export async function requireUnpausedStaff(): Promise<CurrentStaff | null> {
+  const staff = await getCurrentStaff();
+  if (!staff || staff.is_admin_proxy) return staff;
+
+  const supabase = await createClient();
+  const { data: lgu } = await supabase.from("lgus").select("is_paused").eq("id", staff.lgu_id).maybeSingle();
+  if (lgu?.is_paused) return null;
+
+  return staff;
+}
+
+/**
  * The office identity (label, avatar initials, "Applications" home link)
  * shown in every dashboard page's top bar -- including the shared
  * Business Registry page, which needs to show the right office even

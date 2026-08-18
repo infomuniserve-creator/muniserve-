@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { notifyStaffEmail } from "@/lib/notifications";
 import { normalizePhone } from "@/lib/phone";
@@ -40,7 +40,7 @@ const ROLE_LABEL: Record<string, string> = {
  * that was actually created.
  */
 export async function addStaffMember(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const fullName = String(formData.get("fullName") ?? "").trim();
@@ -113,7 +113,7 @@ export async function addStaffMember(formData: FormData) {
  * way to express "not the last one."
  */
 export async function setStaffActive(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const staffId = String(formData.get("staffId"));
@@ -167,7 +167,7 @@ export async function setStaffActive(formData: FormData) {
  * column, nothing about role/department/email is touched here.
  */
 export async function updateStaffPhone(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const staffId = String(formData.get("staffId"));

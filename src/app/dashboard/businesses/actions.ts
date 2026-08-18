@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { openDepartmentReviewRound } from "@/lib/review-workflow";
 import { normalizePhone } from "@/lib/phone";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
@@ -35,7 +35,7 @@ import { revalidatePath } from "next/cache";
  * classification.
  */
 export async function startWalkInApplication(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const businessId = String(formData.get("businessId") ?? "");
@@ -185,7 +185,7 @@ export async function startWalkInApplication(formData: FormData) {
  * fact.
  */
 export async function setLbtCategory(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const businessId = String(formData.get("businessId"));
@@ -221,7 +221,7 @@ export async function setLbtCategory(formData: FormData) {
  * handled as a deliberate, separate decision than silently allowed here.
  */
 export async function updateOwnerPhone(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const businessId = String(formData.get("businessId") ?? "");
@@ -280,7 +280,7 @@ export async function updateOwnerPhone(formData: FormData) {
  * is_legacy_unclaimed), just without anything else attached to it.
  */
 export async function claimLegacyBusiness(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const businessId = String(formData.get("businessId") ?? "");

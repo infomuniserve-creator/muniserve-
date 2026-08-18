@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentStaff } from "@/lib/staff";
+import { requireUnpausedStaff } from "@/lib/staff";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -27,7 +27,7 @@ import { type FeeType, parseLbtCsv, parseMayorsPermitCsv, summarizeRule } from "
  * now; see CLAUDE.md for the full scope note.
  */
 export async function addRegulatoryFee(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const name = String(formData.get("name") ?? "").trim();
@@ -84,7 +84,7 @@ export async function addRegulatoryFee(formData: FormData) {
  * as a deliberate follow-up, not built here.
  */
 export async function setRegulatoryFeeAcctCode(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const feeRuleId = String(formData.get("feeRuleId"));
@@ -114,7 +114,7 @@ export async function setRegulatoryFeeAcctCode(formData: FormData) {
 
 /** Soft-delete only, matching this schema's standing convention (businesses.is_active, lgu_departments.is_active, staff_users.is_active) -- a fee already charged on a past assessment must keep showing correctly on that historical record, which a hard delete would silently corrupt. */
 export async function setRegulatoryFeeActive(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const feeRuleId = String(formData.get("feeRuleId"));
@@ -152,7 +152,7 @@ export async function setRegulatoryFeeActive(formData: FormData) {
  * number a bracket/matrix lookup can get wrong.
  */
 export async function setAutomatedAssessmentEnabled(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const enabled = formData.get("enabled") === "true";
@@ -186,7 +186,7 @@ export async function setAutomatedAssessmentEnabled(formData: FormData) {
  * migration needed for this control.
  */
 export async function updateMayorName(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const mayorName = String(formData.get("mayorName") ?? "").trim() || null;
@@ -214,7 +214,7 @@ export async function updateMayorName(formData: FormData) {
  * signing gate of its own). Same RLS reasoning as updateMayorName.
  */
 export async function updateTreasurerName(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const treasurerName = String(formData.get("treasurerName") ?? "").trim() || null;
@@ -245,7 +245,7 @@ export async function updateTreasurerName(formData: FormData) {
  * lgu's settings" policy already covers this column, no new policy.
  */
 export async function updateSenderName(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const senderName = String(formData.get("senderName") ?? "").trim() || null;
@@ -275,7 +275,7 @@ export async function updateSenderName(formData: FormData) {
  * migration needed for this control itself.
  */
 export async function updateBuildingPermitFeeSettings(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const enabled = formData.get("enabled") === "true";
@@ -314,7 +314,7 @@ export async function updateBuildingPermitFeeSettings(formData: FormData) {
  * this LGU sell CEDULA online," not something that varies by filer type.
  */
 export async function setCedulaIncludedOnline(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const enabled = formData.get("enabled") === "true";
@@ -356,7 +356,7 @@ export type FeeImportPreview = { ok: true; summaries: string[]; warnings: string
 
 /** Parse-only, no writes -- lets BPLO see exactly what a file will do before committing to it. */
 export async function previewFeeRuleImport(feeType: FeeType, csvText: string): Promise<FeeImportPreview> {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const result = feeType === "lbt" ? parseLbtCsv(csvText) : parseMayorsPermitCsv(csvText);
@@ -382,7 +382,7 @@ export async function previewFeeRuleImport(feeType: FeeType, csvText: string): P
  * to "nothing changed" rather than "changed and broken".
  */
 export async function publishFeeRuleImport(feeType: FeeType, csvText: string): Promise<{ ok: true; ruleCount: number } | { ok: false; errors: string[] }> {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const result = feeType === "lbt" ? parseLbtCsv(csvText) : parseMayorsPermitCsv(csvText);
@@ -462,7 +462,7 @@ type ExportBracketRow = { fee_rule_id: string; min_amount: number | null; max_am
 
 /** Used by the template-download route handler -- fetches this LGU's currently active rules of one fee category, shaped for fee-rule-import.ts's CSV builders. Kept here (not the route handler) since it needs the same staff-auth + RLS-scoped client every other settings action uses. */
 export async function getExportableFeeRules(feeType: FeeType): Promise<{ lbt: import("@/lib/fee-rule-import").ExportableLbtRule[] } | { mp: import("@/lib/fee-rule-import").ExportableMpRule[] }> {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const supabase = await createClient();
@@ -531,7 +531,7 @@ export async function getExportableFeeRules(feeType: FeeType): Promise<{ lbt: im
  * constraint -- re-pasting the same list back is a safe no-op.
  */
 export async function addBarangays(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const raw = String(formData.get("barangays") ?? "");
@@ -569,7 +569,7 @@ export async function addBarangays(formData: FormData) {
 
 /** Removes one barangay from the list -- a hard delete, not a soft one. Unlike fee_rules/staff_users, nothing else in this schema references lgu_form_options rows by FK (businesses.barangay is a free-text value, not a foreign key), so there's no history to preserve by keeping a deactivated row around. */
 export async function removeBarangay(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const id = String(formData.get("id") ?? "");
@@ -607,7 +607,7 @@ export async function removeBarangay(formData: FormData) {
  * has nothing to delete).
  */
 export async function setBarangayClearanceRate(formData: FormData) {
-  const staff = await getCurrentStaff();
+  const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const barangay = String(formData.get("barangay") ?? "").trim();
