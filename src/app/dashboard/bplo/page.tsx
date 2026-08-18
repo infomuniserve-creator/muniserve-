@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, CollapsibleSection, DecisionButtons, DocumentList,
-  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, StatGrid, TonePill, UserIcon, WorkflowStepper,
+  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, TonePill, UserIcon, WorkflowStepper,
 } from "../ui";
 import { archiveApplication, finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, reopenApplication, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
 import type { ManualFieldSpec } from "./assessment-manual-fields";
@@ -17,6 +17,7 @@ import { AssessmentLineItems } from "./assessment-line-items";
 import { AwaitingPaymentSection } from "../payment-queue";
 import { signPermit } from "../mayor/actions";
 import { DepartmentReviewActions } from "../department-review-actions";
+import { BploDashboardTabs, type BploTabDef } from "./dashboard-tabs";
 
 /**
  * BPLO dashboard -- redesigned per the approved design concept (card-based
@@ -35,7 +36,7 @@ export default async function BploDashboardPage() {
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      `id, application_type, status, submitted_at, archived_from_status, initial_review_decision, initial_review_notes, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
+      `id, application_type, status, submitted_at, archived_from_status, initial_review_decision, initial_review_notes, form_inputs, released_at, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
     )
     .eq("lgu_id", staff.lgu_id)
     .order("submitted_at", { ascending: true });
@@ -89,6 +90,17 @@ export default async function BploDashboardPage() {
     }
   }
 
+  // Released tab (new -- previously only a stat count, no list anywhere on
+  // this page): pdf_url per released application, same public-bucket link
+  // the applicant's own /status page already shows, so staff can hand
+  // someone their permit again without needing the applicant's own link.
+  const permitPdfByApp = new Map<string, string | null>();
+  const releasedIds = released.map((a) => a.id);
+  if (releasedIds.length > 0) {
+    const { data: permitRows } = await supabase.from("permits").select("application_id, pdf_url").in("application_id", releasedIds);
+    for (const p of permitRows ?? []) permitPdfByApp.set(p.application_id, p.pdf_url);
+  }
+
   type BizFields = Record<string, unknown> & {
     id: string;
     business_name: string;
@@ -127,246 +139,317 @@ export default async function BploDashboardPage() {
     pending_release: "For release",
   };
 
+  // Each of the 8 pipeline stat cards doubles as a tab now (project owner's
+  // request, 2026-08-17) -- only the clicked stage's queue shows below,
+  // instead of every stage stacked on the page at once. "Needs your
+  // review" used to bundle Initial review + Assessment review under one
+  // heading/empty-state; split into two standalone tab contents so each
+  // has its own stat card. Tone/icon choices are unchanged from the
+  // original stat grid's own reasoning (see the removed comment this
+  // replaced): warn = BPLO has to make a judgment call, info = waiting on
+  // someone else or a simple physical confirmation, good = done.
+  const initialContent = (
+    <div>
+      <SectionHead title="Initial review" />
+      {initial.length === 0 ? (
+        <EmptyState>Nothing waiting at Initial review right now.</EmptyState>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {initial.map((a) => (
+            <InitialReviewCard
+              key={a.id}
+              applicationId={a.id}
+              businessId={biz(a)?.id ?? null}
+              businessName={businessName(a)}
+              ownerName={ownerName(a)}
+              applicationType={a.application_type}
+              status={a.status}
+              legacyAddress={biz(a)?.address ?? null}
+              profile={biz(a) ? mapBusinessProfile(biz(a)!) : null}
+              basisAmount={basisAmount(a)}
+              lbtCategoryOptions={lbtCategoryOptions}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const assessmentContent = (
+    <div>
+      <SectionHead title="Assessment review" />
+      {assessment.length === 0 ? (
+        <EmptyState>Nothing waiting at Assessment review right now.</EmptyState>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {assessment.map((a) => (
+            <AssessmentCard
+              key={a.id}
+              applicationId={a.id}
+              businessName={businessName(a)}
+              ownerName={ownerName(a)}
+              applicationType={a.application_type}
+              status={a.status}
+              conditionNote={a.initial_review_decision === "approved_with_condition" ? a.initial_review_notes : null}
+              business={biz(a)}
+              formInputs={a.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null}
+              lguId={staff.lgu_id}
+              supabase={supabase}
+              automatedAssessmentEnabled={lgu.automatedAssessmentEnabled}
+              buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
+              buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const deptReviewContent = (
+    <div>
+      <SectionHead title="In review across departments" sub="Engineering, MHO, MPDO, BFP, MENRO" />
+      {inDeptReview.length === 0 ? (
+        <EmptyState>No applications currently with the departments.</EmptyState>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {inDeptReview.map((a) => {
+            const round = roundsByApp.get(a.id);
+            const reviews = round ? reviewsByRound.get(round.id) ?? [] : [];
+            const flagged = reviews.filter((r) => r.decision === "rejected" || r.decision === "request_more_info");
+            return (
+              <Card key={a.id} className="p-5">
+                <p className="mb-3 font-display text-[15px] font-bold text-ink">
+                  {businessName(a)} <span className="font-sans text-[12.5px] font-normal text-ink-soft">· Owner: {ownerName(a)}</span>
+                </p>
+                <WorkflowStepper status={a.status} />
+
+                {/* Audit finding (2026-08-17): "approved with condition"'s
+                    own condition text used to vanish the moment
+                    department review opened -- visible nowhere except
+                    buried as unstructured JSON in the audit log. */}
+                {a.initial_review_decision === "approved_with_condition" && a.initial_review_notes && (
+                  <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
+                    BPLO&rsquo;s condition: {a.initial_review_notes}
+                  </div>
+                )}
+
+                <div className="mb-3 flex flex-col gap-1.5">
+                  {reviews.length === 0 ? (
+                    <span className="text-[12.5px] text-ink-faint">Waiting for department assignment.</span>
+                  ) : (
+                    reviews.map((r) => (
+                      <div key={r.department} className="flex flex-wrap items-center gap-2">
+                        <TonePill
+                          dot
+                          tone={r.decision === "approved" || r.decision === "approved_with_condition" ? "good" : r.decision === "rejected" ? "bad" : r.decision === "request_more_info" ? "info" : "neutral"}
+                          label={`${r.department} · ${r.decision.replace(/_/g, " ")}${r.acted_on_behalf ? " (BPLO)" : ""}`}
+                        />
+                        {r.notes && <span className="text-[12px] text-ink-soft">{r.notes}</span>}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {reviews.filter((r) => r.decision === "pending").map((r) => (
+                  <div key={r.id} className="flex flex-wrap items-center gap-1.5">
+                    <span className="mr-1 text-[11px] font-bold text-ink-soft">Act for {r.department}:</span>
+                    <DepartmentReviewActions
+                      action={submitDepartmentDecisionAsBplo}
+                      departmentReviewId={r.id}
+                      department={r.department}
+                      buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
+                      buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
+                      compact
+                    />
+                  </div>
+                ))}
+
+                {flagged.length > 0 && (
+                  <form action={resubmitToDepartments} className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warn-bg px-4 py-3">
+                    <input type="hidden" name="applicationId" value={a.id} />
+                    {flagged.map((r) => (
+                      <input key={r.department} type="hidden" name="departments" value={r.department} />
+                    ))}
+                    <p className="text-[12.5px] font-bold text-warn-ink">
+                      Applicant resubmitted — notify {flagged.map((r) => r.department).join(", ")}
+                    </p>
+                    <button type="submit" className="rounded-full bg-warn px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#b87f15]">
+                      Notify
+                    </button>
+                  </form>
+                )}
+                <form action={archiveApplication} className="mt-3">
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+                </form>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const paymentContent = (
+    <div>
+      <SectionHead
+        title="Awaiting payment"
+        sub="Normally Treasury's own step — use this only if the applicant already paid at the Treasury counter and brought their OR receipt straight to you."
+      />
+      {awaitingPayment.length === 0 ? (
+        <EmptyState>Nothing waiting on Treasury right now.</EmptyState>
+      ) : (
+        <AwaitingPaymentSection lguId={staff.lgu_id} showArchive />
+      )}
+    </div>
+  );
+
+  const printingContent = (
+    <div>
+      <SectionHead title="Ready to print" sub="Paid — waiting on the physical permit before it goes to the Mayor" />
+      {printing.length === 0 ? (
+        <EmptyState>Nothing ready to print right now.</EmptyState>
+      ) : (
+        <Card>
+          {printing.map((a) => (
+            <Row key={a.id}>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+              </div>
+              <a
+                href={`/api/dashboard/print-permit?applicationId=${a.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-info px-3.5 py-1.5 text-[12.5px] font-bold text-info hover:bg-info-bg"
+              >
+                Open permit
+              </a>
+              <form action={markPrinted}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <MiniButton type="submit">Mark as printed</MiniButton>
+              </form>
+              <form action={archiveApplication}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+              </form>
+            </Row>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+
+  const signatureContent = (
+    <div>
+      <SectionHead
+        title="At the Mayor's Office"
+        sub="Printed and carried over for signature — mark this once you've brought the signed copy back."
+      />
+      {awaitingSignature.length === 0 ? (
+        <EmptyState>Nothing at the Mayor&rsquo;s Office right now.</EmptyState>
+      ) : (
+        <Card>
+          {awaitingSignature.map((a) => (
+            <Row key={a.id}>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+              </div>
+              <form action={signPermit}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <MiniButton type="submit">Mark as signed</MiniButton>
+              </form>
+              <form action={archiveApplication}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+              </form>
+            </Row>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+
+  const releaseContent = (
+    <div>
+      <SectionHead title="Ready to release" sub="Signed by the Mayor — waiting to be handed to the applicant" />
+      {forRelease.length === 0 ? (
+        <EmptyState>Nothing ready to release right now.</EmptyState>
+      ) : (
+        <Card>
+          {forRelease.map((a) => (
+            <Row key={a.id}>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+              </div>
+              <form action={markReleased}>
+                <input type="hidden" name="applicationId" value={a.id} />
+                <MiniButton type="submit">Mark as released</MiniButton>
+              </form>
+            </Row>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+
+  // New -- Released previously only ever had a stat count, no list
+  // anywhere on this page. Purely informational (nothing left to act on),
+  // so no action buttons -- just a lookup, with the same permit-PDF
+  // download link the applicant's own /status page already shows, for
+  // handing someone their permit again without needing their own link.
+  const releasedContent = (
+    <div>
+      <SectionHead title="Released" sub="Already handed to the applicant" />
+      {released.length === 0 ? (
+        <EmptyState>Nothing released yet.</EmptyState>
+      ) : (
+        <Card>
+          {released.map((a) => {
+            const pdfUrl = permitPdfByApp.get(a.id);
+            return (
+              <Row key={a.id}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">
+                    Owner: {ownerName(a)}
+                    {a.released_at && ` · Released ${new Date(a.released_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" })}`}
+                  </p>
+                </div>
+                {pdfUrl && (
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-info px-3.5 py-1.5 text-[12.5px] font-bold text-info hover:bg-info-bg"
+                  >
+                    Download permit (PDF)
+                  </a>
+                )}
+              </Row>
+            );
+          })}
+        </Card>
+      )}
+    </div>
+  );
+
+  const tabs: BploTabDef[] = [
+    { key: "initial", statCard: <StatCard label="Initial review" value={initial.length} icon={<ClockIcon />} tone="warn" />, content: initialContent },
+    { key: "dept_review", statCard: <StatCard label="In dept. review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />, content: deptReviewContent },
+    { key: "assessment", statCard: <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />, content: assessmentContent },
+    { key: "payment", statCard: <StatCard label="Treasurer approval" value={awaitingPayment.length} icon={<ClockIcon />} tone="info" />, content: paymentContent },
+    { key: "printing", statCard: <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="info" />, content: printingContent },
+    { key: "signature", statCard: <StatCard label="Mayor's signature" value={awaitingSignature.length} icon={<UserIcon className="size-4" />} tone="info" />, content: signatureContent },
+    { key: "release", statCard: <StatCard label="For release" value={forRelease.length} icon={<ClockIcon />} tone="info" />, content: releaseContent },
+    { key: "released", statCard: <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />, content: releasedContent },
+  ];
+
   return (
     <>
-      {/*
-        Every stage of the pipeline gets a count here, not just the ones
-        BPLO directly acts on (Treasurer approval and Mayor's signature
-        are shown for visibility even though Treasury/Mayor own those
-        actions on their own dashboards -- BPLO is the one office that
-        should see the whole thing end to end). Tone reflects what KIND
-        of stage it is, not just "pending": warn = BPLO has to make a
-        judgment call (approve/reject/assess); info = waiting on someone
-        else (departments, Treasury, Mayor) or a simple physical
-        confirmation with no judgment involved (printing/release); good =
-        done. Eight stages, five real tones -- some overlap is inherent,
-        not a mistake.
-      */}
-      <StatGrid>
-        <StatCard label="Initial review" value={initial.length} icon={<ClockIcon />} tone="warn" />
-        <StatCard label="In dept. review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />
-        <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />
-        <StatCard label="Treasurer approval" value={awaitingPayment.length} icon={<ClockIcon />} tone="info" />
-        <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="info" />
-        <StatCard label="Mayor's signature" value={awaitingSignature.length} icon={<UserIcon className="size-4" />} tone="info" />
-        <StatCard label="For release" value={forRelease.length} icon={<ClockIcon />} tone="info" />
-        <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />
-      </StatGrid>
-
-      <div className="mb-9">
-        <SectionHead title="Needs your review" />
-        {initial.length === 0 && assessment.length === 0 ? (
-          <EmptyState>Nothing waiting on BPLO right now.</EmptyState>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {initial.map((a) => (
-              <InitialReviewCard
-                key={a.id}
-                applicationId={a.id}
-                businessId={biz(a)?.id ?? null}
-                businessName={businessName(a)}
-                ownerName={ownerName(a)}
-                applicationType={a.application_type}
-                status={a.status}
-                legacyAddress={biz(a)?.address ?? null}
-                profile={biz(a) ? mapBusinessProfile(biz(a)!) : null}
-                basisAmount={basisAmount(a)}
-                lbtCategoryOptions={lbtCategoryOptions}
-              />
-            ))}
-            {assessment.map((a) => (
-              <AssessmentCard
-                key={a.id}
-                applicationId={a.id}
-                businessName={businessName(a)}
-                ownerName={ownerName(a)}
-                applicationType={a.application_type}
-                status={a.status}
-                conditionNote={a.initial_review_decision === "approved_with_condition" ? a.initial_review_notes : null}
-                business={biz(a)}
-                formInputs={a.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null}
-                lguId={staff.lgu_id}
-                supabase={supabase}
-                automatedAssessmentEnabled={lgu.automatedAssessmentEnabled}
-                buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
-                buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mb-9">
-        <SectionHead title="In review across departments" sub="Engineering, MHO, MPDO, BFP, MENRO" />
-        {inDeptReview.length === 0 ? (
-          <EmptyState>No applications currently with the departments.</EmptyState>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {inDeptReview.map((a) => {
-              const round = roundsByApp.get(a.id);
-              const reviews = round ? reviewsByRound.get(round.id) ?? [] : [];
-              const flagged = reviews.filter((r) => r.decision === "rejected" || r.decision === "request_more_info");
-              return (
-                <Card key={a.id} className="p-5">
-                  <p className="mb-3 font-display text-[15px] font-bold text-ink">
-                    {businessName(a)} <span className="font-sans text-[12.5px] font-normal text-ink-soft">· Owner: {ownerName(a)}</span>
-                  </p>
-                  <WorkflowStepper status={a.status} />
-
-                  {/* Audit finding (2026-08-17): "approved with condition"'s
-                      own condition text used to vanish the moment
-                      department review opened -- visible nowhere except
-                      buried as unstructured JSON in the audit log. */}
-                  {a.initial_review_decision === "approved_with_condition" && a.initial_review_notes && (
-                    <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
-                      BPLO&rsquo;s condition: {a.initial_review_notes}
-                    </div>
-                  )}
-
-                  <div className="mb-3 flex flex-col gap-1.5">
-                    {reviews.length === 0 ? (
-                      <span className="text-[12.5px] text-ink-faint">Waiting for department assignment.</span>
-                    ) : (
-                      reviews.map((r) => (
-                        <div key={r.department} className="flex flex-wrap items-center gap-2">
-                          <TonePill
-                            dot
-                            tone={r.decision === "approved" || r.decision === "approved_with_condition" ? "good" : r.decision === "rejected" ? "bad" : r.decision === "request_more_info" ? "info" : "neutral"}
-                            label={`${r.department} · ${r.decision.replace(/_/g, " ")}${r.acted_on_behalf ? " (BPLO)" : ""}`}
-                          />
-                          {r.notes && <span className="text-[12px] text-ink-soft">{r.notes}</span>}
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {reviews.filter((r) => r.decision === "pending").map((r) => (
-                    <div key={r.id} className="flex flex-wrap items-center gap-1.5">
-                      <span className="mr-1 text-[11px] font-bold text-ink-soft">Act for {r.department}:</span>
-                      <DepartmentReviewActions
-                        action={submitDepartmentDecisionAsBplo}
-                        departmentReviewId={r.id}
-                        department={r.department}
-                        buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
-                        buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
-                        compact
-                      />
-                    </div>
-                  ))}
-
-                  {flagged.length > 0 && (
-                    <form action={resubmitToDepartments} className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warn-bg px-4 py-3">
-                      <input type="hidden" name="applicationId" value={a.id} />
-                      {flagged.map((r) => (
-                        <input key={r.department} type="hidden" name="departments" value={r.department} />
-                      ))}
-                      <p className="text-[12.5px] font-bold text-warn-ink">
-                        Applicant resubmitted — notify {flagged.map((r) => r.department).join(", ")}
-                      </p>
-                      <button type="submit" className="rounded-full bg-warn px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#b87f15]">
-                        Notify
-                      </button>
-                    </form>
-                  )}
-                  <form action={archiveApplication} className="mt-3">
-                    <input type="hidden" name="applicationId" value={a.id} />
-                    <MiniButton type="submit" tone="neutral">Archive</MiniButton>
-                  </form>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {awaitingPayment.length > 0 && (
-        <div className="mb-9">
-          <SectionHead
-            title="Awaiting payment"
-            sub="Normally Treasury's own step — use this only if the applicant already paid at the Treasury counter and brought their OR receipt straight to you."
-          />
-          <AwaitingPaymentSection lguId={staff.lgu_id} showArchive />
-        </div>
-      )}
-
-      {printing.length > 0 && (
-        <div className="mb-9">
-          <SectionHead title="Ready to print" sub="Paid — waiting on the physical permit before it goes to the Mayor" />
-          <Card>
-            {printing.map((a) => (
-              <Row key={a.id}>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
-                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
-                </div>
-                <a
-                  href={`/api/dashboard/print-permit?applicationId=${a.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-info px-3.5 py-1.5 text-[12.5px] font-bold text-info hover:bg-info-bg"
-                >
-                  Open permit
-                </a>
-                <form action={markPrinted}>
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <MiniButton type="submit">Mark as printed</MiniButton>
-                </form>
-                <form action={archiveApplication}>
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
-                </form>
-              </Row>
-            ))}
-          </Card>
-        </div>
-      )}
-
-      {awaitingSignature.length > 0 && (
-        <div className="mb-9">
-          <SectionHead
-            title="At the Mayor's Office"
-            sub="Printed and carried over for signature — mark this once you've brought the signed copy back."
-          />
-          <Card>
-            {awaitingSignature.map((a) => (
-              <Row key={a.id}>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
-                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
-                </div>
-                <form action={signPermit}>
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <MiniButton type="submit">Mark as signed</MiniButton>
-                </form>
-                <form action={archiveApplication}>
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
-                </form>
-              </Row>
-            ))}
-          </Card>
-        </div>
-      )}
-
-      {forRelease.length > 0 && (
-        <div className="mb-9">
-          <SectionHead title="Ready to release" sub="Signed by the Mayor — waiting to be handed to the applicant" />
-          <Card>
-            {forRelease.map((a) => (
-              <Row key={a.id}>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
-                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
-                </div>
-                <form action={markReleased}>
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <MiniButton type="submit">Mark as released</MiniButton>
-                </form>
-              </Row>
-            ))}
-          </Card>
-        </div>
-      )}
+      <BploDashboardTabs tabs={tabs} defaultTab="initial" />
 
       {returned.length > 0 && (
         <CollapsibleSection title="Returned to applicant" sub={`${returned.length} waiting on the applicant`}>

@@ -78,6 +78,7 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] verify-otp now rejects ambiguous request shapes and checks a legacy-business claim's own LGU before allowing it, instead of trusting a different route's scoping. See CLAUDE.md section 7qq's same-day follow-up.
 - [x] BPLO can now regenerate a signed permit's PDF/QR from the Business Registry — before this, a failed generation at signing time was permanent with no way to retry. See CLAUDE.md section 7qq's same-day follow-up.
 - [x] BPLO can now unlink a business from the wrong owner and let it be reclaimed — closes the last item from the full-pipeline audit (all 23 findings now addressed). See CLAUDE.md section 7qq's same-day follow-up.
+- [x] BPLO dashboard's 8 pipeline stat cards are now clickable tabs — only the clicked stage's queue shows below, defaulting to Initial review. See CLAUDE.md section 7rr.
 - [ ] Whatever's next — see CLAUDE.md section 10 for what's still open (mostly blocked on legal/LGU confirmation, not code)
 
 ## What needs to happen before development continues
