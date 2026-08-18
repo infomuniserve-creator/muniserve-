@@ -48,16 +48,17 @@ export async function recordPayment(formData: FormData) {
   if (!amount || amount <= 0) throw new Error("Invalid amount");
 
   const supabase = await createClient();
-  const { error: paymentError } = await supabase.from("payments").insert({
-    application_id: applicationId,
-    amount,
-    method,
-    or_number: orNumber,
-    received_by: staff.id,
-  });
-  if (paymentError) throw paymentError;
-
   const service = createServiceClient();
+
+  // Claimed first, before the payments INSERT -- audit finding
+  // (2026-08-17): the INSERT used to happen with no applications.status
+  // precondition at all, so a stale page or a fast double-click could
+  // create a real payments row against an application that wasn't
+  // actually at pending_payment, only to fail later at this same guard
+  // with the phantom row left behind and nothing cleaning it up. Same
+  // claim-first shape as finalizeAssessment's own fix -- Postgres
+  // serializes concurrent UPDATEs against the same row, so this also
+  // closes a genuine double-submit race, not just the phantom-row case.
   const { data: updated, error: statusError } = await service
     .from("applications")
     .update({ status: "pending_printing" })
@@ -65,7 +66,22 @@ export async function recordPayment(formData: FormData) {
     .eq("status", "pending_payment")
     .select("reference_number, business:businesses(owner:owners(phone))")
     .single();
-  if (statusError || !updated) throw statusError ?? new Error("Update failed");
+  if (statusError || !updated) throw statusError ?? new Error("This application isn't awaiting payment.");
+
+  const { error: paymentError } = await supabase.from("payments").insert({
+    application_id: applicationId,
+    amount,
+    method,
+    or_number: orNumber,
+    received_by: staff.id,
+  });
+  if (paymentError) {
+    // Compensating rollback, same shape as finalizeAssessment's own fix --
+    // no real multi-statement transaction available, so undo the claim
+    // if the payment itself couldn't actually be recorded.
+    await service.from("applications").update({ status: "pending_payment" }).eq("id", applicationId);
+    throw paymentError;
+  }
 
   const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
   if (business?.owner?.phone) {

@@ -35,7 +35,7 @@ export default async function BploDashboardPage() {
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      `id, application_type, status, submitted_at, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
+      `id, application_type, status, submitted_at, archived_from_status, form_inputs, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
     )
     .eq("lgu_id", staff.lgu_id)
     .order("submitted_at", { ascending: true });
@@ -111,6 +111,21 @@ export default async function BploDashboardPage() {
     const inputs = a.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null;
     return inputs?.capital_investment ?? inputs?.gross_sales ?? null;
   }
+
+  // Matches WorkflowStepper's own terminology (ui.tsx's STEPS) -- shown
+  // next to an archived application so BPLO can see (and Reopen back to)
+  // the real stage it was closed out from, now that Archive works from
+  // any non-terminal status, not just "Returned to applicant."
+  const ARCHIVE_STAGE_LABEL: Record<string, string> = {
+    pending_bplo_initial: "Initial review",
+    pending_dept_review: "Departments review",
+    returned_to_applicant: "Returned to applicant",
+    pending_bplo_assessment: "Assessment review",
+    pending_payment: "Treasurer approval",
+    pending_printing: "For printing",
+    pending_mayor: "Mayor's signature",
+    pending_release: "For release",
+  };
 
   return (
     <>
@@ -239,6 +254,10 @@ export default async function BploDashboardPage() {
                       </button>
                     </form>
                   )}
+                  <form action={archiveApplication} className="mt-3">
+                    <input type="hidden" name="applicationId" value={a.id} />
+                    <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+                  </form>
                 </Card>
               );
             })}
@@ -252,7 +271,7 @@ export default async function BploDashboardPage() {
             title="Awaiting payment"
             sub="Normally Treasury's own step — use this only if the applicant already paid at the Treasury counter and brought their OR receipt straight to you."
           />
-          <AwaitingPaymentSection lguId={staff.lgu_id} />
+          <AwaitingPaymentSection lguId={staff.lgu_id} showArchive />
         </div>
       )}
 
@@ -278,6 +297,10 @@ export default async function BploDashboardPage() {
                   <input type="hidden" name="applicationId" value={a.id} />
                   <MiniButton type="submit">Mark as printed</MiniButton>
                 </form>
+                <form action={archiveApplication}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+                </form>
               </Row>
             ))}
           </Card>
@@ -300,6 +323,10 @@ export default async function BploDashboardPage() {
                 <form action={signPermit}>
                   <input type="hidden" name="applicationId" value={a.id} />
                   <MiniButton type="submit">Mark as signed</MiniButton>
+                </form>
+                <form action={archiveApplication}>
+                  <input type="hidden" name="applicationId" value={a.id} />
+                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
                 </form>
               </Row>
             ))}
@@ -354,7 +381,10 @@ export default async function BploDashboardPage() {
               <div key={a.id} className="flex items-center gap-3 border-b border-border px-4.5 py-3 last:border-b-0">
                 <div className="min-w-0 flex-1">
                   <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
-                  <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
+                  <p className="text-[12px] text-ink-soft">
+                    Owner: {ownerName(a)}
+                    {a.archived_from_status && ` · was at ${ARCHIVE_STAGE_LABEL[a.archived_from_status] ?? a.archived_from_status}`}
+                  </p>
                 </div>
                 <TonePill label="Archived" tone="neutral" />
                 <form action={reopenApplication}>
@@ -535,6 +565,11 @@ async function AssessmentCard({
         </label>
 
         <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
+      </form>
+
+      <form action={archiveApplication} className="mt-3">
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <MiniButton type="submit" tone="neutral">Archive</MiniButton>
       </form>
     </Card>
   );

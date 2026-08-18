@@ -1,0 +1,11 @@
+-- Audit finding (2026-08-17): archiveApplication only ever worked from
+-- returned_to_applicant -- an application stalled at any other
+-- non-terminal stage (mid-department-review, stuck in assessment, a
+-- payment that never comes, sitting at printing/signing/release for
+-- months) had no way to close at all. Widened to accept any non-terminal
+-- status; archived_from_status remembers what it was so reopenApplication
+-- can restore the real prior state instead of always assuming
+-- returned_to_applicant. Null for anything archived before this migration
+-- (the existing manual-archive feature) -- reopenApplication falls back
+-- to returned_to_applicant for those, matching its old behavior exactly.
+alter table applications add column archived_from_status text;

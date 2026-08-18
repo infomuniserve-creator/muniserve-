@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { Card, EmptyState, NotesField, OutlineButton, PrimaryButton, WorkflowStepper, peso } from "./ui";
+import { Card, EmptyState, MiniButton, NotesField, OutlineButton, PrimaryButton, WorkflowStepper, peso } from "./ui";
 import { recordPayment, requestPaymentInfo } from "./treasury/actions";
+import { archiveApplication } from "./bplo/actions";
 
 type FeeLine = { display_label: string; computed_amount: number; overridden_amount: number | null; included_in_total: boolean; is_manual: boolean };
 
@@ -24,8 +25,14 @@ type FeeLine = { display_label: string; computed_amount: number; overridden_amou
  * Visibility policy (show this section at all, hide it when empty, etc.)
  * is each caller's own choice -- this component only ever renders rows
  * or a single EmptyState, nothing about whether it's shown.
+ *
+ * showArchive (2026-08-17, audit finding -- Archive widened to work from
+ * any non-terminal status, not just "Returned to applicant") is BPLO-only
+ * on purpose, same as every other Archive entry point -- Treasury's own
+ * rendering of this same component never passes it, since closing an
+ * application out entirely isn't Treasury's call to make.
  */
-export async function AwaitingPaymentSection({ lguId }: { lguId: string }) {
+export async function AwaitingPaymentSection({ lguId, showArchive = false }: { lguId: string; showArchive?: boolean }) {
   const supabase = await createClient();
   const { data: apps } = await supabase
     .from("applications")
@@ -135,6 +142,13 @@ export async function AwaitingPaymentSection({ lguId }: { lguId: string }) {
                 <OutlineButton type="submit" tone="info" className="self-start">Request more info</OutlineButton>
               </form>
             </details>
+
+            {showArchive && (
+              <form action={archiveApplication} className="mt-3">
+                <input type="hidden" name="applicationId" value={a.id} />
+                <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+              </form>
+            )}
           </Card>
         );
       })}

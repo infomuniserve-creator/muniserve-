@@ -370,6 +370,21 @@ export async function finalizeAssessment(formData: FormData) {
     );
   }
 
+  // Audit finding (2026-08-17): an override used to accept literally
+  // anything typed into it -- a stray letter silently became NaN and
+  // poisoned the total rather than being rejected, and nothing stopped a
+  // negative amount either. Only rejects genuinely nonsensical input
+  // (non-numeric, negative) -- deliberately no upper ceiling, since a
+  // sane "too large" threshold would just be an invented real-world
+  // number this project's own standing rule warns against guessing.
+  function parseOverrideAmount(raw: string, label: string): number {
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error(`The override amount for "${label}" must be a valid, non-negative number.`);
+    }
+    return amount;
+  }
+
   const lineRows = finalLines.map((line) => {
     let overriddenAmount: number | null = null;
     let overrideReason: string | null = null;
@@ -377,7 +392,7 @@ export async function finalizeAssessment(formData: FormData) {
     // already is the final figure BPLO chose to charge.
     if (!line.isManual && line.feeRuleId) {
       const overrideRaw = String(formData.get(`override_${line.feeRuleId}`) ?? "").trim();
-      overriddenAmount = overrideRaw !== "" ? Number(overrideRaw) : null;
+      overriddenAmount = overrideRaw !== "" ? parseOverrideAmount(overrideRaw, line.displayLabel) : null;
       overrideReason = overriddenAmount != null ? String(formData.get(`overrideReason_${line.feeRuleId}`) ?? "").trim() || null : null;
     }
     return {
@@ -397,17 +412,26 @@ export async function finalizeAssessment(formData: FormData) {
   });
 
   const service = createServiceClient();
-  if (lineRows.length > 0) {
-    const { error: insertError } = await service.from("application_fee_lines").insert(lineRows);
-    if (insertError) throw insertError;
-  }
 
-  const { error: statusError } = await service
+  // Audit finding (2026-08-17): this status transition used to be the
+  // LAST thing this function did, after the application_fee_lines insert
+  // -- so two near-simultaneous finalize calls (a double-click before the
+  // button disables, two tabs) could both pass the initial fetch's guard,
+  // both insert a full duplicate set of fee lines, and only then race on
+  // this update, with the loser silently affecting zero rows (no error,
+  // since this update never selected/singled its result) while its
+  // duplicate fee lines had already been committed. Claiming the status
+  // transition FIRST closes this for real: Postgres serializes concurrent
+  // UPDATEs against the same row, so only one caller's WHERE clause can
+  // ever match, and `.select().single()` makes the loser's zero-row match
+  // throw immediately -- before it ever reaches the fee-lines insert.
+  //
+  // assessment_finalized_at (migration 0022) closes the one gap in an
+  // otherwise-complete stage-timestamp timeline -- Performance Stats
+  // needs this moment to measure "how long did BPLO take to assess"
+  // separately from "how long did the applicant take to pay after."
+  const { data: claimed, error: claimError } = await service
     .from("applications")
-    // assessment_finalized_at (migration 0022) closes the one gap in an
-    // otherwise-complete stage-timestamp timeline -- Performance Stats
-    // needs this moment to measure "how long did BPLO take to assess"
-    // separately from "how long did the applicant take to pay after."
     .update({
       status: "pending_payment",
       assessment_finalized_at: new Date().toISOString(),
@@ -415,8 +439,26 @@ export async function finalizeAssessment(formData: FormData) {
       assessment_finalized_by: staff.id,
     })
     .eq("id", applicationId)
-    .eq("status", "pending_bplo_assessment");
-  if (statusError) throw statusError;
+    .eq("status", "pending_bplo_assessment")
+    .select("reference_number")
+    .single();
+  if (claimError || !claimed) throw claimError ?? new Error("This application was already finalized, or isn't awaiting assessment anymore.");
+
+  if (lineRows.length > 0) {
+    const { error: insertError } = await service.from("application_fee_lines").insert(lineRows);
+    if (insertError) {
+      // Compensating rollback -- same "undo what already succeeded if a
+      // later step fails" shape as the fee-rule CSV import (CLAUDE.md
+      // 7s), since there's no real multi-statement transaction available
+      // here. Without this, a failed insert would leave the application
+      // sitting at pending_payment with no fee lines to actually show.
+      await service
+        .from("applications")
+        .update({ status: "pending_bplo_assessment", assessment_finalized_at: null, mode_of_payment: null, assessment_finalized_by: null })
+        .eq("id", applicationId);
+      throw insertError;
+    }
+  }
 
   const totalDue = lineRows
     .filter((l) => l.included_in_total)
@@ -639,18 +681,51 @@ export async function getApplicationDocuments(applicationId: string) {
   return data ?? [];
 }
 
+// Every status Archive can close out from -- every non-terminal stage
+// BEFORE a permit is actually issued. Deliberately excludes
+// pending_release: the Mayor has already signed by that point (permits/
+// permit_history rows exist, CLAUDE.md 7i -- the permit is legally
+// issued there, release is just the physical hand-off), so "archived"
+// would misleadingly read as "this business doesn't have a permit" when
+// they genuinely do. Also excludes the two real terminal statuses
+// (released, archived itself) and the dead 'rejected' status value
+// (schema-valid, never actually set by any code path, see CLAUDE.md 7oo).
+const ARCHIVABLE_STATUSES = new Set([
+  "pending_bplo_initial",
+  "pending_dept_review",
+  "returned_to_applicant",
+  "pending_bplo_assessment",
+  "pending_payment",
+  "pending_printing",
+  "pending_mayor",
+]);
+
 /**
- * Closes out a "Returned to applicant" application that's never coming
- * back (2026-08-17, migration 0044) -- the project owner flagged that
- * this queue had no way out except the applicant actually responding, so
- * it just grows forever otherwise (bplo/page.tsx's own query has no date
- * filter). A manual action rather than an auto-expiry timeout -- this
+ * Closes out an application that's never coming back. Originally
+ * (2026-08-17, migration 0044) scoped to just "Returned to applicant" --
+ * the project owner flagged that queue had no way out except the
+ * applicant actually responding, so it just grew forever otherwise
+ * (bplo/page.tsx's own query has no date filter). Widened the same day
+ * (audit finding, migration 0046) once it was clear the identical
+ * "grows forever, no way to close" problem applies to every other
+ * non-terminal stage too -- a department round nobody ever finishes, an
+ * assessment left half-done, a payment that never comes.
+ *
+ * A manual action rather than an auto-expiry timeout either way -- this
  * project's standing rule against inventing an unconfirmed real-world
  * number (same reasoning the department-reminder escalation tier is
  * still left unset, CLAUDE.md section 10). No applicant notification --
  * archiving only happens once BPLO has already confirmed by phone or in
  * person that they're not proceeding, so a notification would be
  * redundant.
+ *
+ * Reads the current status first (rather than a single blind guarded
+ * update) specifically so archived_from_status can remember it --
+ * reopenApplication needs this to restore the REAL prior stage instead
+ * of always assuming returned_to_applicant. The second update re-checks
+ * that same status, so a status change racing in between the read and
+ * the write still fails safely rather than archiving from a stage BPLO
+ * never actually saw.
  */
 export async function archiveApplication(formData: FormData) {
   const staff = await getCurrentStaff();
@@ -658,14 +733,20 @@ export async function archiveApplication(formData: FormData) {
 
   const applicationId = String(formData.get("applicationId"));
   const supabase = await createClient();
+
+  const { data: current } = await supabase.from("applications").select("status").eq("id", applicationId).single();
+  if (!current || !ARCHIVABLE_STATUSES.has(current.status)) {
+    throw new Error("This application can't be archived from its current status.");
+  }
+
   const { data: updated, error } = await supabase
     .from("applications")
-    .update({ status: "archived" })
+    .update({ status: "archived", archived_from_status: current.status })
     .eq("id", applicationId)
-    .eq("status", "returned_to_applicant")
+    .eq("status", current.status)
     .select("reference_number")
     .single();
-  if (error || !updated) throw error ?? new Error("Update failed");
+  if (error || !updated) throw error ?? new Error("This application's status changed -- refresh and try again.");
 
   await logAuditEvent(supabase, {
     lguId: staff.lgu_id,
@@ -673,22 +754,35 @@ export async function archiveApplication(formData: FormData) {
     actorRole: staff.role,
     actorLabel: actorLabelFor(staff),
     action: "application_archived",
-    summary: `Archived ${updated.reference_number} -- confirmed the applicant isn't proceeding`,
+    summary: `Archived ${updated.reference_number} (was ${current.status}) -- confirmed the applicant isn't proceeding`,
+    details: { archivedFromStatus: current.status },
   });
 
   revalidatePath("/dashboard/bplo");
 }
 
-/** Undoes archiveApplication -- not a one-way door, in case it was archived by mistake or the applicant comes back after all. */
+/**
+ * Undoes archiveApplication -- not a one-way door, in case it was
+ * archived by mistake or the applicant comes back after all. Restores
+ * archived_from_status (2026-08-17, migration 0046) rather than always
+ * returned_to_applicant, so an application archived out of, say,
+ * pending_payment reopens back into pending_payment, not somewhere it
+ * never actually was. Falls back to returned_to_applicant for anything
+ * archived before this column existed.
+ */
 export async function reopenApplication(formData: FormData) {
   const staff = await getCurrentStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
   const supabase = await createClient();
+
+  const { data: current } = await supabase.from("applications").select("archived_from_status").eq("id", applicationId).single();
+  const restoreStatus = current?.archived_from_status ?? "returned_to_applicant";
+
   const { data: updated, error } = await supabase
     .from("applications")
-    .update({ status: "returned_to_applicant" })
+    .update({ status: restoreStatus, archived_from_status: null })
     .eq("id", applicationId)
     .eq("status", "archived")
     .select("reference_number")
@@ -701,7 +795,8 @@ export async function reopenApplication(formData: FormData) {
     actorRole: staff.role,
     actorLabel: actorLabelFor(staff),
     action: "application_reopened",
-    summary: `Reopened ${updated.reference_number}`,
+    summary: `Reopened ${updated.reference_number} (back to ${restoreStatus})`,
+    details: { restoredToStatus: restoreStatus },
   });
 
   revalidatePath("/dashboard/bplo");
