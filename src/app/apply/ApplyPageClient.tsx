@@ -9,6 +9,7 @@ import {
 import { isFieldVisible, REQUIRED_FIELDS, type FieldKey } from "@/lib/application-form-logic";
 import { ALLOWED_TYPES, DOCUMENT_BUCKET, MAX_FILE_BYTES, MAX_FILE_MB } from "@/lib/document-upload";
 import { createClient } from "@/lib/supabase/client";
+import { signOutApplicant } from "@/lib/applicant-session-actions";
 import type { LguDisplay } from "@/lib/lgu";
 import type { LguFormOptions } from "@/lib/lgu-form-options";
 
@@ -354,7 +355,16 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     return () => observer.disconnect();
   }, []);
 
+  /**
+   * "Start over" used to only ever reset local React state -- the real
+   * applicant_session cookie (and its server-side row) stayed live for its
+   * full 30 days regardless, so on a shared/public device the next person
+   * could still submit under the previous person's identity with no OTP.
+   * Now actually revokes the session server-side first (signOutApplicant),
+   * so this is a real sign-out, not just a fresh-looking form.
+   */
   function startOver() {
+    void signOutApplicant();
     setScreen("landing");
     setPath(null);
     setPhoneSigninMode(false);

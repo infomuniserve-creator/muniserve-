@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
 import { AdditionalDocumentUpload } from "./upload-form";
 import { VerifyPhoneCard } from "./verify-phone-form";
+import { SignOutButton } from "./sign-out-button";
 
 /**
  * Status tracker (reference/MuniServe_Applicant_Flow_Prototype.html's
@@ -79,6 +80,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
     return (
       <Shell>
         <Head title={business.business_name} sub={`Reference ${reference}`} />
+        <SignOutButton />
         <OpenInfoRequestsCard applicationId={application.id} fallbackTitle="Returned for corrections" />
         <UploadCard applicationId={application.id} />
       </Shell>
@@ -89,6 +91,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
     return (
       <Shell>
         <Head title={business.business_name} sub={`Reference ${reference}`} />
+        <SignOutButton />
         <Card>
           <p style={{ fontSize: 13, fontWeight: 500 }}>Application rejected</p>
           <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Please contact the BPLO office for details.</p>
@@ -101,6 +104,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
     return (
       <Shell>
         <Head title={business.business_name} sub={`Reference ${reference}`} />
+        <SignOutButton />
         <Card>
           <p style={{ fontSize: 13, fontWeight: 500 }}>Application closed</p>
           <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
@@ -114,6 +118,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
   return (
     <Shell>
       <Head title={business.business_name} sub={`Reference ${reference}`} />
+      <SignOutButton />
       <div style={{ display: "flex", marginBottom: "1.5rem" }}>
         {visualStages.map((s, i) => {
           const done = i < currentIdx;
