@@ -6,6 +6,7 @@ import { normalizePhone } from "@/lib/phone";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
+import { TERMINAL_STATUSES } from "@/lib/business-status";
 import type { FieldKey } from "@/lib/application-form-logic";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
@@ -265,6 +266,78 @@ export async function updateOwnerPhone(formData: FormData) {
     action: "owner_phone_updated",
     summary: `Updated registered mobile number for ${business.business_name ?? "(business record missing)"} -- verified in person at the counter`,
     details: { businessId },
+  });
+
+  revalidatePath("/dashboard/businesses");
+}
+
+/**
+ * Detaches a business from its owner entirely -- the counter-mistake case
+ * `updateOwnerPhone` can't fix: it only ever changes the phone on the
+ * SAME owner, so a business linked to the wrong person outright (wrong
+ * owner picked at the counter, or claimed by someone who wasn't actually
+ * the business's owner) had no way back to a claimable state at all.
+ *
+ * Deliberately reuses `is_legacy_unclaimed = true` as the "no owner,
+ * available to be (re)claimed" flag rather than adding a new column or a
+ * separate un-claim state -- that's already the one thing this flag
+ * means everywhere else in the schema (business-status.ts), and setting
+ * it here is what makes the existing `claimLegacyBusiness` form
+ * (gated on exactly this flag) immediately usable again for the SAME row
+ * -- unclaim-then-reclaim-to-a-different-number is the reassign flow,
+ * with no separate "reassign" action needed. The one real cosmetic
+ * trade-off: a business that was always MuniServe-native (never a real
+ * paper import) and gets unclaimed this way will show as "Legacy — not
+ * claimed" in the registry afterward, which isn't literally true -- this
+ * schema has no other vocabulary for "ownerless, claimable" today, and
+ * this is expected to be a rare admin-correction path, not a new column
+ * worth adding for one label's accuracy.
+ *
+ * Blocks unclaiming while any of the business's own applications are
+ * still in flight (not in business-status.ts's own TERMINAL_STATUSES) --
+ * a live application doesn't depend on businesses.owner_id for its own
+ * review workflow (every action keys off application_id), but the
+ * applicant's own /status/[reference] page DOES gate on
+ * business.owner_id === the signed-in session's ownerId, so unclaiming
+ * mid-review would silently lock the real applicant out of their own
+ * already-in-progress application's status page.
+ */
+export async function unclaimBusiness(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const businessId = String(formData.get("businessId") ?? "");
+  if (!businessId) throw new Error("Invalid request");
+
+  const supabase = await createClient();
+  const { data: business, error: fetchError } = await supabase
+    .from("businesses")
+    .select("business_name, owner_id")
+    .eq("id", businessId)
+    .single();
+  if (fetchError || !business) throw fetchError ?? new Error("Business not found");
+  if (!business.owner_id) {
+    throw new Error("This business has no owner to unlink.");
+  }
+
+  const { data: apps } = await supabase.from("applications").select("status").eq("business_id", businessId);
+  if ((apps ?? []).some((a) => !TERMINAL_STATUSES.has(a.status))) {
+    throw new Error("This business has an application currently in progress -- wait until it's finished (or archive it) before unlinking the owner.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("businesses")
+    .update({ owner_id: null, is_legacy_unclaimed: true })
+    .eq("id", businessId);
+  if (updateError) throw updateError;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "business_unclaimed",
+    summary: `Unlinked ${business.business_name ?? "(business record missing)"} from its registered owner -- available to be claimed again`,
+    details: { businessId, previousOwnerId: business.owner_id },
   });
 
   revalidatePath("/dashboard/businesses");

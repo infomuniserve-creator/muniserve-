@@ -33,7 +33,7 @@ export type BusinessStatus = "active" | "needs_renewal" | "legacy" | "inactive" 
 // up (bplo/page.tsx's own "Returned to applicant" queue). Left
 // unarchived ("returned_to_applicant" alone) still correctly counts as
 // in-progress -- that's the live, unresolved case.
-const TERMINAL_STATUSES = new Set(["released", "rejected", "archived"]);
+export const TERMINAL_STATUSES = new Set(["released", "rejected", "archived"]);
 
 export function classifyBusinessStatus(params: {
   isLegacyUnclaimed: boolean;
