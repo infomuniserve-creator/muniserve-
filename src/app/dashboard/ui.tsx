@@ -337,7 +337,7 @@ export function DashboardTopBar({
   settingsHref?: string;
   /** BPLO and Mayor both see the Audit Trail (CLAUDE.md 7o follow-up, the project owner asked for Mayor explicitly) -- a real nav pill, not an icon, since it's a primary reporting section rather than an occasional admin task like Settings. */
   auditHref?: string;
-  /** Same gating as auditHref -- Performance Stats, also BPLO + Mayor. */
+  /** Same gating as auditHref -- Stats & Reports (2026-08-17, renamed from Performance Stats), also BPLO + Mayor. */
   statsHref?: string;
   rightSlot?: React.ReactNode;
 }) {
@@ -394,7 +394,7 @@ export function DashboardTopBar({
               active === "stats" ? "bg-surface text-brand-navy shadow-sm" : "text-ink-soft hover:text-ink"
             }`}
           >
-            Performance Stats
+            Stats & Reports
             <NavLinkPendingHint />
           </Link>
         )}

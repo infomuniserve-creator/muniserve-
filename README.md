@@ -79,6 +79,7 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] BPLO can now regenerate a signed permit's PDF/QR from the Business Registry — before this, a failed generation at signing time was permanent with no way to retry. See CLAUDE.md section 7qq's same-day follow-up.
 - [x] BPLO can now unlink a business from the wrong owner and let it be reclaimed — closes the last item from the full-pipeline audit (all 23 findings now addressed). See CLAUDE.md section 7qq's same-day follow-up.
 - [x] BPLO dashboard's 8 pipeline stat cards are now clickable tabs — only the clicked stage's queue shows below, defaulting to Initial review. See CLAUDE.md section 7rr.
+- [x] Performance Stats renamed to Stats & Reports, with a new Reports tab — revenue collected by Barangay Clearance / Engineering / CEDULA / Actual Permit, each downloadable as CSV. See CLAUDE.md section 7ss.
 - [ ] Whatever's next — see CLAUDE.md section 10 for what's still open (mostly blocked on legal/LGU confirmation, not code)
 
 ## What needs to happen before development continues

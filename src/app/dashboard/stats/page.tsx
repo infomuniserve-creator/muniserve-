@@ -3,6 +3,7 @@ import { computePerformanceStats } from "@/lib/performance-stats";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, EmptyState, SectionHead, StatCard, StatGrid, TonePill } from "../ui";
+import { StatsSubNav } from "./sub-nav";
 
 /**
  * Processing-speed and bottleneck report (CLAUDE.md 7o follow-up) -- the
@@ -52,8 +53,9 @@ export default async function PerformanceStatsPage({
 
   return (
     <>
+      <StatsSubNav active="performance" />
       <SectionHead
-        title="Performance Stats"
+        title="Performance"
         sub="How fast applications actually move through the pipeline, and where they get stuck."
       />
 
