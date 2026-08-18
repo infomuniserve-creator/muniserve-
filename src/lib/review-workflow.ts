@@ -254,9 +254,38 @@ export async function submitDepartmentDecision(params: {
   const { departmentReviewId, decision, notes, assessedAmount, staff, actedOnBehalf } = params;
   const supabase = await createClient();
 
+  // Fetch once up front: the department name (for the Engineering gate
+  // below) and which round this row belongs to. The UI only ever renders
+  // an "Act for {department}" button for a pending row in the latest
+  // round, but nothing server-side enforced that -- a crafted or stale
+  // form submission could reference an older, superseded round's still-
+  // pending row and still succeed, since RLS only checks "same LGU," not
+  // "this is the round that's actually open right now." Checked before
+  // any write, same "guard before touching data" shape as the rest of
+  // this function's own precedents (requireLbtCategorySet, the Engineering
+  // amount check just below).
+  const { data: reviewRow } = await supabase
+    .from("department_reviews")
+    .select("department, review_round_id, review_round:review_rounds(application_id, round_number)")
+    .eq("id", departmentReviewId)
+    .single();
+  if (!reviewRow) throw new Error("Review not found");
+  const ownRound = reviewRow.review_round as unknown as { application_id: string; round_number: number } | null;
+  if (!ownRound) throw new Error("Review round not found");
+
+  const { data: latestRound } = await supabase
+    .from("review_rounds")
+    .select("round_number")
+    .eq("application_id", ownRound.application_id)
+    .order("round_number", { ascending: false })
+    .limit(1)
+    .single();
+  if (!latestRound || latestRound.round_number !== ownRound.round_number) {
+    throw new Error("This review is from an earlier round and is no longer open.");
+  }
+
   if (decision === "approved" || decision === "approved_with_condition") {
-    const { data: reviewRow } = await supabase.from("department_reviews").select("department").eq("id", departmentReviewId).single();
-    if (reviewRow?.department === "Engineering") {
+    if (reviewRow.department === "Engineering") {
       const { data: lgu } = await supabase.from("lgus").select("building_permit_fee_enabled").eq("id", staff.lgu_id).single();
       if (lgu?.building_permit_fee_enabled && (assessedAmount == null || assessedAmount <= 0)) {
         throw new Error("Enter the Building Permit Fee amount before approving.");
