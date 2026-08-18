@@ -1,11 +1,35 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
-import { computeRevenueReport, type RevenueBucketKey } from "@/lib/revenue-report";
+import { computeRevenueReport, type RevenueBucketKey, type RevenueLine } from "@/lib/revenue-report";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Card, EmptyState, SectionHead, StatCard, StatGrid } from "../../ui";
+import { Card, ChevronRightIcon, EmptyState, SectionHead, StatCard, StatGrid } from "../../ui";
 import { StatsSubNav } from "../sub-nav";
 import { DownloadCsvButton } from "./export-buttons";
+
+/**
+ * One row per application within a category, not one row per fee line --
+ * the project owner's own feedback on the first version of this page
+ * (screenshot: "Benj Computer Shop" repeated 6 times in a row, once per
+ * fee line). Grouped client-side from the same flat `lines` array
+ * computeRevenueReport already returns -- no change to that function or
+ * its return shape, this is purely a rendering concern.
+ */
+function groupLinesByApplication(lines: RevenueLine[]) {
+  const order: string[] = [];
+  const byApp = new Map<string, { applicationId: string; referenceNumber: string; businessName: string; paidAt: string; subtotal: number; lines: RevenueLine[] }>();
+  for (const l of lines) {
+    let entry = byApp.get(l.applicationId);
+    if (!entry) {
+      entry = { applicationId: l.applicationId, referenceNumber: l.referenceNumber, businessName: l.businessName, paidAt: l.paidAt, subtotal: 0, lines: [] };
+      byApp.set(l.applicationId, entry);
+      order.push(l.applicationId);
+    }
+    entry.subtotal += l.amount;
+    entry.lines.push(l);
+  }
+  return order.map((id) => byApp.get(id)!);
+}
 
 /**
  * Revenue breakdown -- the "Reports" half of Stats & Reports (2026-08-17,
@@ -104,35 +128,68 @@ export default async function RevenueReportsPage({
             </Card>
           </div>
 
+          {/*
+            Three levels, matching the project owner's own description
+            after seeing the first version's very long, business-name-
+            repeated-per-line list: category (collapsed, shows the total)
+            -> business/application (collapsed, shows that business's
+            subtotal in this category) -> individual fee lines, shown only
+            once a specific business row is opened.
+          */}
           {(["barangay_clearance", "engineering", "cedula", "actual_permit"] as RevenueBucketKey[]).map((key) => {
             const bucket = bucketByKey.get(key);
             const bucketLines = linesByBucket(key);
+            const groups = groupLinesByApplication(bucketLines);
             return (
-              <div key={key} className="mb-9">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <SectionHead title={bucket?.label ?? key} sub={`${bucket?.applicationCount ?? 0} application(s) · ${fmt(bucket?.total ?? 0)}`} />
-                  <DownloadCsvButton lines={bucketLines} filenamePrefix={`MuniServe_${bucket?.label.replace(/\s+/g, "")}_${rangeSuffix}`} label="Download CSV" />
+              <details key={key} className="group mb-4 rounded-3xl border border-border bg-surface shadow-[0_1px_2px_rgba(23,33,66,0.05),0_10px_28px_-12px_rgba(23,33,66,0.14)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_10px_28px_-14px_rgba(0,0,0,0.5)]">
+                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-5 py-4">
+                  <span className="flex items-center gap-2.5">
+                    <ChevronRightIcon className="chev size-3.5 shrink-0 text-ink-faint" />
+                    <span className="font-display text-[15px] font-bold text-ink">{bucket?.label ?? key}</span>
+                    <span className="text-[12px] text-ink-faint">{bucket?.applicationCount ?? 0} application(s)</span>
+                  </span>
+                  <span className="font-display text-[16px] font-bold text-ink tabular-nums">{fmt(bucket?.total ?? 0)}</span>
+                </summary>
+                <div className="border-t border-border px-5 py-4">
+                  <div className="mb-3 flex justify-end">
+                    <DownloadCsvButton lines={bucketLines} filenamePrefix={`MuniServe_${bucket?.label.replace(/\s+/g, "")}_${rangeSuffix}`} label="Download CSV" />
+                  </div>
+                  {groups.length === 0 ? (
+                    <EmptyState>Nothing collected in this category for this range.</EmptyState>
+                  ) : (
+                    <div className="flex flex-col divide-y divide-border">
+                      {groups.map((g) => (
+                        <details key={g.applicationId} className="group/app">
+                          <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 py-3">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <ChevronRightIcon className="chev size-3 shrink-0 text-ink-faint" />
+                              <span className="min-w-0">
+                                <p className="truncate text-[13px] font-bold text-ink">{g.businessName}</p>
+                                <p className="text-[11.5px] text-ink-soft">
+                                  {g.referenceNumber} · {g.lines.length} fee line{g.lines.length === 1 ? "" : "s"}
+                                </p>
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-[13px] font-bold text-ink tabular-nums">{fmt(g.subtotal)}</span>
+                          </summary>
+                          <div className="ml-5 flex flex-col gap-1.5 border-l-2 border-border py-1 pb-3 pl-4">
+                            {g.lines.map((l, i) => (
+                              <div key={i} className="flex items-center justify-between gap-3">
+                                <span className="text-[12px] text-ink-soft">
+                                  {l.displayLabel}
+                                  {l.acctCode ? ` · Acct ${l.acctCode}` : ""} ·{" "}
+                                  {new Date(l.paidAt).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric" })}
+                                </span>
+                                <span className="shrink-0 text-[12px] font-bold text-ink tabular-nums">{fmt(l.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {bucketLines.length === 0 ? (
-                  <EmptyState>Nothing collected in this category for this range.</EmptyState>
-                ) : (
-                  <Card>
-                    {bucketLines.map((l, i) => (
-                      <div key={`${l.applicationId}-${l.displayLabel}-${i}`} className="flex items-center gap-3 border-b border-border px-4.5 py-3 last:border-b-0">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-ink">{l.businessName}</p>
-                          <p className="text-[11.5px] text-ink-soft">
-                            {l.referenceNumber} · {l.displayLabel}
-                            {l.acctCode ? ` · Acct ${l.acctCode}` : ""} ·{" "}
-                            {new Date(l.paidAt).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric" })}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-[13px] font-bold text-ink tabular-nums">{fmt(l.amount)}</span>
-                      </div>
-                    ))}
-                  </Card>
-                )}
-              </div>
+              </details>
             );
           })}
         </>

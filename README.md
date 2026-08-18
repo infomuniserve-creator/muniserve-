@@ -81,6 +81,7 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] BPLO dashboard's 8 pipeline stat cards are now clickable tabs — only the clicked stage's queue shows below, defaulting to Initial review. See CLAUDE.md section 7rr.
 - [x] Performance Stats renamed to Stats & Reports, with a new Reports tab — revenue collected by Barangay Clearance / Engineering / CEDULA / Actual Permit, each downloadable as CSV. See CLAUDE.md section 7ss.
 - [x] Settings redesigned — 12 flat, scattered sections regrouped into 6 labeled, bordered categories (Staff & Access, Fee Rates, Barangays, Assessment Rules, Documents & Alerts, Public Application Form). See CLAUDE.md section 7tt.
+- [x] Reports tab redesigned into a real 3-level drill-down (category → business subtotal → fee lines) instead of a long flat list repeating each business name per fee line. See CLAUDE.md section 7ss's same-day follow-up.
 - [ ] Whatever's next — see CLAUDE.md section 10 for what's still open (mostly blocked on legal/LGU confirmation, not code)
 
 ## What needs to happen before development continues
