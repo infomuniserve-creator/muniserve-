@@ -53,7 +53,8 @@ export type AuditAction =
   | "application_archived"
   | "application_reopened"
   | "permit_pdf_regenerated"
-  | "business_unclaimed";
+  | "business_unclaimed"
+  | "businesses_imported";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

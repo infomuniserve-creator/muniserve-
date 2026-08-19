@@ -4,11 +4,12 @@ import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
-import { Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
+import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
 import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
+import { BusinessImportCard } from "./business-import";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
@@ -82,6 +83,12 @@ export default async function SettingsPage() {
 
       <SettingsGroup icon={<UserIcon className="size-4" />} title="Staff & Access" description="Who can sign in, and what they can do.">
         <StaffManagementSection lguName={lgu.name} lguProvince={lgu.province} staffList={staffListRaw ?? []} departments={departmentsRaw ?? []} />
+      </SettingsGroup>
+
+      <SettingsGroup icon={<BuildingIcon className="size-4" />} title="Data Import" description="Bring in your existing business roster from a previous system.">
+        <CollapsibleSection title="Import Businesses" sub="Upload an Excel/CSV export of your businesses -- turns into self-service renewals immediately for any row with a mobile number.">
+          <BusinessImportCard />
+        </CollapsibleSection>
       </SettingsGroup>
 
       <SettingsGroup icon={<span className="text-[15px] leading-none">₱</span>} title="Fee Rates" description="How much each fee actually costs.">
@@ -174,7 +181,7 @@ export default async function SettingsPage() {
                 <form key={b.id} action={removeBarangay} className="flex items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-3 pr-1.5">
                   <span className="text-[12.5px] font-bold text-ink">{b.value}</span>
                   <input type="hidden" name="id" value={b.id} />
-                  <MiniButton type="submit" tone="bad">✕</MiniButton>
+                  <MiniButton type="submit" tone="bad" aria-label={`Remove ${b.value}`} title={`Remove ${b.value}`}>✕</MiniButton>
                 </form>
               ))}
             </div>
