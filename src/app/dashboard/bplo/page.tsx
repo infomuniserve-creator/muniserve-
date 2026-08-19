@@ -716,6 +716,9 @@ async function InitialReviewCard({
             ))}
           </select>
           <MiniButton type="submit">Save</MiniButton>
+          <Link href="/dashboard/settings" className="text-[11px] font-bold text-info-ink underline underline-offset-2">
+            Don&rsquo;t see it? Add it in Settings
+          </Link>
         </form>
       )}
 

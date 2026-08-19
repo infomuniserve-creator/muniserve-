@@ -363,6 +363,9 @@ function RegistryRow({
               ))}
             </select>
             <MiniButton type="submit">Save</MiniButton>
+            <Link href="/dashboard/settings" className="text-[11px] font-bold text-info-ink underline underline-offset-2">
+              Don&rsquo;t see it? Add it in Settings
+            </Link>
             {!profile.lbtCategory && (
               <span className="text-[11.5px] font-bold text-warn-ink">
                 Required before this business&apos;s application can enter department review or be assessed.

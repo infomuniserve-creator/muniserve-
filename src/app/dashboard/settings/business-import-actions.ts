@@ -68,7 +68,7 @@ export async function publishBusinessImport(csvText: string, taxYear: number): P
   const validLbtCategories = new Set((await getLbtCategoryOptions(staff.lgu_id)).map((o) => o.value));
   for (const row of result.rows) {
     if (row.lbtCategory && !validLbtCategories.has(row.lbtCategory)) {
-      warnings.push(`"${row.businessName}": lbt_category "${row.lbtCategory}" doesn't match any of this LGU's configured LBT schedules -- imported without one. Set it in the Business Registry before this business can enter department review.`);
+      warnings.push(`"${row.businessName}": lbt_category "${row.lbtCategory}" doesn't match any of this LGU's configured LBT schedules -- imported without one. Either set it to an existing category in the Business Registry, or add "${row.lbtCategory}" as a new category in Settings -> Fee Rates -> Business Tax & Mayor's Permit Fee Setup.`);
       row.lbtCategory = null;
     }
   }

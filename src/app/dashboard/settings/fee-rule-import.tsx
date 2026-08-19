@@ -55,7 +55,10 @@ export function FeeRuleImportCard({ feeType, label }: { feeType: FeeType; label:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[13.5px] font-bold text-ink">{label}</p>
-          <p className="text-[12px] text-ink-soft">Download the current rates as a starting point, edit the numbers in Excel/Sheets, then upload it back here.</p>
+          <p className="text-[12px] text-ink-soft">
+            Download the current rates as a starting point, edit the numbers in Excel/Sheets, then upload it back here.
+            {feeType === "lbt" && " Each unique category_code row also defines one LBT category -- add a new row here to add a new category, no separate step needed."}
+          </p>
         </div>
         <a
           href={`/api/dashboard/fee-rule-template?type=${feeType}`}

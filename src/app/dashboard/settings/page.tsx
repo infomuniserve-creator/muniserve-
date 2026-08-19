@@ -94,7 +94,7 @@ export default async function SettingsPage() {
       <SettingsGroup icon={<span className="text-[15px] leading-none">₱</span>} title="Fee Rates" description="How much each fee actually costs.">
       <CollapsibleSection
         title="Business Tax & Mayor's Permit Fee Setup"
-        sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed."
+        sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed. This is also where LBT categories come from: each row in the Local Business Tax file adds one category, which then shows up wherever staff pick a business's category."
       >
         <div className="flex flex-col gap-3">
           <FeeRuleImportCard feeType="lbt" label="Local Business Tax" />
