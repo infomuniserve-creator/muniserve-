@@ -4,7 +4,7 @@ import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../dashboard/sign-out-button";
-import { createLguClient, deleteLguClient, setLguPaused, viewAsLgu } from "./actions";
+import { addLguDepartment, createLguClient, deleteLguClient, setDepartmentActive, setLguPaused, viewAsLgu } from "./actions";
 
 /**
  * Platform-admin dashboard (CLAUDE.md section 7o) -- the "agency owner"
@@ -31,18 +31,24 @@ export default async function AdminPage() {
     .order("created_at", { ascending: false });
   const lguList = lgus ?? [];
 
-  // Powers the per-LGU "View as" department options below -- fetched once
-  // for every client rather than per-row, then grouped in JS.
-  const { data: allDepartments } = await supabase
+  // Every department, active or not -- powers both the per-LGU "View as"
+  // dropdown (active only, filtered below) and the new "Manage
+  // Departments" section (shows both, so a deactivated one can be found
+  // and reactivated instead of only ever disappearing). One fetch,
+  // derived twice, rather than querying this table separately per use.
+  const { data: allDepartmentsRaw } = await supabase
     .from("lgu_departments")
-    .select("lgu_id, name, display_name")
-    .eq("is_active", true)
+    .select("id, lgu_id, name, display_name, is_active")
     .order("name", { ascending: true });
+  const allDepartmentsByLgu = new Map<string, { id: string; name: string; display_name: string | null; is_active: boolean }[]>();
+  for (const d of allDepartmentsRaw ?? []) {
+    const list = allDepartmentsByLgu.get(d.lgu_id) ?? [];
+    list.push({ id: d.id, name: d.name, display_name: d.display_name, is_active: d.is_active });
+    allDepartmentsByLgu.set(d.lgu_id, list);
+  }
   const departmentsByLgu = new Map<string, { name: string; display_name: string | null }[]>();
-  for (const d of allDepartments ?? []) {
-    const list = departmentsByLgu.get(d.lgu_id) ?? [];
-    list.push({ name: d.name, display_name: d.display_name });
-    departmentsByLgu.set(d.lgu_id, list);
+  for (const [lguId, list] of allDepartmentsByLgu) {
+    departmentsByLgu.set(lguId, list.filter((d) => d.is_active));
   }
 
   // Tells each row whether Delete is actually possible -- deleteLguClient
@@ -225,6 +231,56 @@ export default async function AdminPage() {
                     </button>
                   </form>
                 </div>
+
+                <details style={{ marginTop: 10, borderTop: "0.5px dashed #e5e7eb", paddingTop: 10 }}>
+                  <summary style={{ fontSize: 11.5, color: "#0C447C", fontWeight: 600, cursor: "pointer" }}>
+                    Manage departments ({(allDepartmentsByLgu.get(lgu.id) ?? []).filter((d) => d.is_active).length} active)
+                  </summary>
+                  <div style={{ marginTop: 8 }}>
+                    <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 8 }}>
+                      Adding or reactivating a department only affects applications that open a review round from now on — it never
+                      reaches back into one already in progress, and deactivating one doesn&rsquo;t remove it from a round it&rsquo;s
+                      already part of.
+                    </p>
+                    {(allDepartmentsByLgu.get(lgu.id) ?? []).length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                        {(allDepartmentsByLgu.get(lgu.id) ?? []).map((d) => (
+                          <div key={d.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ fontSize: 12.5, color: d.is_active ? "#1a1a2e" : "#9ca3af", textDecoration: d.is_active ? "none" : "line-through" }}>
+                              {d.display_name ?? d.name}
+                            </span>
+                            <form action={setDepartmentActive}>
+                              <input type="hidden" name="departmentId" value={d.id} />
+                              <input type="hidden" name="isActive" value={String(!d.is_active)} />
+                              <button
+                                type="submit"
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  padding: "4px 10px",
+                                  borderRadius: 8,
+                                  border: d.is_active ? "1px solid #b45309" : "1px solid #15803d",
+                                  background: "#fff",
+                                  color: d.is_active ? "#b45309" : "#15803d",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {d.is_active ? "Deactivate" : "Reactivate"}
+                              </button>
+                            </form>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <form action={addLguDepartment} style={{ display: "flex", gap: 8 }}>
+                      <input type="hidden" name="lguId" value={lgu.id} />
+                      <input name="name" type="text" required placeholder="e.g. Zoning" style={{ ...inputStyle, height: 30, width: 180, fontSize: 12 }} />
+                      <button type="submit" style={{ ...submitBtnStyle, padding: "5px 12px", fontSize: 12 }}>
+                        Add department
+                      </button>
+                    </form>
+                  </div>
+                </details>
 
                 <div style={{ marginTop: 10, borderTop: "0.5px dashed #e5e7eb", paddingTop: 10 }}>
                   {canDelete ? (

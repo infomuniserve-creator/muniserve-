@@ -57,7 +57,9 @@ export type AuditAction =
   | "businesses_imported"
   | "permit_number_format_updated"
   | "installment_reminder_dates_updated"
-  | "payment_methods_updated";
+  | "payment_methods_updated"
+  | "lgu_department_added"
+  | "lgu_department_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

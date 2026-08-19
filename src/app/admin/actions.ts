@@ -219,6 +219,102 @@ export async function viewAsLgu(formData: FormData) {
 }
 
 /**
+ * Manage Departments (2026-08-19) -- the project owner's own direct
+ * follow-up after learning departments could previously only ever be set
+ * once, at LGU creation, with no way back in for an existing client
+ * short of asking for a raw SQL run: "at the very least, in the admin
+ * login, I should be able to add it." Platform-admin-only for this pass
+ * (RLS already restricts writes on lgu_departments to platform admins
+ * regardless, migration 0018 -- no new policy needed), matching the
+ * project owner's own explicitly scoped ask rather than also building a
+ * BPLO-facing Settings section nobody asked for yet.
+ *
+ * addLguDepartment reuses the existing row instead of colliding with
+ * lgu_departments' own unique(lgu_id, name) constraint if the name was
+ * previously deactivated -- reactivates it automatically (a forgiving,
+ * one-step recovery) rather than making the admin separately find and
+ * click Reactivate below. A name that's already active is a safe no-op,
+ * matching this schema's other "re-submitting the same thing twice
+ * doesn't error" conventions (e.g. addBarangays).
+ */
+export async function addLguDepartment(formData: FormData) {
+  const admin = await getCurrentPlatformAdmin();
+  if (!admin) throw new Error("Not authorized");
+
+  const lguId = String(formData.get("lguId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!lguId || !name) throw new Error("Invalid request");
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("lgu_departments")
+    .select("id, is_active")
+    .eq("lgu_id", lguId)
+    .ilike("name", name)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.is_active) {
+      revalidatePath("/admin");
+      return; // already on file and active -- nothing to do
+    }
+    const { error } = await supabase.from("lgu_departments").update({ is_active: true }).eq("id", existing.id);
+    if (error) throw error;
+    await logAuditEvent(supabase, {
+      lguId,
+      actorRole: "platform_admin",
+      actorLabel: `${admin.full_name ?? admin.email} (Platform Admin)`,
+      action: "lgu_department_updated",
+      summary: `Department "${name}" reactivated`,
+    });
+    revalidatePath("/admin");
+    return;
+  }
+
+  const { error } = await supabase.from("lgu_departments").insert({ lgu_id: lguId, name, display_name: name });
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId,
+    actorRole: "platform_admin",
+    actorLabel: `${admin.full_name ?? admin.email} (Platform Admin)`,
+    action: "lgu_department_added",
+    summary: `Department "${name}" added`,
+  });
+
+  revalidatePath("/admin");
+}
+
+/** Soft-delete only (lgu_departments.is_active), matching this schema's standing convention -- a department that already has real department_reviews history must keep showing correctly on those historical rows. */
+export async function setDepartmentActive(formData: FormData) {
+  const admin = await getCurrentPlatformAdmin();
+  if (!admin) throw new Error("Not authorized");
+
+  const departmentId = String(formData.get("departmentId") ?? "");
+  const isActive = formData.get("isActive") === "true";
+  if (!departmentId) throw new Error("Invalid request");
+
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("lgu_departments")
+    .update({ is_active: isActive })
+    .eq("id", departmentId)
+    .select("lgu_id, name")
+    .single();
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: updated.lgu_id,
+    actorRole: "platform_admin",
+    actorLabel: `${admin.full_name ?? admin.email} (Platform Admin)`,
+    action: "lgu_department_updated",
+    summary: `Department "${updated.name}" ${isActive ? "reactivated" : "deactivated"}`,
+  });
+
+  revalidatePath("/admin");
+}
+
+/**
  * Deactivates (never deletes -- same soft-delete convention as everywhere
  * else) the platform admin's own "view as" proxy row. Needed for real:
  * getCurrentStaff() (src/lib/staff.ts) now prefers an *active* admin-proxy
