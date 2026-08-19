@@ -202,12 +202,13 @@ function isBlankValue(value: unknown): boolean {
 type FieldDescriptor =
   | { key: FieldKey; label: string; kind: "text" | "number" }
   | { key: FieldKey; label: string; kind: "select"; options: readonly string[] }
+  | { key: FieldKey; label: string; kind: "searchable-select"; options: readonly string[] }
   | { key: FieldKey; label: string; kind: "checkboxgroup"; options: readonly string[] };
 
 const BUSINESS_INFO_FIELDS: FieldDescriptor[] = [
   { key: "businessName", label: "Business name", kind: "text" },
   { key: "businessTaxPayment", label: "Business tax payment", kind: "select", options: BUSINESS_TAX_PAYMENT_OPTIONS },
-  { key: "natureOfBusiness", label: "Nature of business", kind: "select", options: NATURE_OF_BUSINESS_OPTIONS },
+  { key: "natureOfBusiness", label: "Nature of business", kind: "searchable-select", options: NATURE_OF_BUSINESS_OPTIONS },
   { key: "organizationType", label: "Organization type", kind: "select", options: ORGANIZATION_TYPE_OPTIONS },
   { key: "registrationAuthority", label: "Registration authority", kind: "select", options: REGISTRATION_AUTHORITY_OPTIONS },
   { key: "registrationNo", label: "DTI / SEC / CDA registration no.", kind: "text" },
@@ -269,7 +270,7 @@ const BUSINESS_OPERATION_FIELDS: FieldDescriptor[] = [
  */
 function withDynamicOptions(fields: FieldDescriptor[], overrides: Partial<Record<FieldKey, readonly string[]>>): FieldDescriptor[] {
   return fields.map((f) => {
-    if (f.kind !== "select" && f.kind !== "checkboxgroup") return f;
+    if (f.kind !== "select" && f.kind !== "searchable-select" && f.kind !== "checkboxgroup") return f;
     const override = overrides[f.key];
     if (!override) return f;
     if (override.length === 0) return { key: f.key, label: f.label, kind: "text" as const };
@@ -857,6 +858,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         </Field>
       );
     }
+    if (fd.kind === "searchable-select") {
+      return (
+        <Field key={fd.key} label={label}>
+          <SearchableSelect value={value} onChange={(v) => setForm((f) => ({ ...f, [fd.key]: v }))} options={fd.options} />
+        </Field>
+      );
+    }
     return (
       <Field key={fd.key} label={label}>
         <input
@@ -1160,6 +1168,156 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginBottom: 12, flex: 1 }}>
       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Type-to-filter dropdown (2026-08-19, project owner's own direct
+ * report: "I can only type one letter") -- a plain native <select> with
+ * ~220 Nature of Business options only supports the browser's own
+ * built-in typeahead (jump to the first option starting with whatever
+ * key was just pressed, resetting almost immediately), not a real
+ * substring search. Kept as its own reusable FieldDescriptor kind
+ * ("searchable-select") rather than a one-off hack tied to this specific
+ * field, so applying it to another long list later (e.g. Barangay) is a
+ * one-line change, not a rebuild.
+ *
+ * Deliberately still resolves to one exact string from `options` on
+ * selection -- typing never becomes the stored value itself, matching
+ * every other select-backed field in this form (application-form-logic.ts's
+ * conditional rules pattern-match on exact option text). Clicking away or
+ * pressing Escape without picking an option reverts the visible text back
+ * to whatever was actually selected, so this can never end up in a state
+ * where the displayed text doesn't match the real underlying value.
+ */
+function SearchableSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: readonly string[] }) {
+  // `query` intentionally only initializes from `value` once, at mount --
+  // this component only ever mounts once the "form" screen is already
+  // showing, by which point a returning applicant's profile (if any) has
+  // already been merged into `value`, so there's no later external change
+  // to sync. Every path that changes `value` after that point originates
+  // from this component itself (select()/the outside-click and Escape
+  // handlers below), and each one already sets `query` directly right
+  // there -- an effect re-deriving query from value would just be a
+  // second, redundant write, exactly what react-hooks/set-state-in-effect
+  // flags.
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || q === value.toLowerCase()) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [query, options, value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery(value);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open, value]);
+
+  function select(opt: string) {
+    onChange(opt);
+    setQuery(opt);
+    setOpen(false);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "Enter") setOpen(true);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlighted((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlighted((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered[highlighted]) select(filtered[highlighted]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setQuery(value);
+    }
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          setHighlighted(0);
+        }}
+        onFocus={() => setOpen(true)}
+        // Selecting an option uses onMouseDown + preventDefault (below) so
+        // the input never actually blurs during selection -- meaning a
+        // second click on the (already-focused) input right after picking
+        // something would never re-fire onFocus, and the dropdown would
+        // stay stuck closed with no way to search again. onClick covers
+        // exactly that case; onFocus alone covers tabbing/clicking in from
+        // a genuinely different element. Found by driving a real click
+        // sequence during verification, not by inspection.
+        onClick={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Type to search…"
+        autoComplete="off"
+        style={inputStyle}
+      />
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 20,
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            maxHeight: 240,
+            overflowY: "auto",
+            background: "#fff",
+            border: "0.5px solid #e5e7eb",
+            borderRadius: 8,
+            boxShadow: "0 8px 20px rgba(0,0,0,0.1)",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div style={{ padding: "10px 12px", fontSize: 13, color: "#9ca3af" }}>No matches — try a different spelling.</div>
+          ) : (
+            filtered.map((opt, i) => (
+              <div
+                key={opt}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  select(opt);
+                }}
+                onMouseEnter={() => setHighlighted(i)}
+                style={{
+                  padding: "9px 12px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  background: i === highlighted ? "#f4f6fb" : "#fff",
+                  color: opt === value ? "#0C447C" : "#1a1a2e",
+                  fontWeight: opt === value ? 600 : 400,
+                }}
+              >
+                {opt}
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

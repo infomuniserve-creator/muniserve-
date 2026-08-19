@@ -1342,6 +1342,18 @@ The project owner's own arrangement: 1000 free SMS/month per municipality, no ca
 
 ---
 
+## 7a1. Nature of Business: searchable instead of a plain dropdown (2026-08-19)
+
+The project owner's own live-testing report: "I can only type one letter" -- Nature of Business is a native `<select>` with ~220 options, and a native select only ever supports the browser's own built-in typeahead (jump to whichever option starts with the last key pressed, resetting almost immediately), not a real substring search. With 220 entries, that's genuinely painful to use.
+
+**Built as a real, reusable `FieldDescriptor` kind (`"searchable-select"`), not a one-off hack tied to this specific field** -- `ApplyPageClient.tsx`'s new `SearchableSelect` component is a plain type-to-filter combobox: typing filters the option list by substring (case-insensitive) anywhere in the text, not just the start; clicking or arrow-key-navigating-then-Enter selects; Escape or clicking away reverts the visible text back to whatever's actually selected rather than leaving a half-typed, unselected state. `withDynamicOptions()` (the existing per-LGU option-swap mechanism, section 7o) already treats it identically to a plain `select` for override purposes, so this stays compatible with a future LGU's own nature-of-business list the same way the field already was. Deliberately still resolves to one exact string from the option list on selection -- typing itself never becomes the stored value, since `application-form-logic.ts`'s conditional show/hide rules pattern-match on exact option text (e.g. `natureOfBusiness === "Billiard Hall"`).
+
+**A real bug found live during verification, not by inspection**: after selecting an option, clicking the (already-focused) input again to search for something else did nothing -- the dropdown never reopened. Root cause: selecting an option uses `onMouseDown` + `preventDefault()` (needed so the browser's default focus-shifting behavior doesn't blur the input and close the dropdown before the click registers), which means the input never actually loses focus during selection -- so a second click on it doesn't fire a *new* `onFocus` event, since focus never changed. Fixed by also opening on plain `onClick`, not just `onFocus` -- covers both "focusing in from a different element" and "clicking an input that was already focused."
+
+**Verified interactively against the real component, not a re-implementation** -- since `SearchableSelect` has no session/auth dependency at all (unlike the rest of `/apply`'s OTP-gated later screens), it was temporarily exported, exercised directly in a fixture with the real 220-entry `NATURE_OF_BUSINESS_OPTIONS` list, then reverted: substring filtering confirmed correct (typing "comp" matched "Computer Repair," "Computer/Gadget Store," "Finance Company," etc. -- anywhere-in-string, not just prefix); mouse selection confirmed (updates the bound value, closes the dropdown); the re-click-to-reopen bug above was caught and fixed live during this same pass; the "no matches" state, Escape-reverts-without-selecting, and full keyboard navigation (arrow keys move the highlighted row, Enter selects it) were all confirmed against the real component afterward. `tsc`/`eslint`/a full `next build` all ran clean, and the real, unmodified `/apply` route was confirmed to compile and render with zero server errors.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
