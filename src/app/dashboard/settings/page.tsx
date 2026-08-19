@@ -12,6 +12,7 @@ import { PrintTemplateUpload } from "./print-template-upload";
 import { BusinessImportCard } from "./business-import";
 import { PermitNumberFormatCard } from "./permit-number-format";
 import { PaymentMethodsCard } from "./payment-methods";
+import { SmsUsageCard } from "./sms-usage-card";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
@@ -476,6 +477,13 @@ export default async function SettingsPage() {
           acceptsOnlinePortal={lgu.acceptsOnlinePortal}
           onlinePortalUrl={lgu.onlinePortalUrl}
         />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="SMS Usage"
+        sub="How many texts have gone out this month — OTP codes, status updates, and staff alerts all count. Resets to zero every month; unused SMS don't carry over."
+      >
+        <SmsUsageCard lguId={staff.lgu_id} />
       </CollapsibleSection>
 
       <CollapsibleSection

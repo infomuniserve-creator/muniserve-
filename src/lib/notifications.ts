@@ -15,17 +15,27 @@ import { createServiceClient } from "@/lib/supabase/service";
  * function didn't capture it anywhere -- a real failure (the first live
  * staff-invite email) logged as "failed" with nothing to look at to find
  * out why, not even a console.error. Every failure is queryable now.
+ *
+ * lguId (migration 0054, the SMS usage counter) is denormalized directly
+ * onto the row rather than derived later from application_id -- several
+ * real callers have no application_id at all (OTP sends, the staff
+ * welcome email), which would otherwise make those rows invisible to any
+ * per-LGU count. Exported as `logNotification` so otp.ts -- the one real
+ * SMS path that never went through this file at all before this pass --
+ * can log through the exact same function instead of a second, drifting
+ * copy.
  */
-async function log(
+export async function logNotification(
   applicationId: string | null,
   channel: "sms" | "email",
   recipient: string,
   message: string,
   status: "sent" | "failed",
-  errorDetail?: string
+  errorDetail?: string,
+  lguId?: string | null
 ) {
   const supabase = createServiceClient();
-  await supabase.from("notifications_log").insert({ application_id: applicationId, channel, recipient, message, status, error_detail: errorDetail ?? null });
+  await supabase.from("notifications_log").insert({ application_id: applicationId, channel, recipient, message, status, error_detail: errorDetail ?? null, lgu_id: lguId ?? null });
 }
 
 /**
@@ -53,11 +63,11 @@ export async function notifyApplicantSms(applicationId: string, lguId: string, p
   const { finalMessage, senderName } = await resolveSmsIdentity(lguId, message);
   try {
     await sendSms(phone, finalMessage, senderName);
-    await log(applicationId, "sms", phone, finalMessage, "sent");
+    await logNotification(applicationId, "sms", phone, finalMessage, "sent", undefined, lguId);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyApplicantSms failed", detail);
-    await log(applicationId, "sms", phone, finalMessage, "failed", detail).catch(() => {});
+    await logNotification(applicationId, "sms", phone, finalMessage, "failed", detail, lguId).catch(() => {});
   }
 }
 
@@ -72,11 +82,11 @@ export async function notifyApplicantSms(applicationId: string, lguId: string, p
 export async function notifyApplicantEmail(applicationId: string, email: string, subject: string, html: string, attachments?: EmailAttachment[]): Promise<void> {
   try {
     await sendEmail(email, subject, html, attachments);
-    await log(applicationId, "email", email, subject, "sent");
+    await logNotification(applicationId, "email", email, subject, "sent");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyApplicantEmail failed", detail);
-    await log(applicationId, "email", email, subject, "failed", detail).catch(() => {});
+    await logNotification(applicationId, "email", email, subject, "failed", detail).catch(() => {});
   }
 }
 
@@ -84,11 +94,11 @@ export async function notifyApplicantEmail(applicationId: string, email: string,
 export async function notifyStaffEmail(applicationId: string | null, email: string, subject: string, html: string): Promise<void> {
   try {
     await sendEmail(email, subject, html);
-    await log(applicationId, "email", email, subject, "sent");
+    await logNotification(applicationId, "email", email, subject, "sent");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyStaffEmail failed", detail);
-    await log(applicationId, "email", email, subject, "failed", detail).catch(() => {});
+    await logNotification(applicationId, "email", email, subject, "failed", detail).catch(() => {});
   }
 }
 
@@ -105,11 +115,11 @@ export async function notifyStaffSms(applicationId: string | null, lguId: string
   const { finalMessage, senderName } = await resolveSmsIdentity(lguId, message);
   try {
     await sendSms(phone, finalMessage, senderName);
-    await log(applicationId, "sms", phone, finalMessage, "sent");
+    await logNotification(applicationId, "sms", phone, finalMessage, "sent", undefined, lguId);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("notifyStaffSms failed", detail);
-    await log(applicationId, "sms", phone, finalMessage, "failed", detail).catch(() => {});
+    await logNotification(applicationId, "sms", phone, finalMessage, "failed", detail, lguId).catch(() => {});
   }
 }
 

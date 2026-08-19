@@ -5,6 +5,7 @@ import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "../dashboard/sign-out-button";
 import { addLguDepartment, createLguClient, deleteLguClient, setDepartmentActive, setLguPaused, viewAsLgu } from "./actions";
+import { getSmsUsageHistory, SMS_FREE_MONTHLY_LIMIT } from "@/lib/sms-usage";
 
 /**
  * Platform-admin dashboard (CLAUDE.md section 7o) -- the "agency owner"
@@ -65,6 +66,14 @@ export default async function AdminPage() {
     })
   );
   const countsByLgu = new Map(recordCounts.map((c) => [c.lguId, c]));
+
+  // SMS Usage (2026-08-19) -- 1000 free/month per municipality, no
+  // carryover, Php 0.55 each over. One query set per client (6 months
+  // each) -- fine at this client count; worth revisiting if the client
+  // list ever grows large enough to make this expensive.
+  const smsUsageByLgu = new Map(
+    await Promise.all(lguList.map(async (lgu) => [lgu.id, await getSmsUsageHistory(supabase, lgu.id, 6)] as const))
+  );
 
   return (
     <div style={{ maxWidth: 760, margin: "32px auto", padding: "0 16px", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
@@ -280,6 +289,40 @@ export default async function AdminPage() {
                       </button>
                     </form>
                   </div>
+                </details>
+
+                <details style={{ marginTop: 10, borderTop: "0.5px dashed #e5e7eb", paddingTop: 10 }}>
+                  {(() => {
+                    const months = smsUsageByLgu.get(lgu.id) ?? [];
+                    const current = months[0];
+                    const previous = months.slice(1);
+                    if (!current) return <summary style={{ fontSize: 11.5, color: "#0C447C", fontWeight: 600, cursor: "pointer" }}>SMS usage</summary>;
+                    return (
+                      <>
+                        <summary style={{ fontSize: 11.5, color: "#0C447C", fontWeight: 600, cursor: "pointer" }}>
+                          SMS this month: {current.count.toLocaleString()} / {SMS_FREE_MONTHLY_LIMIT.toLocaleString()} free
+                          {current.overageCount > 0 && ` — ${current.overageCount.toLocaleString()} over (≈ Php ${current.overageCost.toFixed(2)})`}
+                        </summary>
+                        <div style={{ marginTop: 8 }}>
+                          {previous.length === 0 || previous.every((m) => m.count === 0) ? (
+                            <p style={{ fontSize: 11, color: "#9ca3af" }}>No SMS history before this month yet.</p>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {previous.map((m) => (
+                                <div key={m.monthKey} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#4b5563" }}>
+                                  <span>{m.monthLabel}</span>
+                                  <span>
+                                    {m.count.toLocaleString()}
+                                    {m.overageCount > 0 && ` (+${m.overageCount.toLocaleString()} over, ≈ Php ${m.overageCost.toFixed(2)})`}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </details>
 
                 <div style={{ marginTop: 10, borderTop: "0.5px dashed #e5e7eb", paddingTop: 10 }}>

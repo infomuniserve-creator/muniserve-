@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { otpMessage, sendSms } from "@/lib/semaphore";
+import { logNotification } from "@/lib/notifications";
 
 const OTP_TTL_MINUTES = 5;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -83,8 +84,24 @@ export type SendOtpResult = { ok: true } | { error: "too_soon" | "sms_send_faile
  * and send-renewal-otp/route.ts (phone resolved server-side from a
  * business's linked owner, 2026-08-16) so both enforce the same guarantee
  * rather than drifting apart as two copies of the same 15 lines.
+ *
+ * `lguId` (2026-08-19, the SMS usage counter) is required now -- this was
+ * previously the one real SMS-sending path in the whole app that never
+ * logged anything at all, and had no LGU attached anywhere, even though
+ * OTP is very likely the single largest source of real SMS volume (every
+ * login, renewal, and status re-verification sends one). Logs through
+ * the exact same notifications_log path every other SMS type already
+ * uses (notifications.ts's logNotification), best-effort and never
+ * throwing -- a logging failure must never block a real OTP from
+ * reaching the applicant. Deliberately does NOT also route this message
+ * through resolveSmsIdentity()'s LGU-branded Sender Name/prefix logic --
+ * that's a real, separate gap (OTP messages always send under the bare
+ * Semaphore default today), left untouched here on purpose: OTP is the
+ * single highest-stakes SMS type in this app (a confusing or altered
+ * message could block a real login), not the right place to bundle in an
+ * unrelated behavior change alongside a counting fix.
  */
-export async function sendOtpCode(phone: string): Promise<SendOtpResult> {
+export async function sendOtpCode(phone: string, lguId: string): Promise<SendOtpResult> {
   const supabase = createServiceClient();
   const { data: recent } = await supabase
     .from("otp_codes")
@@ -99,10 +116,13 @@ export async function sendOtpCode(phone: string): Promise<SendOtpResult> {
   }
 
   const code = await createOtp(phone);
+  const message = otpMessage(code);
   try {
-    await sendSms(phone, otpMessage(code));
+    await sendSms(phone, message);
+    await logNotification(null, "sms", phone, message, "sent", undefined, lguId);
   } catch (err) {
     console.error("Semaphore send failed", err);
+    await logNotification(null, "sms", phone, message, "failed", err instanceof Error ? err.message : String(err), lguId).catch(() => {});
     return { error: "sms_send_failed" };
   }
   return { ok: true };

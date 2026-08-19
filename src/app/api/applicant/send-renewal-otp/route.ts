@@ -24,15 +24,15 @@ export async function POST(request: Request) {
   const supabase = createServiceClient();
   const { data: business } = await supabase
     .from("businesses")
-    .select("owner:owners(phone)")
+    .select("lgu_id, owner:owners(phone)")
     .eq("id", businessId)
     .maybeSingle();
   const owner = business?.owner as unknown as { phone: string | null } | null;
-  if (!owner?.phone) {
+  if (!owner?.phone || !business?.lgu_id) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const result = await sendOtpCode(owner.phone);
+  const result = await sendOtpCode(owner.phone, business.lgu_id);
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.error === "too_soon" ? 429 : 502 });
   }
