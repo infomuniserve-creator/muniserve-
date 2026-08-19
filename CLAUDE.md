@@ -1354,6 +1354,21 @@ The project owner's own live-testing report: "I can only type one letter" -- Nat
 
 ---
 
+## 7a2. Vercel function region: Virginia -> Tokyo, to sit next to the database (2026-08-19)
+
+The project owner asked to verify a leftover item from the 23-finding pipeline audit (section 7qq): the theory that clicking between dashboard tabs/sections feels slow partly because the server runs "in Virginia instead of Singapore." Checked both platforms directly rather than trusting the audit's own memory of itself:
+
+- **Vercel (where every Server Component/Server Action actually runs)**: `iad1` -- Washington, D.C. area, Virginia, US East. Confirmed from a live production deployment's own `regions` field. No `vercel.json`/route-level region override existed anywhere in the codebase before this, so every function used this project-level default.
+- **Supabase (the database)**: `ap-northeast-1` -- Tokyo, Japan, not Singapore. Confirmed directly via the project's own metadata.
+
+**The audit's diagnosis was directionally right but its own specifics were off, and the real problem is actually one layer worse than "far from the Philippines"**: the function and the database aren't just each far from Manila, they're far from *each other* -- every Supabase call a Server Component makes has to cross the Pacific from Virginia to Tokyo and back, and this app's dashboard pages routinely make several such calls *sequentially* per page load (LGU lookup, applications, departments, review rounds), so that penalty compounds rather than paying once.
+
+**Fix applied**: `vercel.json` gained a project-level `"regions": ["hnd1"]` (Vercel's Tokyo region) -- confirmed against Vercel's own current docs (`search_vercel_documentation`, not assumed from training data, matching this project's standing AGENTS.md caution about this stack) that a top-level `regions` array is the documented way to set the default execution region for every function in a project. This collapses the function<->database leg (paid multiple times per page) from a transpacific US-East-Coast round trip down to a same-metro hop, leaving only a single Manila<->Tokyo leg for the user-facing request instead of a Manila<->Virginia<->Tokyo<->Virginia<->Manila chain.
+
+**Deliberately not also moving the database to Singapore in this pass** -- discussed directly with the project owner first: Supabase has no in-place region change, only create-a-new-project-and-migrate, and while the actual data footprint here is small enough to make that low-risk (1,181 businesses, 8 applications, 44 documents/~20MB, 13,555 static permit_history rows, 3 real staff/admin logins at the time this was checked), it's still a real cutover for a live pilot client's production data. The project owner's own choice was to ship the free, reversible Vercel-region change first and observe whether that alone meaningfully improves things before committing to a database migration.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
