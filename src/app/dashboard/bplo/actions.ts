@@ -215,15 +215,11 @@ export async function resubmitToDepartments(formData: FormData) {
  * mechanism from manual entry, and only offered on lines that stayed
  * computed).
  */
-const MODE_OF_PAYMENT_VALUES = new Set(["Annual", "Semi-Annual", "Quarterly"]);
-
 export async function finalizeAssessment(formData: FormData) {
   const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
 
   const applicationId = String(formData.get("applicationId"));
-  const modeOfPayment = String(formData.get("modeOfPayment") ?? "");
-  if (!MODE_OF_PAYMENT_VALUES.has(modeOfPayment)) throw new Error("Select a Mode of Payment before finalizing.");
 
   const supabase = await createClient();
   const lgu = await getLguDisplay(supabase, staff.lgu_id);
@@ -231,7 +227,7 @@ export async function finalizeAssessment(formData: FormData) {
   const { data: application, error: fetchError } = await supabase
     .from("applications")
     .select(
-      `reference_number, application_type, form_inputs, business:businesses(business_name, trade_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, has_barangay_clearance, owner:owners(phone, email, full_name))`
+      `reference_number, application_type, form_inputs, business:businesses(business_name, trade_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, lbt_category, organization_type, is_branch_office, is_aircon, seating_capacity, lodger_count, land_area_hectares, warehouse_floor_area_sqm, total_floor_area_sqm, billiard_table_count, guard_post_count, animal_count, male_employee_count, female_employee_count, has_barangay_clearance, business_tax_payment, owner:owners(phone, email, full_name))`
     )
     .eq("id", applicationId)
     .eq("status", "pending_bplo_assessment")
@@ -263,9 +259,18 @@ export async function finalizeAssessment(formData: FormData) {
     male_employee_count: number | null;
     female_employee_count: number | null;
     has_barangay_clearance: string | null;
+    business_tax_payment: string | null;
     owner: { phone: string | null; email: string | null; full_name: string | null } | null;
   } | null;
   if (!business) throw new Error("Business record missing");
+
+  // Mode of Payment is derived straight from the applicant's own
+  // Business Tax Payment choice (2026-08-19), not a separate BPLO pick --
+  // see AssessmentCard (bplo/page.tsx) for the identical fallback shown
+  // in the live preview. Defaults to Annual for a pre-feature application
+  // or a walk-in filing that never had a chance to set this (CLAUDE.md:
+  // startWalkInApplication doesn't re-collect the ~40-field profile).
+  const modeOfPayment = business.business_tax_payment ?? "Annual";
 
   const formInputs = application.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null;
 
@@ -292,6 +297,7 @@ export async function finalizeAssessment(formData: FormData) {
       femaleEmployeeCount: business.female_employee_count,
       barangay: business.barangay,
       hasBarangayClearance: business.has_barangay_clearance,
+      businessTaxPayment: business.business_tax_payment,
     },
   });
   // A blocked result is only ever recoverable through manual entry -- with
@@ -457,6 +463,46 @@ export async function finalizeAssessment(formData: FormData) {
         .update({ status: "pending_bplo_assessment", assessment_finalized_at: null, mode_of_payment: null, assessment_finalized_by: null })
         .eq("id", applicationId);
       throw insertError;
+    }
+  }
+
+  // Business Tax installment reminders (2026-08-19) -- reminder-only, per
+  // the project owner's own explicit choice: MuniServe doesn't track or
+  // collect the remaining installments online here, it just texts/emails
+  // a reminder on each of the LGU's configured dates. Snapshots the exact
+  // amount just charged (the LBT line's final amount, override included)
+  // rather than re-deriving it later, so a subsequent fee-rule edit can't
+  // retroactively change what a reminder claims is due -- same
+  // "denormalize at the moment of truth" convention as application_fee_
+  // lines' own display_label/acct_code. Best-effort: a scheduling failure
+  // here must never undo an assessment that was already finalized and
+  // charged, same reasoning as the notification calls below.
+  if (modeOfPayment === "Bi-Annually" || modeOfPayment === "Quarterly") {
+    const lbtLine = lineRows.find((l) => l.fee_category === "lbt");
+    const installmentAmount = lbtLine ? (lbtLine.overridden_amount ?? lbtLine.computed_amount) : null;
+    const configuredDates = modeOfPayment === "Bi-Annually" ? lgu.lbtBiannualReminderDates : lgu.lbtQuarterlyReminderDates;
+    if (installmentAmount != null && configuredDates.length > 0) {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const reminderRows = configuredDates
+        .map((mmdd) => {
+          const [month, day] = mmdd.split("-").map(Number);
+          if (!month || !day) return null;
+          // Noon UTC, not midnight -- this project's own established
+          // "date-only strings parse at noon UTC" convention
+          // (permit-pdf.ts, /verify/[reference]) avoids the exact class
+          // of off-by-one-day bug already caught in both of those.
+          return new Date(Date.UTC(currentYear, month - 1, day, 12));
+        })
+        // Only ever schedule dates still ahead of right now -- an
+        // application finalized after, say, August has no business
+        // "reminding" about an April date that's already passed.
+        .filter((d): d is Date => d != null && d.getTime() > now.getTime())
+        .map((date) => ({ application_id: applicationId, lgu_id: staff.lgu_id, reminder_date: date.toISOString().slice(0, 10), amount: installmentAmount }));
+      if (reminderRows.length > 0) {
+        const { error: reminderError } = await service.from("business_tax_reminders").insert(reminderRows);
+        if (reminderError) console.error("Could not schedule business tax reminders", reminderError);
+      }
     }
   }
 

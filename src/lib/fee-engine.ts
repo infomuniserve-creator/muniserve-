@@ -109,8 +109,23 @@ export type FeeComputationInput = {
     femaleEmployeeCount: number | null;
     barangay: string | null;
     hasBarangayClearance: string | null; // "Yes" or "No, generate my Brgy. clearance" -- the applicant form's own field, san-miguel-form-options.ts's BARANGAY_CLEARANCE_OPTIONS
+    businessTaxPayment: string | null; // "Annual" / "Bi-Annually" / "Quarterly" -- san-miguel-form-options.ts's BUSINESS_TAX_PAYMENT_OPTIONS. Only ever "Annual" on a New application (locked client- and server-side); a Renewal can pick any of the three. Divides the LBT line's charged amount (2026-08-19) -- see LBT_INSTALLMENT_DIVISOR below.
   };
 };
+
+/**
+ * Business Tax installment payments (2026-08-19, project owner's direct
+ * request) -- Bi-Annually pays half now (the LGC's own Jan/Jul split),
+ * Quarterly pays a quarter now (the LGC's own Jan/Apr/Jul/Oct split,
+ * confirmed with the project owner over a literal "divide by three" --
+ * the math only lines up with the standard 4-quarter schedule and their
+ * own 3 future reminder dates). Deliberately only divides the LBT line
+ * itself -- Mayor's Permit Fee, CEDULA, and every regulatory fee stay
+ * full/one-time amounts regardless of payment frequency, matching how
+ * these actually work under the Local Government Code (only the
+ * business tax itself has an installment schedule).
+ */
+const LBT_INSTALLMENT_DIVISOR: Record<string, number> = { "Bi-Annually": 2, Quarterly: 4 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -383,8 +398,18 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
   const warnings: string[] = [];
 
   // ---- LBT schedule line ----
+  // lbtAmount stays the FULL ANNUAL figure throughout this function --
+  // Mayor's Permit's own "preceding_year_lbt_paid" tiering (below) needs
+  // the real annual amount regardless of how this year's payment happens
+  // to be split, not whatever slice of it is being charged this round.
+  // lbtChargedAmount is the one actually pushed as the LBT line (and what
+  // the essential-commodity discount is computed against, since the
+  // discount is a rate reduction on whatever's actually being charged
+  // now) -- divided by the installment schedule below.
   const lbtRule = rules.find((r) => r.fee_category === "lbt" && r.applies_to === input.business.lbtCategory);
   let lbtAmount: number | null = null;
+  let lbtChargedAmount: number | null = null;
+  const lbtDivisor = LBT_INSTALLMENT_DIVISOR[input.business.businessTaxPayment ?? ""] ?? 1;
   if (!lbtRule) {
     warnings.push(`No active LBT Schedule rule matches "${input.business.lbtCategory}" — check the category in the Business Registry.`);
   } else if (lbtBasis == null) {
@@ -400,18 +425,23 @@ export async function computeApplicationFees(supabase: SupabaseClient, input: Fe
     if (typeof result === "object") warnings.push(result.error);
     else {
       lbtAmount = round2(result);
-      lines.push({ feeRuleId: lbtRule.id, feeCategory: "lbt", displayLabel: CATEGORY_LABEL.lbt!, amount: lbtAmount, includedInTotal: lbtRule.delivery_mode === "online", isManualEligible: true, acctCode: lbtRule.acct_code });
+      lbtChargedAmount = lbtDivisor === 1 ? lbtAmount : round2(lbtAmount / lbtDivisor);
+      const note =
+        lbtDivisor > 1
+          ? `${input.business.businessTaxPayment} installment (1 of ${lbtDivisor}) — the full annual Local Business Tax is ₱${lbtAmount.toLocaleString()}.`
+          : undefined;
+      lines.push({ feeRuleId: lbtRule.id, feeCategory: "lbt", displayLabel: CATEGORY_LABEL.lbt!, amount: lbtChargedAmount, includedInTotal: lbtRule.delivery_mode === "online", note, isManualEligible: true, acctCode: lbtRule.acct_code });
     }
   }
 
   // ---- Essential-commodity discount ----
-  if (lbtRule && lbtAmount != null) {
+  if (lbtRule && lbtChargedAmount != null) {
     const discountRule = rules.find((r) => r.fee_category === "discount");
     if (discountRule) {
       const commodityList = (discountRule.applies_to ?? "").split("|").map((s) => s.trim().toLowerCase());
       const targets = discountRule.discount_target_fee_rule_ids ?? [];
       if (commodityList.includes(nature) && targets.includes(lbtRule.id)) {
-        const discountAmount = -round2(lbtAmount * (discountRule.percentage_rate ?? 0));
+        const discountAmount = -round2(lbtChargedAmount * (discountRule.percentage_rate ?? 0));
         lines.push({ feeRuleId: discountRule.id, feeCategory: "discount", displayLabel: discountRule.name, amount: discountAmount, includedInTotal: discountRule.delivery_mode === "online", isManualEligible: false, acctCode: discountRule.acct_code });
       }
     }

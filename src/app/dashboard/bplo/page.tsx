@@ -567,9 +567,16 @@ async function AssessmentCard({
           femaleEmployeeCount: (business.female_employee_count as number | null) ?? null,
           barangay: (business.barangay as string | null) ?? null,
           hasBarangayClearance: (business.has_barangay_clearance as string | null) ?? null,
+          businessTaxPayment: (business.business_tax_payment as string | null) ?? null,
         },
       })
     : { ok: false, blockedReason: "Business record missing." };
+
+  // Mode of Payment is now derived straight from the applicant's own
+  // choice (2026-08-19), not a separate BPLO pick -- see finalizeAssessment
+  // for the authoritative version of this same fallback (defaults to
+  // Annual for a pre-feature application or a walk-in that never set this).
+  const modeOfPayment = (business?.business_tax_payment as string | null) ?? "Annual";
 
   // Blocked and Automated Assessment is on: nothing to do here but send
   // BPLO to fix the underlying data, exactly as before.
@@ -657,21 +664,12 @@ async function AssessmentCard({
 
         <AssessmentLineItems lines={computedLines} warnings={warnings} automatedAssessmentEnabled={automatedAssessmentEnabled} manualFields={manualFields} />
 
-        <label className="mb-4 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="modeOfPayment" value={modeOfPayment} />
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-[12.5px] font-bold text-ink-soft">Mode of Payment</span>
-          <select
-            name="modeOfPayment"
-            required
-            defaultValue=""
-            className="h-9 rounded-xl border border-border-strong bg-surface px-2.5 text-[13px] text-ink"
-          >
-            <option value="" disabled>Select one</option>
-            <option value="Annual">Annual</option>
-            <option value="Semi-Annual">Semi-Annual</option>
-            <option value="Quarterly">Quarterly</option>
-          </select>
-          <span className="text-[11px] text-ink-faint">Printed on the Order of Payment.</span>
-        </label>
+          <span className="rounded-full bg-surface-2 px-3 py-1 text-[13px] font-bold text-ink">{modeOfPayment}</span>
+          <span className="text-[11px] text-ink-faint">The applicant&rsquo;s own choice on their application — printed on the Order of Payment.</span>
+        </div>
 
         <PrimaryButton type="submit">Finalize assessment</PrimaryButton>
       </form>

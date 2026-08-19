@@ -666,6 +666,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       phone,
       gender: genderInput,
       ...form,
+      // A New business always pays the full annual Business Tax -- locked
+      // rather than a free choice, overriding whatever's in form state so
+      // the required-field/readyForDocuments check doesn't wait on a value
+      // the applicant is never shown a control for. Only Renewal gets the
+      // real Annual/Bi-Annually/Quarterly choice (project owner's own
+      // request, 2026-08-19).
+      ...(path === "new" ? { businessTaxPayment: "Annual" } : {}),
     };
   }
 
@@ -686,7 +693,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           businessName: form.businessName,
           natureOfBusiness: form.natureOfBusiness,
           organizationType: form.organizationType,
-          businessTaxPayment: form.businessTaxPayment || undefined,
+          businessTaxPayment: path === "new" ? "Annual" : form.businessTaxPayment || undefined,
           registrationAuthority: form.registrationAuthority || undefined,
           registrationNo: form.registrationNo || undefined,
           tin: form.tin || undefined,
@@ -797,6 +804,20 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     if (!isFieldVisible(fd.key, formValues)) return null;
     const required = REQUIRED_FIELDS.has(fd.key);
     const label = fd.label + (required ? " *" : "");
+
+    // A New business always pays the full annual amount -- shown locked,
+    // not a real dropdown, so there's nothing to click here. Renewal
+    // below still gets the normal 3-option select.
+    if (fd.key === "businessTaxPayment" && path === "new") {
+      return (
+        <Field key={fd.key} label={label}>
+          <input value="Annual" readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
+          <span style={{ fontSize: 11, color: "#9199a8", marginTop: 4, display: "block" }}>
+            New businesses pay the full year&rsquo;s business tax upfront. Bi-Annual and Quarterly are only available on renewal.
+          </span>
+        </Field>
+      );
+    }
 
     if (fd.kind === "checkboxgroup") {
       const current = (form[fd.key as keyof FormState] as string[]) ?? [];

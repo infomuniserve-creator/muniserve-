@@ -55,7 +55,8 @@ export type AuditAction =
   | "permit_pdf_regenerated"
   | "business_unclaimed"
   | "businesses_imported"
-  | "permit_number_format_updated";
+  | "permit_number_format_updated"
+  | "installment_reminder_dates_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
-import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
+import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -163,6 +163,38 @@ export default async function SettingsPage() {
               <input name="acctCode" placeholder="e.g. 582-2" className="h-9 w-28 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
             </div>
             <PrimaryButton type="submit">Add a fee</PrimaryButton>
+          </form>
+        </Card>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Business Tax Installment Reminders"
+        sub="A New application always pays the full annual Business Tax. A Renewal that chooses Bi-Annually or Quarterly pays the first installment now; MuniServe texts (and emails, if on file) a reminder for the rest, on the dates below. Applicants still pay the remaining balance the usual way -- these dates aren't the same for every LGU, so nothing is reminded until you set them."
+      >
+        <Card className="p-5">
+          <form action={updateInstallmentReminderDates} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Bi-Annual reminder date(s)</span>
+              <input
+                name="biannualDates"
+                type="text"
+                defaultValue={lgu.lbtBiannualReminderDates.join(", ")}
+                placeholder="e.g. 07-05"
+                className="h-9 w-full max-w-sm rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Quarterly reminder date(s)</span>
+              <input
+                name="quarterlyDates"
+                type="text"
+                defaultValue={lgu.lbtQuarterlyReminderDates.join(", ")}
+                placeholder="e.g. 04-05, 07-05, 10-05"
+                className="h-9 w-full max-w-sm rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </div>
+            <p className="text-[11px] text-ink-faint">Format: MM-DD, comma-separated for more than one (e.g. &ldquo;04-05, 07-05, 10-05&rdquo;). No year -- the same dates apply every year.</p>
+            <PrimaryButton type="submit" className="self-start">Save</PrimaryButton>
           </form>
         </Card>
       </CollapsibleSection>

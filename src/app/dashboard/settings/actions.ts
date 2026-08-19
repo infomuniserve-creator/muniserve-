@@ -175,6 +175,55 @@ export async function setAutomatedAssessmentEnabled(formData: FormData) {
   revalidatePath("/dashboard/bplo");
 }
 
+const MMDD_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+function parseReminderDates(raw: string): string[] {
+  const dates = raw
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const invalid = dates.filter((d) => !MMDD_RE.test(d));
+  if (invalid.length > 0) throw new Error(`"${invalid[0]}" isn't a valid date -- use MM-DD, e.g. 07-05 for July 5.`);
+  return [...new Set(dates)].sort();
+}
+
+/**
+ * Business Tax installment reminder dates (2026-08-19) -- Bi-Annually and
+ * Quarterly each installment-plan gets its own LGU-configurable set of
+ * 'MM-DD' dates, deliberately NOT hardcoded (the project owner's own
+ * words: "I'm not sure if other LGUs are doing the same dates"). San
+ * Miguel's real dates were seeded directly in migration 0052 since
+ * they're a known fact for the pilot LGU; every other LGU starts blank
+ * (no reminders scheduled) until BPLO sets these. Same "RLS bounds rows,
+ * not columns" reasoning as every other lgus-settings action here --
+ * migration 0027's existing policy already covers both new columns.
+ */
+export async function updateInstallmentReminderDates(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const biannual = parseReminderDates(String(formData.get("biannualDates") ?? ""));
+  const quarterly = parseReminderDates(String(formData.get("quarterlyDates") ?? ""));
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lgus")
+    .update({ lbt_biannual_reminder_dates: biannual, lbt_quarterly_reminder_dates: quarterly })
+    .eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "installment_reminder_dates_updated",
+    summary: `Business Tax installment reminder dates updated (Bi-Annual: ${biannual.join(", ") || "none"}; Quarterly: ${quarterly.join(", ") || "none"})`,
+    details: { biannual, quarterly },
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
 /**
  * Sets the Mayor's name shown on the pre-signature print certificate
  * (CLAUDE.md 7x, print-certificate.ts) -- migration 0033's lgus.mayor_name.

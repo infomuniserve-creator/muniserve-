@@ -62,6 +62,19 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" });
 }
 
+/**
+ * "Bi-Annually" is the canonical stored value everywhere else in this
+ * schema (businesses.business_tax_payment, applications.mode_of_payment
+ * as of 2026-08-19, permit_history's own historical vocabulary) -- but
+ * the real physical Order of Payment this PDF was built to match
+ * (CLAUDE.md 7ii) prints "Semi-Annual". A display-only relabel at the
+ * one place that actually needs the government-document wording, rather
+ * than a second stored vocabulary.
+ */
+function displayModeOfPayment(mode: string | null): string {
+  return mode === "Bi-Annually" ? "Semi-Annual" : (mode ?? "—");
+}
+
 function formatPeso(amount: number): string {
   // "Php" not "₱" -- pdf-lib's standard Helvetica (WinAnsi encoding) has no
   // glyph for U+20B1 and throws outright. Same convention permit-pdf.ts and
@@ -107,7 +120,7 @@ export async function generateOrderOfPaymentPdf(input: OrderOfPaymentInput): Pro
     ["Business name", input.businessName],
     ["Business address", input.address || "—"],
     ["Business owner", input.ownerName],
-    ["Mode of payment", input.modeOfPayment ?? "—"],
+    ["Mode of payment", displayModeOfPayment(input.modeOfPayment)],
   ];
   for (const [label, value] of detailRows) {
     page.drawText(label, { x: MARGIN, y, font: bold, size: 10, color: MUTED });

@@ -140,7 +140,11 @@ export async function POST(request: Request) {
     businessName: body.businessName,
     natureOfBusiness: body.natureOfBusiness,
     organizationType: body.organizationType,
-    businessTaxPayment: body.businessTaxPayment,
+    // A New business always pays the full annual Business Tax -- never
+    // trust the client's own value for this, since the applicant form's
+    // lock is only a UI convenience (2026-08-19). Only Renewal keeps
+    // whatever the applicant actually picked.
+    businessTaxPayment: body.applicationType === "new" ? "Annual" : body.businessTaxPayment,
     registrationAuthority: body.registrationAuthority,
     registrationNo: body.registrationNo,
     tin: body.tin,
@@ -227,7 +231,7 @@ export async function POST(request: Request) {
     business_name: body.businessName,
     nature_of_business: body.natureOfBusiness,
     organization_type: body.organizationType ?? null,
-    business_tax_payment: body.businessTaxPayment ?? null,
+    business_tax_payment: (values.businessTaxPayment as string | undefined) ?? null,
     registration_authority: body.registrationAuthority ?? null,
     registration_no: body.registrationNo ?? null,
     tin: body.tin ?? null,

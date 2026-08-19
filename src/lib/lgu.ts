@@ -48,10 +48,12 @@ export type LguDisplay = {
   referencePrefix: string; // migration 0051 -- the existing short_code column, now exposed as the BPLO-editable "field 1" of Permit No. Format (e.g. "SMB"). Falls back to "APP" (matching generate_application_reference()'s own SQL-side coalesce) rather than null -- a permit number always needs a real prefix, there's no "blank" state to model.
   referenceYearDigits: 2 | 4; // migration 0051 -- "field 2" width, 2-digit ("26") or 4-digit ("2026") -- the year itself always stays live-computed, this only controls how many digits of it are shown
   referenceCounterDigits: number; // migration 0051 -- "field 3" zero-padding width (3-8), e.g. 5 -> "00056"
+  lbtBiannualReminderDates: string[]; // migration 0052 -- 'MM-DD' strings, e.g. ["07-05"]. Empty = not configured, no reminders scheduled.
+  lbtQuarterlyReminderDates: string[]; // e.g. ["04-05", "07-05", "10-05"]
 };
 
 const LGU_SELECT_COLUMNS =
-  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits";
+  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates";
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
 function withFallback(row: {
@@ -59,6 +61,7 @@ function withFallback(row: {
   print_template_path: string | null; print_template_field_mapping: Record<string, string> | null;
   building_permit_fee_enabled: boolean; building_permit_fee_label: string | null; is_paused: boolean; automated_assessment_enabled: boolean; treasurer_name: string | null; sender_name: string | null;
   short_code: string | null; reference_year_digits: number; reference_counter_digits: number;
+  lbt_biannual_reminder_dates: string[] | null; lbt_quarterly_reminder_dates: string[] | null;
 }, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
@@ -80,6 +83,8 @@ function withFallback(row: {
     referencePrefix: row.short_code ?? "APP",
     referenceYearDigits: row.reference_year_digits === 2 ? 2 : 4,
     referenceCounterDigits: row.reference_counter_digits,
+    lbtBiannualReminderDates: row.lbt_biannual_reminder_dates ?? [],
+    lbtQuarterlyReminderDates: row.lbt_quarterly_reminder_dates ?? [],
   };
 }
 
