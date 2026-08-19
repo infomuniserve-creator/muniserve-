@@ -8,6 +8,7 @@ import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/l
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { generateOrderOfPaymentPdf } from "@/lib/order-of-payment-pdf";
+import { formatPaymentChannelsForEmailHtml, formatPaymentChannelsForSms, getEnabledPaymentChannels } from "@/lib/payment-methods";
 import { createInfoRequest, reopenDepartmentRound } from "@/lib/info-requests";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -510,6 +511,11 @@ export async function finalizeAssessment(formData: FormData) {
     .filter((l) => l.included_in_total)
     .reduce((sum, l) => sum + (l.overridden_amount ?? l.computed_amount), 0);
 
+  // Accepted Payment Methods (2026-08-19) -- one shared derivation, used
+  // by both the SMS below and the email/PDF further down, so the two can
+  // never describe the payment options differently. See payment-methods.ts.
+  const paymentChannels = getEnabledPaymentChannels(lgu);
+
   if (business.owner?.phone) {
     // Use each line's FINAL amount (override if BPLO set one), not
     // result.total -- that total was computed before overrides, and
@@ -518,7 +524,7 @@ export async function finalizeAssessment(formData: FormData) {
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. Pay at the Treasurer's Office to continue.`
+      `your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. ${formatPaymentChannelsForSms(paymentChannels)}`
     );
   }
 
@@ -551,7 +557,7 @@ export async function finalizeAssessment(formData: FormData) {
         applicationId,
         business.owner.email,
         `Order of Payment -- ${application.reference_number}`,
-        `<p>Your application <strong>${application.reference_number}</strong> has been assessed. Total due: <strong>PHP ${totalDue.toLocaleString()}</strong>.</p><p>The attached Order of Payment lists the full breakdown -- bring it (printed or on your phone) to the Treasurer's Office to pay.</p>`,
+        `<p>Your application <strong>${application.reference_number}</strong> has been assessed. Total due: <strong>PHP ${totalDue.toLocaleString()}</strong>.</p><p>The attached Order of Payment lists the full breakdown.</p>${formatPaymentChannelsForEmailHtml(paymentChannels)}`,
         [{ filename: `${application.reference_number}-order-of-payment.pdf`, content: Buffer.from(orderOfPaymentPdf).toString("base64") }]
       );
     } catch (err) {

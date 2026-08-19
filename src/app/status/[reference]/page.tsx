@@ -1,5 +1,7 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { maskPhone } from "@/lib/mask";
+import { getLguDisplay } from "@/lib/lgu";
+import { anyChannelNeedsProofUpload, getEnabledPaymentChannels } from "@/lib/payment-methods";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
 import { AdditionalDocumentUpload } from "./upload-form";
@@ -30,7 +32,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
   const { data: application } = await supabase
     .from("applications")
     .select(
-      "id, status, submitted_at, business:businesses(business_name, owner_id, owner:owners(phone))"
+      "id, lgu_id, status, submitted_at, business:businesses(business_name, owner_id, owner:owners(phone))"
     )
     .eq("reference_number", reference)
     .maybeSingle();
@@ -142,10 +144,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
         </>
       )}
       {application.status === "pending_payment" && (
-        <>
-          <OpenInfoRequestsCard applicationId={application.id} />
-          <UploadCard applicationId={application.id} />
-        </>
+        <PendingPaymentSection applicationId={application.id} lguId={application.lgu_id} />
       )}
       {application.status === "released" && <ReleasedNote applicationId={application.id} />}
     </Shell>
@@ -255,7 +254,7 @@ async function OpenInfoRequestsCard({ applicationId, fallbackTitle }: { applicat
  * common case outright; the field stays editable for the unprompted-upload
  * case, which has nothing sensible to pre-fill.
  */
-async function UploadCard({ applicationId }: { applicationId: string }) {
+async function UploadCard({ applicationId, promptOverride, defaultLabelOverride }: { applicationId: string; promptOverride?: string; defaultLabelOverride?: string }) {
   const supabase = createServiceClient();
   const { data: openRequest } = await supabase
     .from("info_requests")
@@ -270,10 +269,47 @@ async function UploadCard({ applicationId }: { applicationId: string }) {
     <Card>
       <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Have a document to add?</p>
       <p style={{ fontSize: 12, color: "#6b7280" }}>
-        Upload it here -- if a department, BPLO, or Treasury asked for something specific, it&rsquo;ll be sent straight back to them.
+        {promptOverride ?? "Upload it here -- if a department, BPLO, or Treasury asked for something specific, it’ll be sent straight back to them."}
       </p>
-      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel={openRequest?.notes ?? ""} />
+      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel={openRequest?.notes || defaultLabelOverride || ""} />
     </Card>
+  );
+}
+
+/**
+ * Accepted Payment Methods (2026-08-19) -- shows the applicant which
+ * channels this LGU actually accepts (and their details) right on the
+ * status page, not just in the one-time SMS/email. For a non-cash
+ * channel (GCash/Bank Transfer/Online -- none of which go through
+ * MuniServe directly), the generic UploadCard below gets a payment-
+ * specific prompt/default label instead of the generic "have a document
+ * to add?" one, so it's obvious this is where a payment screenshot goes.
+ */
+async function PendingPaymentSection({ applicationId, lguId }: { applicationId: string; lguId: string }) {
+  const supabase = createServiceClient();
+  const lgu = await getLguDisplay(supabase, lguId);
+  const channels = getEnabledPaymentChannels(lgu);
+  const needsProof = anyChannelNeedsProofUpload(channels);
+
+  return (
+    <>
+      <OpenInfoRequestsCard applicationId={applicationId} />
+      {channels.length > 0 && (
+        <Card>
+          <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>How to pay</p>
+          {channels.map((c, i) => (
+            <p key={i} style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+              {c.longDetail}
+            </p>
+          ))}
+        </Card>
+      )}
+      <UploadCard
+        applicationId={applicationId}
+        promptOverride={needsProof ? "Paid via GCash, Bank Transfer, or online? Upload your receipt or screenshot here so staff can confirm it." : undefined}
+        defaultLabelOverride={needsProof ? "Payment receipt/screenshot" : undefined}
+      />
+    </>
   );
 }
 

@@ -225,6 +225,74 @@ export async function updateInstallmentReminderDates(formData: FormData) {
 }
 
 /**
+ * Accepted Payment Methods (2026-08-19) -- lets BPLO turn on whichever
+ * channels their LGU actually accepts (multiple at once, the project
+ * owner's own confirmed choice), each with its own detail fields.
+ * payment-methods.ts is the one place that turns these into the text an
+ * applicant actually sees, used by both the assessment-finalized
+ * notification (bplo/actions.ts) and the applicant status page. Same
+ * "RLS bounds rows, not columns" reasoning as every other lgus-settings
+ * action here -- migration 0027's existing policy already covers all 10
+ * new columns, no new migration/policy needed for this control itself.
+ */
+export async function updatePaymentMethods(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const acceptsCashCounter = formData.get("acceptsCashCounter") === "on";
+  const acceptsGcash = formData.get("acceptsGcash") === "on";
+  const gcashNumber = String(formData.get("gcashNumber") ?? "").trim() || null;
+  const gcashName = String(formData.get("gcashName") ?? "").trim() || null;
+  const acceptsBankTransfer = formData.get("acceptsBankTransfer") === "on";
+  const bankName = String(formData.get("bankName") ?? "").trim() || null;
+  const bankAccountNumber = String(formData.get("bankAccountNumber") ?? "").trim() || null;
+  const bankAccountName = String(formData.get("bankAccountName") ?? "").trim() || null;
+  const acceptsOnlinePortal = formData.get("acceptsOnlinePortal") === "on";
+  const onlinePortalUrl = String(formData.get("onlinePortalUrl") ?? "").trim() || null;
+
+  if (acceptsGcash && !gcashNumber) throw new Error("Enter a GCash number before turning GCash on.");
+  if (acceptsBankTransfer && (!bankName || !bankAccountNumber)) throw new Error("Enter a bank name and account number before turning Bank Transfer on.");
+  if (acceptsOnlinePortal && (!onlinePortalUrl || !/^https?:\/\//i.test(onlinePortalUrl))) {
+    throw new Error("Enter a valid payment portal URL (starting with http:// or https://) before turning Online Portal on.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lgus")
+    .update({
+      accepts_cash_counter: acceptsCashCounter,
+      accepts_gcash: acceptsGcash,
+      gcash_number: gcashNumber,
+      gcash_name: gcashName,
+      accepts_bank_transfer: acceptsBankTransfer,
+      bank_name: bankName,
+      bank_account_number: bankAccountNumber,
+      bank_account_name: bankAccountName,
+      accepts_online_portal: acceptsOnlinePortal,
+      online_portal_url: onlinePortalUrl,
+    })
+    .eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  const enabled = [
+    acceptsCashCounter && "Cash",
+    acceptsGcash && "GCash",
+    acceptsBankTransfer && "Bank Transfer",
+    acceptsOnlinePortal && "Online Portal",
+  ].filter(Boolean);
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "payment_methods_updated",
+    summary: enabled.length > 0 ? `Accepted payment methods updated: ${enabled.join(", ")}` : "Accepted payment methods updated -- none enabled",
+    details: { acceptsCashCounter, acceptsGcash, acceptsBankTransfer, acceptsOnlinePortal },
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
  * Sets the Mayor's name shown on the pre-signature print certificate
  * (CLAUDE.md 7x, print-certificate.ts) -- migration 0033's lgus.mayor_name.
  * No generic fallback exists for a person's actual name (unlike

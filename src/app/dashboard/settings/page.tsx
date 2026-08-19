@@ -11,6 +11,7 @@ import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
 import { BusinessImportCard } from "./business-import";
 import { PermitNumberFormatCard } from "./permit-number-format";
+import { PaymentMethodsCard } from "./payment-methods";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
@@ -451,6 +452,24 @@ export default async function SettingsPage() {
             Acct Codes for each fee (shown on the same slip) are set per regulatory fee above — Local Business Tax and Mayor&rsquo;s Permit Fee codes aren&rsquo;t editable here yet.
           </p>
         </Card>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Accepted Payment Methods"
+        sub="What applicants are told when their assessment is finalized -- turn on as many as you actually accept. Cash at the counter is on by default, matching how every LGU starts out; GCash, Bank Transfer, and an Online Portal are each optional, with their own details shown once turned on."
+      >
+        <PaymentMethodsCard
+          acceptsCashCounter={lgu.acceptsCashCounter}
+          acceptsGcash={lgu.acceptsGcash}
+          gcashNumber={lgu.gcashNumber}
+          gcashName={lgu.gcashName}
+          acceptsBankTransfer={lgu.acceptsBankTransfer}
+          bankName={lgu.bankName}
+          bankAccountNumber={lgu.bankAccountNumber}
+          bankAccountName={lgu.bankAccountName}
+          acceptsOnlinePortal={lgu.acceptsOnlinePortal}
+          onlinePortalUrl={lgu.onlinePortalUrl}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection

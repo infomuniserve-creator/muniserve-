@@ -50,10 +50,20 @@ export type LguDisplay = {
   referenceCounterDigits: number; // migration 0051 -- "field 3" zero-padding width (3-8), e.g. 5 -> "00056"
   lbtBiannualReminderDates: string[]; // migration 0052 -- 'MM-DD' strings, e.g. ["07-05"]. Empty = not configured, no reminders scheduled.
   lbtQuarterlyReminderDates: string[]; // e.g. ["04-05", "07-05", "10-05"]
+  acceptsCashCounter: boolean; // migration 0053 -- defaults true, matching every LGU's real unconfigured behavior today
+  acceptsGcash: boolean;
+  gcashNumber: string | null;
+  gcashName: string | null;
+  acceptsBankTransfer: boolean;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountName: string | null;
+  acceptsOnlinePortal: boolean;
+  onlinePortalUrl: string | null; // e.g. a Landbank LinkBiz URL
 };
 
 const LGU_SELECT_COLUMNS =
-  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates";
+  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates, accepts_cash_counter, accepts_gcash, gcash_number, gcash_name, accepts_bank_transfer, bank_name, bank_account_number, bank_account_name, accepts_online_portal, online_portal_url";
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
 function withFallback(row: {
@@ -62,6 +72,9 @@ function withFallback(row: {
   building_permit_fee_enabled: boolean; building_permit_fee_label: string | null; is_paused: boolean; automated_assessment_enabled: boolean; treasurer_name: string | null; sender_name: string | null;
   short_code: string | null; reference_year_digits: number; reference_counter_digits: number;
   lbt_biannual_reminder_dates: string[] | null; lbt_quarterly_reminder_dates: string[] | null;
+  accepts_cash_counter: boolean; accepts_gcash: boolean; gcash_number: string | null; gcash_name: string | null;
+  accepts_bank_transfer: boolean; bank_name: string | null; bank_account_number: string | null; bank_account_name: string | null;
+  accepts_online_portal: boolean; online_portal_url: string | null;
 }, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
@@ -85,6 +98,16 @@ function withFallback(row: {
     referenceCounterDigits: row.reference_counter_digits,
     lbtBiannualReminderDates: row.lbt_biannual_reminder_dates ?? [],
     lbtQuarterlyReminderDates: row.lbt_quarterly_reminder_dates ?? [],
+    acceptsCashCounter: row.accepts_cash_counter,
+    acceptsGcash: row.accepts_gcash,
+    gcashNumber: row.gcash_number,
+    gcashName: row.gcash_name,
+    acceptsBankTransfer: row.accepts_bank_transfer,
+    bankName: row.bank_name,
+    bankAccountNumber: row.bank_account_number,
+    bankAccountName: row.bank_account_name,
+    acceptsOnlinePortal: row.accepts_online_portal,
+    onlinePortalUrl: row.online_portal_url,
   };
 }
 
