@@ -80,7 +80,7 @@ export default async function BusinessesPage({
     fetchAllRows((offset, limit) =>
       supabase
         .from("businesses")
-        .select(`${BUSINESS_PROFILE_COLUMNS}, address, legacy_license_no, is_active, is_legacy_unclaimed, owner_id, created_at, owner:owners(full_name, phone)`, { count: "exact" })
+        .select(`${BUSINESS_PROFILE_COLUMNS}, address, legacy_license_no, legacy_application_type, is_active, is_legacy_unclaimed, owner_id, created_at, owner:owners(full_name, phone)`, { count: "exact" })
         .eq("lgu_id", staff.lgu_id)
         .order("business_name", { ascending: true })
         .range(offset, offset + limit - 1)
@@ -260,6 +260,7 @@ type BizRowType = Record<string, unknown> & {
   business_name: string;
   legacy_owner_name: string | null;
   legacy_license_no: string | null;
+  legacy_application_type: string | null;
   is_active: boolean;
   is_legacy_unclaimed: boolean;
   owner_id: string | null;
@@ -374,9 +375,19 @@ function RegistryRow({
           </form>
         )}
 
-        {b.legacy_license_no && (
+        {(b.legacy_license_no || b.legacy_application_type) && (
           <p className="mb-3 text-[12.5px] text-ink-soft">
-            <span className="font-bold text-ink-faint">License no.</span> {b.legacy_license_no}
+            {b.legacy_license_no && (
+              <>
+                <span className="font-bold text-ink-faint">License no.</span> {b.legacy_license_no}
+              </>
+            )}
+            {b.legacy_license_no && b.legacy_application_type && " · "}
+            {b.legacy_application_type && (
+              <>
+                <span className="font-bold text-ink-faint">Most recent filing (from import)</span> {b.legacy_application_type}
+              </>
+            )}
           </p>
         )}
 

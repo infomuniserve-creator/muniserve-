@@ -120,7 +120,7 @@ export async function publishBusinessImport(csvText: string, taxYear: number): P
       // claimLegacyBusiness/startWalkInApplication.
       const newOwnerRows = newOwnerPhones.map((phone) => {
         const row = importableRows.find((r) => r.phone === phone)!;
-        return { id: crypto.randomUUID(), full_name: row.legacyOwnerName || phone, phone, email: row.email || null, claimed_at: new Date().toISOString() };
+        return { id: crypto.randomUUID(), full_name: row.legacyOwnerName || phone, phone, email: row.email || null, gender: row.ownerGender, claimed_at: new Date().toISOString() };
       });
       const { error: ownerInsertError } = await supabase.from("owners").insert(newOwnerRows);
       if (ownerInsertError) return { ok: false, errors: [`Could not create owner accounts: ${ownerInsertError.message}`] };
@@ -144,6 +144,8 @@ export async function publishBusinessImport(csvText: string, taxYear: number): P
       owner_id: ownerId,
       is_legacy_unclaimed: ownerId == null,
       is_active: true,
+      business_tax_payment: row.businessTaxPayment,
+      legacy_application_type: row.legacyApplicationType,
       gross_sales_history: row.grossSales != null ? { [String(taxYear)]: row.grossSales } : null,
     };
   });
