@@ -1068,7 +1068,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
                 {loading ? "Submitting…" : "Submit application"}
               </button>
               <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8 }}>
-                * required. If anything&rsquo;s missing, you&rsquo;ll see exactly what right here after you submit.
+                * required. If anything&rsquo;s missing, you&rsquo;ll see exactly what&rsquo;s missing right here after you submit.
               </p>
             </>
           ) : (

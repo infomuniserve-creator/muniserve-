@@ -365,7 +365,7 @@ function RegistryRow({
             <MiniButton type="submit">Save</MiniButton>
             {!profile.lbtCategory && (
               <span className="text-[11.5px] font-bold text-warn-ink">
-                Required before this business's application can enter department review or be assessed.
+                Required before this business&apos;s application can enter department review or be assessed.
               </span>
             )}
           </form>

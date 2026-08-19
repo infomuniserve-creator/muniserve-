@@ -438,7 +438,7 @@ export default async function BploDashboardPage() {
 
   const tabs: BploTabDef[] = [
     { key: "initial", statCard: <StatCard label="Initial review" value={initial.length} icon={<ClockIcon />} tone="warn" />, content: initialContent },
-    { key: "dept_review", statCard: <StatCard label="In dept. review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />, content: deptReviewContent },
+    { key: "dept_review", statCard: <StatCard label="In department review" value={inDeptReview.length} icon={<BuildingIcon className="size-4" />} tone="info" />, content: deptReviewContent },
     { key: "assessment", statCard: <StatCard label="Assessment review" value={assessment.length} icon={<ClockIcon />} tone="warn" />, content: assessmentContent },
     { key: "payment", statCard: <StatCard label="Treasurer approval" value={awaitingPayment.length} icon={<ClockIcon />} tone="info" />, content: paymentContent },
     { key: "printing", statCard: <StatCard label="For printing" value={printing.length} icon={<ClockIcon />} tone="info" />, content: printingContent },
