@@ -85,6 +85,7 @@ Live in production: Supabase, GitHub, Vercel, fee rules, legacy business data, a
 - [x] Self-service "Import Businesses" in Settings — a new LGU can upload their existing business roster (Excel/CSV) themselves; a row with a phone number is claimed immediately. See CLAUDE.md section 7uu.
 - [x] Clarified where LBT categories actually come from — labeling + contextual "Add it in Settings" links wherever a category might be missing. See CLAUDE.md section 7uu's same-day follow-up.
 - [x] Import Businesses template gained owner gender, payment frequency, and an informational new/renewal note — plus fixed a real bug where a valid organization_type was silently rejected. See CLAUDE.md section 7uu's same-day follow-up.
+- [x] Configurable Permit No. Format per LGU — Settings now has a "Permit No. Format" section (prefix, year width, auto-incrementing counter width, e.g. SMB-2026-000056), with a live preview. The year always stays live-computed; only its display width is a choice. Migration `0051`, live in production. See CLAUDE.md section 7vv.
 - [ ] Whatever's next — see CLAUDE.md section 10 for what's still open (mostly blocked on legal/LGU confirmation, not code)
 
 ## What needs to happen before development continues

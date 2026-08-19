@@ -45,16 +45,20 @@ export type LguDisplay = {
   cedulaIncludedOnline: boolean; // migration 0038 -- true when both of this LGU's CEDULA fee_rules rows have delivery_mode = 'online' (fee-engine.ts's own source of truth, not a separate lgus column); when true, CEDULA joins the online total and the application form skips the upload requirement, since there's no pre-existing document to upload
   treasurerName: string | null; // migration 0039 -- e.g. "Pablo R. Sarmiento", for the Order of Payment's "Reviewed & Recommended for Approval" line. Same "no generic fallback" reasoning as mayorName.
   senderName: string | null; // migration 0040 -- this LGU's own approved Semaphore Sender Name (e.g. "SANMIGUELBPLO"), null until purchased/registered. notifications.ts uses this to decide both the Semaphore `sendername` param and whether the "BPLO: " fallback text prefix is still needed.
+  referencePrefix: string; // migration 0051 -- the existing short_code column, now exposed as the BPLO-editable "field 1" of Permit No. Format (e.g. "SMB"). Falls back to "APP" (matching generate_application_reference()'s own SQL-side coalesce) rather than null -- a permit number always needs a real prefix, there's no "blank" state to model.
+  referenceYearDigits: 2 | 4; // migration 0051 -- "field 2" width, 2-digit ("26") or 4-digit ("2026") -- the year itself always stays live-computed, this only controls how many digits of it are shown
+  referenceCounterDigits: number; // migration 0051 -- "field 3" zero-padding width (3-8), e.g. 5 -> "00056"
 };
 
 const LGU_SELECT_COLUMNS =
-  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name";
+  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits";
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
 function withFallback(row: {
   id: string; name: string; province: string | null; subdomain: string | null; display_name: string | null; bplo_office_name: string | null; mayor_name: string | null;
   print_template_path: string | null; print_template_field_mapping: Record<string, string> | null;
   building_permit_fee_enabled: boolean; building_permit_fee_label: string | null; is_paused: boolean; automated_assessment_enabled: boolean; treasurer_name: string | null; sender_name: string | null;
+  short_code: string | null; reference_year_digits: number; reference_counter_digits: number;
 }, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
@@ -73,6 +77,9 @@ function withFallback(row: {
     cedulaIncludedOnline,
     treasurerName: row.treasurer_name,
     senderName: row.sender_name,
+    referencePrefix: row.short_code ?? "APP",
+    referenceYearDigits: row.reference_year_digits === 2 ? 2 : 4,
+    referenceCounterDigits: row.reference_counter_digits,
   };
 }
 

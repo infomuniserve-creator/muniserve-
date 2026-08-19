@@ -235,6 +235,54 @@ export async function updateTreasurerName(formData: FormData) {
 }
 
 /**
+ * Permit No. Format (2026-08-19) -- the LGU's own choice of how their
+ * reference number looks, e.g. "SMB-2026-000056". Three fields, matching
+ * the project owner's own description: prefix (free text, any length,
+ * reuses the existing `lgus.short_code` column -- it was already exactly
+ * this, just not BPLO-editable), year display width (2 or 4 digits --
+ * the year itself always stays live-computed from the real calendar date,
+ * this only controls how many digits of it show), and counter zero-pad
+ * width (3-8 digits). generate_application_reference() (migration 0051)
+ * is the one place that actually reads these three columns; this action
+ * only validates and writes them. Same "RLS bounds rows, not columns"
+ * reasoning as every other lgus-settings action here -- migration 0027's
+ * existing "bplo can update their own lgu's settings" policy already
+ * covers all three columns, no new policy needed.
+ */
+export async function updatePermitNumberFormat(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const prefix = String(formData.get("prefix") ?? "").trim().toUpperCase();
+  const yearDigits = Number(formData.get("yearDigits"));
+  const counterDigits = Number(formData.get("counterDigits"));
+
+  if (!prefix || prefix.length > 8 || !/^[A-Z0-9]+$/.test(prefix)) throw new Error("Prefix must be 1-8 letters/numbers, no spaces or symbols.");
+  if (yearDigits !== 2 && yearDigits !== 4) throw new Error("Year must be 2 or 4 digits.");
+  if (!Number.isInteger(counterDigits) || counterDigits < 3 || counterDigits > 8) throw new Error("The auto-incrementing number must be 3-8 digits wide.");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lgus")
+    .update({ short_code: prefix, reference_year_digits: yearDigits, reference_counter_digits: counterDigits })
+    .eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  const sampleCounter = "1".padStart(counterDigits, "0");
+  const sampleYear = yearDigits === 2 ? "26" : "2026";
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "permit_number_format_updated",
+    summary: `Permit No. Format set to "${prefix}-${sampleYear}-${sampleCounter}"`,
+    details: { prefix, yearDigits, counterDigits },
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
  * Sets this LGU's own approved Semaphore Sender Name -- migration 0040's
  * lgus.sender_name. Null until purchased/registered directly with
  * Semaphore (this form doesn't buy or register one, only records the

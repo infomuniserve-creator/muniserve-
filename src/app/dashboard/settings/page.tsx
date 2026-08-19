@@ -10,6 +10,7 @@ import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
 import { BusinessImportCard } from "./business-import";
+import { PermitNumberFormatCard } from "./permit-number-format";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
@@ -365,6 +366,13 @@ export default async function SettingsPage() {
       </SettingsGroup>
 
       <SettingsGroup icon={<BellIcon className="size-4" />} title="Documents & Alerts" description="What gets printed, and what MuniServe texts out.">
+      <CollapsibleSection
+        title="Permit No. Format"
+        sub="How your reference number looks, e.g. SMB-2026-000056 -- three fields: a prefix you choose, the year, and an auto-incrementing number that resets every January. Applies to every new application going forward; permits already issued keep the number they were given."
+      >
+        <PermitNumberFormatCard prefix={lgu.referencePrefix} yearDigits={lgu.referenceYearDigits} counterDigits={lgu.referenceCounterDigits} />
+      </CollapsibleSection>
+
       <CollapsibleSection
         title="Permit Certificate Details"
         sub="Shown on the pre-signature certificate printed at the 'For Printing' stage — see the Applications tab."
