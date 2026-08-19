@@ -403,7 +403,12 @@ export default async function SettingsPage() {
         title="Permit No. Format"
         sub="How your reference number looks, e.g. SMB-2026-000056 -- three fields: a prefix you choose, the year, and an auto-incrementing number that resets every January. Applies to every new application going forward; permits already issued keep the number they were given."
       >
-        <PermitNumberFormatCard prefix={lgu.referencePrefix} yearDigits={lgu.referenceYearDigits} counterDigits={lgu.referenceCounterDigits} />
+        <PermitNumberFormatCard
+          key={`${lgu.referencePrefix}|${lgu.referenceYearDigits}|${lgu.referenceCounterDigits}`}
+          prefix={lgu.referencePrefix}
+          yearDigits={lgu.referenceYearDigits}
+          counterDigits={lgu.referenceCounterDigits}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection
@@ -459,6 +464,7 @@ export default async function SettingsPage() {
         sub="What applicants are told when their assessment is finalized -- turn on as many as you actually accept. Cash at the counter is on by default, matching how every LGU starts out; GCash, Bank Transfer, and an Online Portal are each optional, with their own details shown once turned on."
       >
         <PaymentMethodsCard
+          key={[lgu.acceptsCashCounter, lgu.acceptsGcash, lgu.gcashNumber, lgu.gcashName, lgu.acceptsBankTransfer, lgu.bankName, lgu.bankAccountNumber, lgu.bankAccountName, lgu.acceptsOnlinePortal, lgu.onlinePortalUrl].join("|")}
           acceptsCashCounter={lgu.acceptsCashCounter}
           acceptsGcash={lgu.acceptsGcash}
           gcashNumber={lgu.gcashNumber}

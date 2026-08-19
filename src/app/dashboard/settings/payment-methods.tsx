@@ -26,6 +26,21 @@ type Props = {
  * other Settings card. See actions.ts's updatePaymentMethods for the
  * real validation (this component's own checks are just for disabling
  * Save early, not authoritative).
+ *
+ * IMPORTANT for the caller (settings/page.tsx): pass a `key` derived from
+ * every prop below. React 19 resets a <form>'s own DOM elements after a
+ * successful `action={fn}` submit -- confirmed directly (a temporary
+ * repro fixture, 2026-08-19, right after a real user report: the
+ * checkboxes visually unchecked themselves immediately after a
+ * successful Save, even though the database write was correct) that
+ * this reverts a controlled checkbox's visible checked state to
+ * whatever it was at mount, even though this component's own state
+ * still (correctly) reflects the just-saved value -- a plain <input>
+ * text field is NOT affected, only checkbox/<select> elements are.
+ * Without a key that changes on a real save, every toggle here would
+ * visually snap back to unchecked right after clicking Save. A `key`
+ * forces a clean remount on the next server-refreshed props, sidestepping
+ * the desync entirely instead of fighting it.
  */
 export function PaymentMethodsCard(props: Props) {
   const [cash, setCash] = useState(props.acceptsCashCounter);

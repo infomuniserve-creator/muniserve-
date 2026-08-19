@@ -25,6 +25,19 @@ type Props = {
  * updatePermitNumberFormat for the real validation (this component's own
  * checks are just for the live preview / disabling Save early, not
  * authoritative).
+ *
+ * IMPORTANT for the caller (settings/page.tsx): pass a `key` derived from
+ * prefix/yearDigits/counterDigits (e.g. `${prefix}|${yearDigits}|${counterDigits}`).
+ * React 19 resets a <form>'s own DOM elements after a successful
+ * `action={fn}` submit -- confirmed directly (a temporary repro fixture,
+ * 2026-08-19) that this reverts a controlled <select>'s visible value to
+ * whatever it showed at mount, even though this component's own state
+ * still holds the just-saved value (a plain <input> is NOT affected,
+ * only <select>/checkbox elements are). Without a key that changes on a
+ * real save, the Year/Counter dropdowns would visually snap back to
+ * their old values right after Save, even though the write succeeded --
+ * a `key` forces a clean remount on the next server-refreshed props,
+ * sidestepping the desync entirely instead of fighting it.
  */
 export function PermitNumberFormatCard({ prefix, yearDigits, counterDigits }: Props) {
   const [draftPrefix, setDraftPrefix] = useState(prefix);
