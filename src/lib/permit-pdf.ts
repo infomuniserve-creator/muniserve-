@@ -1,6 +1,7 @@
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import QRCode from "qrcode";
 import type { LguDisplay } from "@/lib/lgu";
+import { centerText, drawLabelValueRow, formatManilaDate, wrapText } from "@/lib/pdf-doc-utils";
 
 /**
  * Generates the permit certificate PDF + its QR code image, at signing
@@ -41,22 +42,7 @@ export type PermitPdfInput = {
   lgu: LguDisplay;
 };
 
-/**
- * Formats a date for display on the certificate. Two timezone traps
- * avoided here, not just one: a date-only string ("2026-12-31") parses
- * as UTC midnight, so anything that then renders in a negative-UTC-offset
- * timezone rolls back a day (caught live -- "valid until" showed
- * December 30 for a December 31 input); noon UTC is far enough from
- * midnight in either direction that no real-world timezone can roll it
- * over. Explicit Asia/Manila on the formatter itself makes the actual
- * displayed date deterministic regardless of what timezone the server
- * (Vercel's functions run in UTC) happens to execute in -- otherwise
- * issuedAt (a real timestamp, not date-only) could shift near midnight.
- */
-function formatDate(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(`${d}T12:00:00Z`) : d;
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila" });
-}
+const formatDate = formatManilaDate;
 
 export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf: Uint8Array; qrPng: Uint8Array }> {
   const qrPng = await QRCode.toBuffer(input.verifyUrl, { type: "png", margin: 1, width: 300, color: { dark: "#0C4DA2", light: "#FFFFFF" } });
@@ -72,21 +58,21 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
   page.drawRectangle({ x: 0, y: PAGE_HEIGHT - bannerHeight, width: PAGE_WIDTH, height: bannerHeight, color: NAVY });
 
   let y = PAGE_HEIGHT - 30;
-  centerText(page, "Republic of the Philippines", y, font, 11, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, "Republic of the Philippines", y, font, 11, rgb(1, 1, 1));
   y -= 15;
   if (input.lgu.province) {
-    centerText(page, `Province of ${input.lgu.province}`, y, font, 11, rgb(1, 1, 1));
+    centerText(page, PAGE_WIDTH, `Province of ${input.lgu.province}`, y, font, 11, rgb(1, 1, 1));
     y -= 15;
   }
-  centerText(page, input.lgu.displayName, y, font, 11, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, input.lgu.displayName, y, font, 11, rgb(1, 1, 1));
   y -= 16;
-  centerText(page, input.lgu.bploOfficeName.toUpperCase(), y, bold, 10, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, input.lgu.bploOfficeName.toUpperCase(), y, bold, 10, rgb(1, 1, 1));
   y -= 26;
-  centerText(page, "BUSINESS PERMIT", y, bold, 20, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, "BUSINESS PERMIT", y, bold, 20, rgb(1, 1, 1));
 
   // --- Permit number, prominent, right under the banner ---
   y = PAGE_HEIGHT - bannerHeight - 34;
-  centerText(page, `Permit No. ${input.referenceNumber}`, y, bold, 14, NAVY);
+  centerText(page, PAGE_WIDTH, `Permit No. ${input.referenceNumber}`, y, bold, 14, NAVY);
 
   // --- Details table ---
   y -= 42;
@@ -100,9 +86,13 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
     ["Valid until", formatDate(input.validUntil)],
   ];
   for (const [label, value] of rows) {
-    page.drawText(label, { x: MARGIN, y, font: bold, size: 10.5, color: MUTED });
-    page.drawText(value, { x: MARGIN + 170, y, font, size: 11, color: INK, maxWidth: PAGE_WIDTH - MARGIN - 170 - MARGIN });
-    y -= 26;
+    y = drawLabelValueRow(page, y, {
+      label, value,
+      labelX: MARGIN, valueX: MARGIN + 170, valueMaxWidth: PAGE_WIDTH - MARGIN - 170 - MARGIN,
+      labelFont: bold, labelSize: 10.5, labelColor: MUTED,
+      valueFont: font, valueSize: 11, valueColor: INK,
+      lineGap: 14, rowPadding: 12,
+    });
   }
 
   // --- Body text ---
@@ -140,27 +130,4 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
 
   const pdfBytes = await pdfDoc.save();
   return { pdf: pdfBytes, qrPng };
-}
-
-function centerText(page: PDFPage, text: string, y: number, font: PDFFont, size: number, color: ReturnType<typeof rgb>) {
-  const width = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: (PAGE_WIDTH - width) / 2, y, font, size, color });
-}
-
-/** Naive word-wrap by measured width -- good enough for the one paragraph on this certificate. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) > maxWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }

@@ -1,5 +1,6 @@
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import type { LguDisplay } from "@/lib/lgu";
+import { centerText, centerTextInRange, drawLabelValueRow, wrapText } from "@/lib/pdf-doc-utils";
 
 /**
  * Generates the PRE-signature certificate shown at "For Printing"
@@ -137,23 +138,23 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
   page.drawRectangle({ x: 0, y: PAGE_HEIGHT - bannerHeight, width: PAGE_WIDTH, height: bannerHeight, color: NAVY });
 
   let y = PAGE_HEIGHT - 30;
-  centerText(page, "Republic of the Philippines", y, font, 11, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, "Republic of the Philippines", y, font, 11, rgb(1, 1, 1));
   y -= 15;
   if (input.lgu.province) {
-    centerText(page, `Province of ${input.lgu.province}`, y, font, 11, rgb(1, 1, 1));
+    centerText(page, PAGE_WIDTH, `Province of ${input.lgu.province}`, y, font, 11, rgb(1, 1, 1));
     y -= 15;
   }
-  centerText(page, input.lgu.displayName, y, font, 11, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, input.lgu.displayName, y, font, 11, rgb(1, 1, 1));
   y -= 16;
-  centerText(page, officeTitle, y, bold, 10, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, officeTitle, y, bold, 10, rgb(1, 1, 1));
   y -= 26;
-  centerText(page, "BUSINESS PERMIT", y, bold, 22, rgb(1, 1, 1));
+  centerText(page, PAGE_WIDTH, "BUSINESS PERMIT", y, bold, 22, rgb(1, 1, 1));
 
   // --- Permit No. + application type, prominent, right under the banner ---
   y = PAGE_HEIGHT - bannerHeight - 32;
-  centerText(page, `Permit No. ${values.permit_number}`, y, bold, 15, NAVY);
+  centerText(page, PAGE_WIDTH, `Permit No. ${values.permit_number}`, y, bold, 15, NAVY);
   y -= 18;
-  centerText(page, values.application_type, y, bold, 11, MUTED);
+  centerText(page, PAGE_WIDTH, values.application_type, y, bold, 11, MUTED);
 
   // --- Details table ---
   // "Php" not "₱" (caught by actually rendering a test PDF, not just
@@ -172,9 +173,13 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
     ["Issued on", values.issued_on],
   ];
   for (const [label, value] of rows) {
-    page.drawText(label, { x: MARGIN, y, font: bold, size: 10.5, color: MUTED });
-    page.drawText(value, { x: MARGIN + 180, y, font, size: 11, color: INK, maxWidth: PAGE_WIDTH - MARGIN - 180 - MARGIN });
-    y -= 26;
+    y = drawLabelValueRow(page, y, {
+      label, value,
+      labelX: MARGIN, valueX: MARGIN + 180, valueMaxWidth: PAGE_WIDTH - MARGIN - 180 - MARGIN,
+      labelFont: bold, labelSize: 10.5, labelColor: MUTED,
+      valueFont: font, valueSize: 11, valueColor: INK,
+      lineGap: 14, rowPadding: 12,
+    });
   }
 
   // --- Disclaimer ---
@@ -228,33 +233,4 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
   page.drawText("Printed from MuniServe -- pending Mayor's signature.", { x: MARGIN, y: 40, font, size: 8, color: MUTED });
 
   return pdfDoc.save();
-}
-
-function centerText(page: PDFPage, text: string, y: number, font: PDFFont, size: number, color: ReturnType<typeof rgb>) {
-  const width = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: (PAGE_WIDTH - width) / 2, y, font, size, color });
-}
-
-function centerTextInRange(page: PDFPage, text: string, xStart: number, xEnd: number, y: number, font: PDFFont, size: number, color: ReturnType<typeof rgb>) {
-  const width = font.widthOfTextAtSize(text, size);
-  const rangeWidth = xEnd - xStart;
-  page.drawText(text, { x: xStart + Math.max(0, (rangeWidth - width) / 2), y, font, size, color });
-}
-
-/** Naive word-wrap by measured width -- same approach permit-pdf.ts already uses. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) > maxWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }

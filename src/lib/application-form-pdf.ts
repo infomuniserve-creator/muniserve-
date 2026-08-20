@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import type { LguDisplay } from "@/lib/lgu";
 import type { FieldKey } from "@/lib/application-form-logic";
+import { wrapText } from "@/lib/pdf-doc-utils";
 
 /**
  * Generates a PDF of exactly what an applicant (or BPLO, filing a walk-in)
@@ -150,24 +151,6 @@ function formatValue(key: FieldKey, value: unknown): string | null {
 function formatDateTime(d: Date | string): string {
   const date = typeof d === "string" ? new Date(d) : d;
   return date.toLocaleString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" });
-}
-
-/** Naive word-wrap by measured width, same approach as permit-pdf.ts's own copy. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) > maxWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length ? lines : [""];
 }
 
 const LABEL_WIDTH = 195;
