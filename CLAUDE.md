@@ -1401,6 +1401,16 @@ The project owner asked for a genuinely broad functional pass -- not a code revi
 
 ---
 
+## 7a4. Critical cross-tenant RLS gap on `department_reviews`, fixed during a full-system audit (2026-08-20)
+
+A full audit (UI/design, mobile, code quality, security, ops readiness, performance, run in five parallel passes) found one **critical** issue: `department_reviews`' own "department scoped access" policy (migration 0002) matched purely on department NAME (`'Engineering' = 'Engineering'`), with no join back to `applications.lgu_id` -- unlike every other policy on this table (`"bplo full access"`, `"treasury and mayor can view"`, migration 0047), which both correctly join through to `applications.lgu_id`. Confirmed directly against production before fixing: San Miguel and the Demo Account LGU both use standard department names that collide (Engineering, MENRO, MHO); a genuine `department`-role account at either LGU could read/write the *other* LGU's `department_reviews` rows for a same-named department -- including `assessed_amount` (the Engineering-typed Building Permit Fee, section 7aa), which feeds directly into what a real applicant gets charged. The Demo Account's own Engineering reviewer had never signed in at audit time (`auth_user_id null`), so this wasn't caught mid-exploit by a live session -- but the gap was real, live, and would have activated the moment that account (or any future colliding-named department account) signed in.
+
+**Fixed** (migration `0056_fix_department_scoped_rls_cross_tenant.sql`, applied directly to production): added the identical `review_rounds`/`applications` join + `s.lgu_id = a.lgu_id` check every other policy on this table already uses (migration 0047 is the direct template) -- same "widen/fix one policy at a time, don't touch the others" caution this schema's RLS history already establishes throughout.
+
+**Verified against real production data before and after**: confirmed via `pg_policies` that the fixed policy's `qual` now includes the join; re-ran `get_advisors` (security) afterward and confirmed no new findings were introduced. Verified no regression with a rolled-back transaction under San Miguel's own real, active Engineering department-reviewer session (`auth_user_id d7864521-328a-4c45-bc12-9354df4e8f2b`) -- correctly still sees exactly its own 8 real `department_reviews` rows post-fix, same count as before the fix, confirming legitimate same-LGU access is untouched. A true live cross-tenant negative test (two different LGUs' colliding-named accounts both actually signed in) wasn't possible against real data since only one of the two colliding accounts has ever authenticated -- the fix's correctness instead rests on it being byte-for-byte the same join shape as migration 0047's already-proven policy on this identical table.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
