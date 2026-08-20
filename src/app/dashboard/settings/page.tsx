@@ -13,6 +13,8 @@ import { BusinessImportCard } from "./business-import";
 import { PermitNumberFormatCard } from "./permit-number-format";
 import { PaymentMethodsCard } from "./payment-methods";
 import { SmsUsageCard } from "./sms-usage-card";
+import { getCurrentMonthSmsCount, SMS_FREE_MONTHLY_LIMIT } from "@/lib/sms-usage";
+import type { SectionStatus } from "../ui";
 
 /**
  * BPLO-only settings hub (CLAUDE.md section 7o follow-up). Originally
@@ -76,6 +78,60 @@ export default async function SettingsPage() {
     .eq("is_active", true);
   const barangayClearanceByAppliesTo = new Map((barangayClearanceRulesRaw ?? []).map((r) => [r.applies_to, r]));
   const uniformBarangayClearance = barangayClearanceByAppliesTo.get("all") ?? null;
+  const barangayClearanceOverrideCount = [...barangayClearanceByAppliesTo.keys()].filter((k) => k !== "all").length;
+
+  /**
+   * Status pills next to each section's title (2026-08-20, from the
+   * Settings mockup the project owner asked to build for real) -- every
+   * section here starts collapsed by design (CLAUDE.md 7nn), so without
+   * this there was no way to tell e.g. whether Automated Assessment is on
+   * without opening that one section specifically. Two small queries
+   * added below (business count, active rate-rule count) purely to
+   * support this -- everything else reuses data this page was already
+   * fetching for the sections' own content.
+   */
+  const { count: businessCount } = await supabase
+    .from("businesses")
+    .select("id", { count: "exact", head: true })
+    .eq("lgu_id", staff.lgu_id);
+
+  const { count: activeRateRuleCount } = await supabase
+    .from("fee_rules")
+    .select("id", { count: "exact", head: true })
+    .eq("lgu_id", staff.lgu_id)
+    .in("fee_category", ["lbt", "mayors_permit"])
+    .eq("is_active", true);
+
+  const smsThisMonth = await getCurrentMonthSmsCount(supabase, staff.lgu_id);
+
+  const activeRegulatoryFeeCount = regulatoryFees.filter((f) => f.is_active).length;
+
+  const installmentDatesSet = lgu.lbtBiannualReminderDates.length > 0 || lgu.lbtQuarterlyReminderDates.length > 0;
+  const installmentStatus: SectionStatus = installmentDatesSet
+    ? { label: [lgu.lbtBiannualReminderDates.length > 0 && "Bi-Annual", lgu.lbtQuarterlyReminderDates.length > 0 && "Quarterly"].filter(Boolean).join(" + ") + " set", tone: "good" }
+    : { label: "No reminder dates set", tone: "neutral" };
+
+  const barangayClearanceStatus: SectionStatus = !uniformBarangayClearance
+    ? { label: "Uniform rate not set", tone: "warn" }
+    : barangayClearanceOverrideCount > 0
+      ? { label: `Uniform rate + ${barangayClearanceOverrideCount} override${barangayClearanceOverrideCount === 1 ? "" : "s"}`, tone: "good" }
+      : { label: "Uniform rate, no overrides", tone: "neutral" };
+
+  // The counter's real next value lives in application_reference_counters,
+  // not shown here -- this is a format preview only (matches what
+  // PermitNumberFormatCard's own live preview shows), using "1" padded to
+  // the configured width. The year stays live-computed from today's real
+  // date, same as the real number generator.
+  const previewYear = new Date().getFullYear();
+  const previewYearStr = lgu.referenceYearDigits === 2 ? String(previewYear).slice(-2) : String(previewYear);
+  const permitFormatPreview = `${lgu.referencePrefix}-${previewYearStr}-${"1".padStart(lgu.referenceCounterDigits, "0")}`;
+
+  const paymentMethodLabels = [
+    lgu.acceptsCashCounter && "Cash",
+    lgu.acceptsGcash && "GCash",
+    lgu.acceptsBankTransfer && "Bank",
+    lgu.acceptsOnlinePortal && "Online",
+  ].filter(Boolean) as string[];
 
   return (
     <>
@@ -89,7 +145,11 @@ export default async function SettingsPage() {
       </SettingsGroup>
 
       <SettingsGroup icon={<BuildingIcon className="size-4" />} title="Data Import" description="Bring in your existing business roster from a previous system.">
-        <CollapsibleSection title="Import Businesses" sub="Upload an Excel/CSV export of your businesses — turns into self-service renewals immediately for any row with a mobile number.">
+        <CollapsibleSection
+          title="Import Businesses"
+          sub="Upload an Excel/CSV export of your businesses — turns into self-service renewals immediately for any row with a mobile number."
+          status={{ label: `${(businessCount ?? 0).toLocaleString()} on file`, tone: "neutral" }}
+        >
           <BusinessImportCard />
         </CollapsibleSection>
       </SettingsGroup>
@@ -98,6 +158,11 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Business Tax & Mayor's Permit Fee Setup"
         sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself — download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed. This is also where LBT categories come from: each row in the Local Business Tax file adds one category, which then shows up wherever staff pick a business's category."
+        status={
+          activeRateRuleCount && activeRateRuleCount > 0
+            ? { label: `${activeRateRuleCount} active rates`, tone: "good" }
+            : { label: "No rates set up yet", tone: "warn" }
+        }
       >
         <div className="flex flex-col gap-3">
           <FeeRuleImportCard feeType="lbt" label="Local Business Tax" />
@@ -108,6 +173,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Regulatory Fee Flat Amounts"
         sub="Flat, always-included fees on top of Local Business Tax and Mayor's Permit Fee — CNC, Health Permit Fee, Inspection Fee, Plate Fee, Sanitary Fee, whatever your LGU charges. Every fee here is added to every assessment automatically."
+        status={{ label: `${activeRegulatoryFeeCount} active fee${activeRegulatoryFeeCount === 1 ? "" : "s"}`, tone: "neutral" }}
       >
         <Card className="flex flex-col gap-4 p-5">
           {regulatoryFees.length === 0 ? (
@@ -173,6 +239,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Business Tax Installment Reminders"
         sub="A New application always pays the full annual Business Tax. A Renewal that chooses Bi-Annually or Quarterly pays the first installment now; MuniServe texts (and emails, if on file) a reminder for the rest, on the dates below. Applicants still pay the remaining balance the usual way — these dates aren't the same for every LGU, so nothing is reminded until you set them."
+        status={installmentStatus}
       >
         <Card className="p-5">
           <form action={updateInstallmentReminderDates} className="flex flex-col gap-4">
@@ -207,6 +274,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Barangays"
         sub="Shown as a dropdown on your public application form. Without any listed here, applicants type their barangay in as free text instead."
+        status={barangays.length > 0 ? { label: `${barangays.length} barangays`, tone: "neutral" } : { label: "None added — form shows free text", tone: "warn" }}
       >
         <Card className="flex flex-col gap-4 p-5">
           {barangays.length === 0 ? (
@@ -242,6 +310,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Barangay Clearance"
         sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below — an override always wins over the uniform rate for that barangay."
+        status={barangayClearanceStatus}
       >
         <Card className="flex flex-col gap-4 p-5">
           <div>
@@ -319,6 +388,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Automated Assessment"
         sub="A safe fallback if the automated Local Business Tax or Mayor's Permit Fee computation is ever wrong for your LGU."
+        status={lgu.automatedAssessmentEnabled ? { label: "On", tone: "good" } : { label: "Off — manual entry", tone: "warn" }}
       >
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
@@ -341,6 +411,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Building Permit Fee (Engineering)"
         sub="When on, Engineering enters their own computed amount during department review, and it's included in the applicant's total once approved."
+        status={lgu.buildingPermitFeeEnabled ? { label: "On", tone: "good" } : { label: "Off", tone: "neutral" }}
       >
         <Card className="flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -380,6 +451,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="CEDULA (Community Tax Certificate)"
         sub="CEDULA's own amount is fixed by national law and never changes here — this only controls how it's collected."
+        status={lgu.cedulaIncludedOnline ? { label: "Online", tone: "good" } : { label: "Counter-paid", tone: "info" }}
       >
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
@@ -406,6 +478,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Permit No. Format"
         sub="How your reference number looks, e.g. SMB-2026-000056 — three fields: a prefix you choose, the year, and an auto-incrementing number that resets every January. Applies to every new application going forward; permits already issued keep the number they were given."
+        status={{ label: permitFormatPreview, tone: "neutral" }}
       >
         <PermitNumberFormatCard
           key={`${lgu.referencePrefix}|${lgu.referenceYearDigits}|${lgu.referenceCounterDigits}`}
@@ -418,6 +491,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Permit Certificate Details"
         sub="Shown on the pre-signature certificate printed at the 'For Printing' stage — see the Applications tab."
+        status={lgu.mayorName ? { label: "Mayor set", tone: "good" } : { label: "Mayor's name not set", tone: "warn" }}
       >
         <Card className="p-5">
           <form action={updateMayorName} className="flex flex-wrap items-end gap-3">
@@ -442,6 +516,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Order of Payment Details"
         sub="Shown on the itemized assessment slip applicants bring to the Treasurer's counter to pay — available once BPLO finalizes an assessment."
+        status={lgu.treasurerName ? { label: "Treasurer set", tone: "good" } : { label: "Treasurer's name not set", tone: "warn" }}
       >
         <Card className="p-5">
           <form action={updateTreasurerName} className="flex flex-wrap items-end gap-3">
@@ -466,6 +541,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="Accepted Payment Methods"
         sub="What applicants are told when their assessment is finalized — turn on as many as you actually accept. Cash at the counter is on by default, matching how every LGU starts out; GCash, Bank Transfer, and an Online Portal are each optional, with their own details shown once turned on."
+        status={paymentMethodLabels.length > 0 ? { label: paymentMethodLabels.join(", "), tone: "good" } : { label: "None accepted", tone: "warn" }}
       >
         <PaymentMethodsCard
           key={[lgu.acceptsCashCounter, lgu.acceptsGcash, lgu.gcashNumber, lgu.gcashName, lgu.acceptsBankTransfer, lgu.bankName, lgu.bankAccountNumber, lgu.bankAccountName, lgu.acceptsOnlinePortal, lgu.onlinePortalUrl].join("|")}
@@ -485,6 +561,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="SMS Usage"
         sub="How many texts have gone out this month — OTP codes, status updates, and staff alerts all count. Resets to zero every month; unused SMS don't carry over."
+        status={{ label: `${smsThisMonth.toLocaleString()} / ${SMS_FREE_MONTHLY_LIMIT.toLocaleString()} this month`, tone: smsThisMonth >= SMS_FREE_MONTHLY_LIMIT ? "warn" : "neutral" }}
       >
         <SmsUsageCard lguId={staff.lgu_id} />
       </CollapsibleSection>
@@ -492,6 +569,7 @@ export default async function SettingsPage() {
       <CollapsibleSection
         title="SMS Notifications"
         sub="Every text MuniServe sends — OTP codes, status updates to applicants, alerts to staff."
+        status={lgu.senderName ? { label: `"${lgu.senderName}"`, tone: "good" } : { label: "Default “BPLO:” prefix", tone: "neutral" }}
       >
         <Card className="p-5">
           <form action={updateSenderName} className="flex flex-wrap items-end gap-3">

@@ -21,8 +21,13 @@ type DepartmentOption = { name: string; display_name: string | null };
  * action form, nothing needs client-side state.
  */
 export function StaffManagementSection({ lguName, lguProvince, staffList, departments }: { lguName: string; lguProvince: string | null; staffList: StaffRow[]; departments: DepartmentOption[] }) {
+  const activeCount = staffList.filter((s) => s.is_active).length;
   return (
-    <CollapsibleSection title="Add/Remove Staff" sub="They'll be able to sign in with Google once you add them here -- no password to set up.">
+    <CollapsibleSection
+      title="Add/Remove Staff"
+      sub="They'll be able to sign in with Google once you add them here -- no password to set up."
+      status={{ label: `${activeCount} active staff`, tone: activeCount > 0 ? "neutral" : "warn" }}
+    >
       <Card className="mb-4 p-5">
         <form action={addStaffMember} className="flex flex-wrap items-end gap-3">
           <Field label="Full name">

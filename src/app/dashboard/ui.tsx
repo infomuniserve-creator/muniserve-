@@ -295,13 +295,34 @@ export function SectionHead({ title, sub }: { title: string; sub?: string }) {
  * rule already exists (the Business Registry's own expand rows, CLAUDE.md
  * 7dd, use the identical pattern) -- reused here rather than a new rule.
  */
-export function CollapsibleSection({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+export type SectionStatus = { label: string; tone: "good" | "warn" | "bad" | "info" | "cond" | "neutral" };
+
+/**
+ * `status` (2026-08-20, from the Settings mockup the project owner asked
+ * to build for real) -- one or more small TonePills shown next to the
+ * title, still fully visible while the section itself is collapsed. Every
+ * section here starts collapsed by design (CLAUDE.md 7nn's own "declutter"
+ * request), which means there was previously no way to tell e.g. whether
+ * Automated Assessment is on or a barangay-clearance override exists
+ * without opening every section one at a time. Optional and additive --
+ * every existing caller with no `status` prop renders byte-identical to
+ * before. Reuses TonePill directly rather than a parallel component, same
+ * tone vocabulary (good/warn/bad/info/cond/neutral) already used
+ * throughout this file.
+ */
+export function CollapsibleSection({ title, sub, status, children }: { title: string; sub?: string; status?: SectionStatus | SectionStatus[]; children: React.ReactNode }) {
+  const statuses = status ? (Array.isArray(status) ? status : [status]) : [];
   return (
     <details className="mb-9">
-      <summary className="mb-3.5 flex cursor-pointer flex-wrap items-baseline justify-between gap-3">
-        <span className="flex items-center gap-2">
+      <summary className="mb-3.5 flex cursor-pointer flex-wrap items-center justify-between gap-3">
+        <span className="flex flex-wrap items-center gap-2">
           <ChevronRightIcon className="chev size-3.5 shrink-0 text-ink-faint" />
           <h2 className="font-display text-[18px] font-bold text-ink">{title}</h2>
+          {statuses.map((s, i) => (
+            <span key={i} className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-extrabold ${TONE_CLASSES[s.tone]}`}>
+              {s.label}
+            </span>
+          ))}
         </span>
         {sub && <span className="text-[12.5px] text-ink-faint">{sub}</span>}
       </summary>
