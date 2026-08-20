@@ -103,12 +103,14 @@ export function AssessmentLineItems({
                     value={draft}
                     onChange={(e) => setDraft(id, e.target.value)}
                     placeholder="Override (₱)"
+                    aria-label={`Override amount for ${line.displayLabel}`}
                     className="h-8 w-28 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
                   />
                   <input
                     type="text"
                     name={`overrideReason_${id}`}
                     placeholder="Reason for override"
+                    aria-label={`Reason for overriding ${line.displayLabel}`}
                     className="h-8 flex-1 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
                   />
                   <button
@@ -150,6 +152,7 @@ export function AssessmentLineItems({
                 value={manualValues[f.key]}
                 onChange={(e) => setManualValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 placeholder="₱ amount"
+                aria-label={`Amount for ${f.label}`}
                 className="h-9 w-32 rounded-lg border border-warn bg-surface px-2 text-[13px] font-bold text-ink placeholder:text-ink-faint"
               />
             </div>

@@ -41,7 +41,15 @@ export function DepartmentReviewActions({
   return (
     <form action={action} className={compact ? "mb-1.5 flex flex-wrap items-center gap-1.5" : undefined}>
       <input type="hidden" name="departmentReviewId" value={departmentReviewId} />
-      {showNotes && <NotesField name="notes" placeholder="Notes (required if requesting info or rejecting)" />}
+      {showNotes && (
+        <NotesField
+          id={`notes-${departmentReviewId}`}
+          name="notes"
+          placeholder="Notes"
+          hint="Required if requesting info or rejecting."
+          aria-label="Review notes"
+        />
+      )}
       {needsAmount && (
         <div className={compact ? "flex items-center gap-1.5" : "mb-3 flex items-center gap-2"}>
           <label className="text-[11px] font-bold text-ink-soft">{buildingPermitFeeLabel}:</label>

@@ -501,34 +501,61 @@ export function DashboardTopBar({
  * (`requireLbtCategorySet`) is the backstop for a stale form submitting
  * anyway, not the first line of defense.
  */
+/**
+ * 2026-08-20 audit finding: all four decisions read as visually
+ * near-identical (same size/weight outline buttons, two of them sharing
+ * InfoIcon), risking a misclick on Reject specifically -- the one decision
+ * that permanently closes an application (CLAUDE.md 7qq). Fixed two ways
+ * without changing the underlying form/submit mechanics: "Request more
+ * info" gets its own icon (ClockIcon -- waiting on something) instead of
+ * sharing InfoIcon with "Approve with condition," and Reject is visually
+ * separated from the other three with a left divider plus bolder text, so
+ * it reads as a distinct kind of action rather than one more button in the
+ * row.
+ */
 export function DecisionButtons({ compact, disableApprove }: { compact?: boolean; disableApprove?: boolean }) {
   if (compact) {
     return (
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <MiniButton type="submit" name="decision" value="approved" tone="good" disabled={disableApprove}>Approve</MiniButton>
         <MiniButton type="submit" name="decision" value="approved_with_condition" tone="good" disabled={disableApprove}>Approve w/ condition</MiniButton>
         <MiniButton type="submit" name="decision" value="request_more_info" tone="info">Request info</MiniButton>
-        <MiniButton type="submit" name="decision" value="rejected" tone="bad">Reject</MiniButton>
+        <span className="mx-0.5 h-5 w-px bg-border-strong" aria-hidden="true" />
+        <MiniButton type="submit" name="decision" value="rejected" tone="bad" className="font-extrabold">Reject</MiniButton>
       </div>
     );
   }
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <PrimaryButton type="submit" name="decision" value="approved" disabled={disableApprove}><CheckIcon />Approve</PrimaryButton>
       <OutlineButton type="submit" name="decision" value="approved_with_condition" tone="cond" disabled={disableApprove}><InfoIcon />Approve with condition</OutlineButton>
-      <OutlineButton type="submit" name="decision" value="request_more_info" tone="info"><InfoIcon />Request more info</OutlineButton>
-      <OutlineButton type="submit" name="decision" value="rejected" tone="bad"><XIcon />Reject</OutlineButton>
+      <OutlineButton type="submit" name="decision" value="request_more_info" tone="info"><ClockIcon />Request more info</OutlineButton>
+      <span className="mx-1 h-6 w-px bg-border-strong" aria-hidden="true" />
+      <OutlineButton type="submit" name="decision" value="rejected" tone="bad" className="font-extrabold"><XIcon />Reject</OutlineButton>
     </div>
   );
 }
 
-export function NotesField(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const { className = "", ...rest } = props;
+/**
+ * `hint` renders as persistent text under the field, not just inside the
+ * placeholder -- a placeholder-only "required if..." message disappears
+ * the moment someone starts typing, so a reviewer could submit Reject or
+ * Request info with an effectively-blank notes field and never see the
+ * requirement again once real content is in the box (2026-08-20 audit
+ * finding). The four decision buttons share one form (CLAUDE.md 7bb), so
+ * this can't be made conditionally `required` per-button without client
+ * JS -- the persistent hint is the low-risk fix that doesn't touch that.
+ */
+export function NotesField(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { hint?: string }) {
+  const { className = "", hint, ...rest } = props;
   return (
-    <textarea
-      {...rest}
-      className={`mb-3 min-h-[52px] w-full resize-y rounded-2xl border border-border bg-surface px-3.5 py-2.5 text-[13px] text-ink placeholder:text-ink-faint ${className}`}
-    />
+    <div className="mb-3">
+      <textarea
+        {...rest}
+        className={`min-h-[52px] w-full resize-y rounded-2xl border border-border bg-surface px-3.5 py-2.5 text-[13px] text-ink placeholder:text-ink-faint ${className}`}
+      />
+      {hint && <p className="mt-1 text-[11px] text-ink-faint">{hint}</p>}
+    </div>
   );
 }
 

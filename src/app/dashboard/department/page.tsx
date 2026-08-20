@@ -52,6 +52,7 @@ export default async function DepartmentDashboardPage() {
 
   return (
     <>
+      <h1 className="sr-only">Department Review</h1>
       <StatGrid>
         <StatCard label="Awaiting your review" value={rows.length} icon={<ClockIcon />} tone="warn" />
       </StatGrid>

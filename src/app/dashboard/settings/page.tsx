@@ -129,6 +129,7 @@ export default async function SettingsPage() {
                         name="acctCode"
                         defaultValue={f.acct_code ?? ""}
                         placeholder="Acct Code"
+                        aria-label={`Account code for ${f.name}`}
                         className="h-8 w-24 rounded-lg border border-border-strong bg-surface px-2 text-[12px] text-ink placeholder:text-ink-faint"
                       />
                       <MiniButton type="submit" tone="neutral">Save</MiniButton>
@@ -293,12 +294,14 @@ export default async function SettingsPage() {
                         min="0"
                         defaultValue={override?.flat_amount ?? ""}
                         placeholder="Uses uniform rate"
+                        aria-label={`Barangay Clearance override rate for ${b.value}`}
                         className="h-8 w-32 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
                       />
                       <input
                         name="acctCode"
                         defaultValue={override?.acct_code ?? ""}
                         placeholder="Acct Code"
+                        aria-label={`Account code for ${b.value}`}
                         className="h-8 w-24 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
                       />
                       <MiniButton type="submit" tone="neutral">Save</MiniButton>

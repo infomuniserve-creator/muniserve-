@@ -41,22 +41,35 @@ export function BploDashboardTabs({ tabs, defaultTab }: { tabs: BploTabDef[]; de
 
   return (
     <>
-      <StatGrid>
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setActiveTab(t.key)}
-            className={`rounded-3xl border-0 bg-transparent p-0 text-left transition hover:opacity-90 ${
-              t.key === activeTab ? "ring-2 ring-brand-teal ring-offset-2 ring-offset-bg" : ""
-            }`}
-          >
-            {t.statCard}
-          </button>
-        ))}
-      </StatGrid>
+      {/* role="tablist"/"tab"/"tabpanel" -- these stat cards are a real tab
+          switcher, but weren't marked up as one (2026-08-20 audit finding):
+          a screen reader announced them as a plain list of buttons rather
+          than a tab interface, and expected arrow-key tab navigation didn't
+          work. */}
+      <div role="tablist" aria-label="Application pipeline stage">
+        <StatGrid>
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              id={`bplo-tab-${t.key}`}
+              aria-selected={t.key === activeTab}
+              aria-controls={`bplo-tabpanel-${t.key}`}
+              onClick={() => setActiveTab(t.key)}
+              className={`rounded-3xl border-0 bg-transparent p-0 text-left transition hover:opacity-90 ${
+                t.key === activeTab ? "ring-2 ring-brand-teal ring-offset-2 ring-offset-bg" : ""
+              }`}
+            >
+              {t.statCard}
+            </button>
+          ))}
+        </StatGrid>
+      </div>
 
-      <div className="mb-9">{active?.content}</div>
+      <div className="mb-9" role="tabpanel" id={active ? `bplo-tabpanel-${active.key}` : undefined} aria-labelledby={active ? `bplo-tab-${active.key}` : undefined}>
+        {active?.content}
+      </div>
     </>
   );
 }

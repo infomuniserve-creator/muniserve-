@@ -151,17 +151,18 @@ async function PaymentQueueRow({
           type="number"
           step="0.01"
           placeholder="Amount (₱)"
+          aria-label="Amount paid"
           defaultValue={total > 0 ? total : undefined}
           required
           className="h-9 w-36 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
         />
-        <select name="method" defaultValue="Cash" className="h-9 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink">
+        <select name="method" defaultValue="Cash" aria-label="Payment method" className="h-9 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink">
           <option>Cash</option>
           <option>GCash</option>
           <option>Bank Transfer</option>
           <option>Check</option>
         </select>
-        <input name="orNumber" placeholder="OR number" required className="h-9 w-36 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
+        <input name="orNumber" placeholder="OR number" aria-label="Official Receipt (OR) number" required className="h-9 w-36 rounded-xl border border-border bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
         <PrimaryButton type="submit">Record payment</PrimaryButton>
       </form>
 

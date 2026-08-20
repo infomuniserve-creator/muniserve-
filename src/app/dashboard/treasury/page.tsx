@@ -29,6 +29,7 @@ export default async function TreasuryDashboardPage() {
 
   return (
     <>
+      <h1 className="sr-only">Treasury</h1>
       <StatGrid>
         <StatCard label="Awaiting payment" value={count ?? 0} icon={<ClockIcon />} tone="warn" />
       </StatGrid>

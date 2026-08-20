@@ -2,6 +2,7 @@ import { getCurrentStaff } from "@/lib/staff";
 import { getCurrentPlatformAdmin } from "@/lib/platform-admin";
 import { redirect } from "next/navigation";
 import { SignOutButton } from "./sign-out-button";
+import { Card } from "./ui";
 
 /**
  * Landing spot after login. Checks getCurrentStaff() first, not platform
@@ -26,16 +27,20 @@ export default async function DashboardRouterPage() {
   const platformAdmin = await getCurrentPlatformAdmin();
   if (platformAdmin) redirect("/admin");
 
+  // Rebuilt on the shared design-token Card (2026-08-20 audit finding),
+  // matching PausedNotice's identical fix -- previously raw hardcoded
+  // colors with no dark-mode or brand support at all.
   return (
-    <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#f4f6fb" }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 420, textAlign: "center", border: "0.5px solid #e5e7eb" }}>
-        <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Not provisioned</h1>
-        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <Card className="w-full max-w-[420px] p-10 text-center">
+        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-teal">MuniServe</p>
+        <h1 className="mb-2 text-[18px] font-bold text-ink">Not provisioned</h1>
+        <p className="mb-6 text-[13px] leading-relaxed text-ink-soft">
           You&rsquo;re signed in with Google, but this account isn&rsquo;t set up as MuniServe staff yet
-          (or has been deactivated). Ask BPLO to add you to <code>staff_users</code>.
+          (or has been deactivated). Ask BPLO to add you as staff.
         </p>
         <SignOutButton />
-      </div>
+      </Card>
     </div>
   );
 }

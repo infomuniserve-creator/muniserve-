@@ -77,6 +77,7 @@ export function PaymentMethodsCard(props: Props) {
                 value={gcashNumber}
                 onChange={(e) => setGcashNumber(e.target.value)}
                 placeholder="GCash number, e.g. 09171234567"
+                aria-label="GCash number"
                 className="h-9 w-56 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
               />
               <input
@@ -84,6 +85,7 @@ export function PaymentMethodsCard(props: Props) {
                 type="text"
                 defaultValue={props.gcashName ?? ""}
                 placeholder="Name on the account (optional)"
+                aria-label="GCash account name"
                 className="h-9 w-56 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
               />
             </div>
@@ -103,6 +105,7 @@ export function PaymentMethodsCard(props: Props) {
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
                 placeholder="Bank name, e.g. Landbank"
+                aria-label="Bank name"
                 className="h-9 w-48 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
               />
               <input
@@ -111,6 +114,7 @@ export function PaymentMethodsCard(props: Props) {
                 value={bankAccountNumber}
                 onChange={(e) => setBankAccountNumber(e.target.value)}
                 placeholder="Account number"
+                aria-label="Bank account number"
                 className="h-9 w-48 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
               />
               <input
@@ -118,6 +122,7 @@ export function PaymentMethodsCard(props: Props) {
                 type="text"
                 defaultValue={props.bankAccountName ?? ""}
                 placeholder="Account name (optional)"
+                aria-label="Bank account name"
                 className="h-9 w-48 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
               />
             </div>
@@ -137,6 +142,7 @@ export function PaymentMethodsCard(props: Props) {
                 value={onlinePortalUrl}
                 onChange={(e) => setOnlinePortalUrl(e.target.value)}
                 placeholder="e.g. your Landbank LinkBiz URL"
+                aria-label="Online payment portal URL"
                 className="h-9 w-96 max-w-full rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
               />
             </div>

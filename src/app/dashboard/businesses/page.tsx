@@ -193,6 +193,7 @@ export default async function BusinessesPage({
             name="q"
             defaultValue={q}
             placeholder="Search by business name, owner, or license no."
+            aria-label="Search businesses"
             className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-faint"
           />
         </div>
@@ -403,6 +404,7 @@ function RegistryRow({
                   name="newPhone"
                   type="tel"
                   placeholder="New mobile no. (verify in person first)"
+                  aria-label="New mobile number"
                   className="h-8 w-56 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
                 />
                 <MiniButton type="submit" tone="neutral">Update</MiniButton>
@@ -420,6 +422,7 @@ function RegistryRow({
                 name="phone"
                 type="tel"
                 placeholder="Mobile no. (verify in person first)"
+                aria-label="Mobile number"
                 className="h-8 w-56 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
               />
               <MiniButton type="submit" tone="neutral">Attach number</MiniButton>

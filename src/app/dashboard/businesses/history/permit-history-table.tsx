@@ -350,10 +350,26 @@ export function PermitHistoryTable({ rows }: { rows: PermitRow[] }) {
           <thead>
             <tr className="bg-brand-navy text-white">
               {COLUMNS.map((col, i) => (
+                // tabIndex/onKeyDown/aria-sort -- sorting only responded to a mouse click
+                // before (2026-08-20 audit finding), with no keyboard equivalent and no
+                // aria-sort for a screen reader to announce the current sort state.
                 <th
                   key={col.key}
                   onClick={col.sortable ? () => sortBy(col.key) : undefined}
-                  className={`truncate px-3 py-2.5 text-left text-[11px] font-bold tracking-wide ${col.sortable ? "cursor-pointer hover:bg-brand-teal" : ""} ${col.sticky ? "sticky z-[3] bg-brand-navy" : ""}`}
+                  onKeyDown={
+                    col.sortable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            sortBy(col.key);
+                          }
+                        }
+                      : undefined
+                  }
+                  tabIndex={col.sortable ? 0 : undefined}
+                  role={col.sortable ? "button" : undefined}
+                  aria-sort={col.sortable ? (sortCol === col.key ? (sortDir === 1 ? "ascending" : "descending") : "none") : undefined}
+                  className={`truncate px-3 py-2.5 text-left text-[11px] font-bold tracking-wide ${col.sortable ? "cursor-pointer hover:bg-brand-teal focus-visible:outline focus-visible:outline-2 focus-visible:outline-white focus-visible:-outline-offset-2" : ""} ${col.sticky ? "sticky z-[3] bg-brand-navy" : ""}`}
                   style={col.sticky ? { left: STICKY_LEFT[i], width: STICKY_COL_WIDTHS[i], minWidth: STICKY_COL_WIDTHS[i], maxWidth: STICKY_COL_WIDTHS[i] } : undefined}
                 >
                   {col.label}
@@ -418,21 +434,22 @@ export function PermitHistoryTable({ rows }: { rows: PermitRow[] }) {
           {Math.min(clampedPage * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString()} records
         </span>
         <div className="flex items-center gap-1">
-          <PagerButton onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={clampedPage <= 1}>&lsaquo;</PagerButton>
+          <PagerButton onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={clampedPage <= 1} label="Previous page">&lsaquo;</PagerButton>
           <PageButtons page={clampedPage} pages={pages} onGo={setPage} />
-          <PagerButton onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={clampedPage >= pages}>&rsaquo;</PagerButton>
+          <PagerButton onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={clampedPage >= pages} label="Next page">&rsaquo;</PagerButton>
         </div>
       </div>
     </div>
   );
 }
 
-function PagerButton({ children, onClick, disabled, active }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; active?: boolean }) {
+function PagerButton({ children, onClick, disabled, active, label }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; active?: boolean; label?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-label={label}
       className={`h-7 min-w-7 rounded-md border px-2 text-[12px] transition-colors ${
         active ? "border-brand-navy bg-brand-navy font-bold text-white" : "border-border text-ink-soft hover:bg-surface-2"
       } disabled:opacity-40`}

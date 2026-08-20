@@ -219,9 +219,11 @@ export function AuditTrailExplorer({
         </button>
       </div>
 
-      <div className="mb-4 flex gap-2 border-b border-border">
+      <div className="mb-4 flex gap-2 border-b border-border" role="tablist" aria-label="Audit trail view">
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "apps"}
           onClick={() => setTab("apps")}
           className={`-mb-px border-b-2 px-3 py-2 text-[12.5px] font-bold ${tab === "apps" ? "border-brand-teal text-ink" : "border-transparent text-ink-soft hover:text-ink"}`}
         >
@@ -229,6 +231,8 @@ export function AuditTrailExplorer({
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "other"}
           onClick={() => setTab("other")}
           className={`-mb-px border-b-2 px-3 py-2 text-[12.5px] font-bold ${tab === "other" ? "border-brand-teal text-ink" : "border-transparent text-ink-soft hover:text-ink"}`}
         >
@@ -258,9 +262,22 @@ export function AuditTrailExplorer({
                   const isOpen = expanded === g.applicationId;
                   return (
                     <Fragment key={g.applicationId}>
+                      {/* role="button"/tabIndex/onKeyDown -- this row only responded to a
+                          mouse click before (2026-08-20 audit finding), locking out anyone
+                          navigating by keyboard from the primary interaction on this page. */}
                       <tr
                         onClick={() => setExpanded(isOpen ? null : g.applicationId)}
-                        className="cursor-pointer border-b border-border last:border-b-0 hover:bg-surface-2"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setExpanded(isOpen ? null : g.applicationId);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? "Collapse" : "Expand"} history for ${g.referenceNumber}, ${g.businessName}`}
+                        className="cursor-pointer border-b border-border last:border-b-0 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-teal focus-visible:-outline-offset-2"
                       >
                         <td className="whitespace-nowrap py-2.5 pr-4 font-bold text-ink">{g.referenceNumber}</td>
                         <td className="py-2.5 pr-4 text-ink">{g.businessName}</td>

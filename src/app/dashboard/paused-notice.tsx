@@ -1,31 +1,39 @@
 import { SignOutButton } from "./sign-out-button";
+import { Card } from "./ui";
 
 /**
  * Shown instead of the entire dashboard shell (dashboard/layout.tsx never
  * renders {children} when this appears -- CLAUDE.md 7o follow-up) when a
  * real client staff member's own LGU has been paused by a platform admin
- * from /admin, e.g. for non-payment. Deliberately plain inline styles,
- * matching apply/login/status/verify's self-contained pattern, since this
- * is effectively its own standalone page even though it lives inside the
- * dashboard route tree.
+ * from /admin, e.g. for non-payment.
+ *
+ * Rebuilt on the shared design-token Card component (2026-08-20 audit
+ * finding) rather than raw hardcoded colors -- previously ignored a staff
+ * member's own dark-mode preference entirely (a jarring bright-white
+ * screen even with dark mode on) and carried no MuniServe branding at all,
+ * at exactly the stressful moment a client discovers their account is
+ * paused. This still lives inside /dashboard, the one subtree with a
+ * persisted theme preference, so it should look and feel like the rest of
+ * that product, not a bare unbranded error page.
  */
 export function PausedNotice() {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#f4f6fb" }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 420, width: "100%", textAlign: "center", border: "0.5px solid #e5e7eb" }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>⏸️</div>
-        <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Account Paused</h1>
-        <p style={{ fontSize: 13.5, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 }}>
-          Your account is currently Paused, please contact your administrator for more info.
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <Card className="w-full max-w-[420px] p-10 text-center">
+        <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-warn-bg text-2xl">⏸️</div>
+        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-teal">MuniServe</p>
+        <h1 className="mb-2 text-[18px] font-bold text-ink">Account paused</h1>
+        <p className="mb-6 text-[13.5px] leading-relaxed text-ink-soft">
+          Your account is currently paused. Please contact your administrator for more information.
         </p>
-        <div style={{ fontSize: 13, color: "#1a1a2e", marginBottom: 28, lineHeight: 1.9 }}>
-          <p style={{ margin: 0 }}>
-            📧 <a href="mailto:hello@muniserve.ph" style={{ color: "#0C447C" }}>hello@muniserve.ph</a>
+        <div className="mb-7 space-y-1 text-[13px] text-ink">
+          <p className="m-0">
+            📧 <a href="mailto:hello@muniserve.ph" className="text-brand-navy underline">hello@muniserve.ph</a>
           </p>
-          <p style={{ margin: 0 }}>📱 0977-440-1374</p>
+          <p className="m-0">📱 0977-440-1374</p>
         </div>
         <SignOutButton />
-      </div>
+      </Card>
     </div>
   );
 }

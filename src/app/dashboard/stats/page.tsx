@@ -53,6 +53,7 @@ export default async function PerformanceStatsPage({
 
   return (
     <>
+      <h1 className="sr-only">Stats &amp; Reports</h1>
       <StatsSubNav active="performance" />
       <SectionHead
         title="Performance"

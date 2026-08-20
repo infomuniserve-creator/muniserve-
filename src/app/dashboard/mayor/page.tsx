@@ -50,6 +50,7 @@ export default async function MayorDashboardPage() {
 
   return (
     <>
+      <h1 className="sr-only">Mayor&rsquo;s Office</h1>
       <StatGrid>
         <StatCard label="Awaiting signature" value={queue.length} icon={<ClockIcon />} tone="warn" />
         <StatCard label="Released" value={released.length} icon={<CheckIcon />} tone="good" />

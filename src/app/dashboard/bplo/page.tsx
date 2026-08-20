@@ -449,6 +449,10 @@ export default async function BploDashboardPage() {
 
   return (
     <>
+      {/* 2026-08-20 audit finding: this and most other dashboard pages had
+          no top-level heading at all -- a screen reader's primary way of
+          answering "what page am I on" simply wasn't there. */}
+      <h1 className="sr-only">Applications</h1>
       <BploDashboardTabs tabs={tabs} defaultTab="initial" />
 
       {returned.length > 0 && (
@@ -753,7 +757,7 @@ async function InitialReviewCard({
 
       <form action={submitInitialReview}>
         <input type="hidden" name="applicationId" value={applicationId} />
-        <NotesField name="notes" placeholder="Notes (required if requesting info or rejecting)" />
+        <NotesField id={`notes-${applicationId}`} name="notes" placeholder="Notes" hint="Required if requesting info or rejecting." aria-label="Review notes" />
         <DecisionButtons disableApprove={!profile?.lbtCategory} />
       </form>
     </Card>

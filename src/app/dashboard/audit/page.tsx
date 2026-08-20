@@ -102,6 +102,7 @@ export default async function AuditTrailPage({
 
   return (
     <>
+      <h1 className="sr-only">Audit Trail</h1>
       <SectionHead
         title="Audit Trail"
         sub="Every application's full history, plus staff and account changes at your LGU. Useful for DILG reporting and internal review alike."
