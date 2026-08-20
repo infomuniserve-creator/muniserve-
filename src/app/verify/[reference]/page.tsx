@@ -51,8 +51,10 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
   const validUntil = new Date(`${permit.valid_until}T23:59:59+08:00`);
   const isValid = validUntil >= new Date();
 
+  // fontFamily deliberately not overridden here -- see the identical fix
+  // and reasoning in ApplyPageClient.tsx (2026-08-20 audit finding).
   return (
-    <div style={{ maxWidth: 480, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
+    <div style={{ maxWidth: 480, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #c7ced8", color: "#1a1a2e" }}>
       <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
         MuniServe{lgu ? ` · ${lgu.name}, ${lgu.province}` : ""}
       </p>
@@ -89,7 +91,7 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: "0.5px solid #e5e7eb", fontSize: 13 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: "1px solid #c7ced8", fontSize: 13 }}>
       <span style={{ color: "#6b7280" }}>{label}</span>
       <span style={{ fontWeight: 500, textAlign: "right" }}>{value}</span>
     </div>

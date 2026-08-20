@@ -169,7 +169,7 @@ async function ReleasedNote({ applicationId }: { applicationId: string }) {
           href={permit.pdf_url}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ display: "inline-block", fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#0C447C", color: "#fff", fontWeight: 600, textDecoration: "none" }}
+          style={{ display: "inline-block", fontSize: 13, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: "1px solid #c7ced8", background: "#0C447C", color: "#fff", fontWeight: 600, textDecoration: "none" }}
         >
           Download permit (PDF)
         </a>
@@ -313,9 +313,11 @@ async function PendingPaymentSection({ applicationId, lguId }: { applicationId: 
   );
 }
 
+// fontFamily deliberately not overridden here -- see the identical fix and
+// reasoning in ApplyPageClient.tsx (2026-08-20 audit finding).
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
+    <div style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #c7ced8", color: "#1a1a2e" }}>
       {children}
     </div>
   );
@@ -329,5 +331,5 @@ function Head({ title, sub }: { title: string; sub?: string }) {
   );
 }
 function Card({ children }: { children: React.ReactNode }) {
-  return <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: "1rem" }}>{children}</div>;
+  return <div style={{ border: "1px solid #c7ced8", borderRadius: 8, padding: 12, marginBottom: "1rem" }}>{children}</div>;
 }

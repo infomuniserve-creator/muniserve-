@@ -192,6 +192,40 @@ const DOCUMENT_FIELDS: { key: DocumentFieldKey; label: string }[] = [
 ];
 const DOCUMENT_FIELD_KEYS = new Set<FieldKey>(DOCUMENT_FIELDS.map((d) => d.key));
 
+/** 11-digit PH mobile number starting with 09, optional spaces/dashes -- a plain "is this even shaped right" check before spending a real, billed SMS credit on it (2026-08-20 audit finding: previously only checked for non-empty). */
+function isValidPhFormat(value: string): boolean {
+  return /^09\d{9}$/.test(value.replace(/[\s-]/g, ""));
+}
+
+/**
+ * Autosaves the in-progress ~40-field form to the browser's own storage so
+ * a dropped connection, an accidental back-swipe, or the phone's OS killing
+ * a backgrounded tab (common on Android under memory pressure) doesn't
+ * lose everything the applicant has typed (2026-08-20 audit finding --
+ * previously purely in-memory, by design, per this file's own original
+ * doc comment; that reasoning predates the real ~40-field form and doesn't
+ * hold up for this audience). Deliberately localStorage, not sessionStorage
+ * -- a backgrounded-then-reloaded mobile tab doesn't reliably count as "the
+ * same session" the way it does on desktop. Only ever restores back to the
+ * "form" screen itself, never re-derives a verified OTP session -- the
+ * applicant_session cookie (30-day, httpOnly) already covers whether
+ * they're still signed in; this only recovers what they'd typed.
+ */
+const DRAFT_KEY = "muniserve-apply-draft-v1";
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+type DraftState = {
+  savedAt: number;
+  path: "new" | "renewal" | null;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  emailInput: string;
+  genderInput: string;
+  selectedBusinessId: string | null;
+  form: FormState;
+  documents: Partial<Record<DocumentFieldKey, string>>;
+};
+
 function isBlankValue(value: unknown): boolean {
   if (value == null) return true;
   if (typeof value === "string") return value.trim() === "";
@@ -356,6 +390,62 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     return () => observer.disconnect();
   }, []);
 
+  // Restore a saved draft once, on mount, if one exists and isn't stale.
+  // Runs before the user has interacted with anything, so this is the one
+  // legitimate case of setting state from an effect on mount rather than
+  // during a later render -- restoring nine independent useState slices
+  // from one saved object, so (unlike theme-toggle.tsx's identical-in-kind
+  // case) there's no single value to hoist out to make one eslint-disable-
+  // next-line cover them all. A block disable/enable pair around exactly
+  // this restore, not a blanket file-level suppression.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as DraftState;
+      if (!draft.savedAt || Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS) {
+        window.localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      setPath(draft.path);
+      setPhone(draft.phone);
+      setFirstName(draft.firstName);
+      setLastName(draft.lastName);
+      setEmailInput(draft.emailInput);
+      setGenderInput(draft.genderInput);
+      setSelectedBusinessId(draft.selectedBusinessId);
+      setForm(draft.form);
+      setDocuments(draft.documents);
+      setScreen("form");
+    } catch {
+      // A corrupted/unreadable draft is never worth blocking the page over -- just start fresh.
+      window.localStorage.removeItem(DRAFT_KEY);
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Autosaves the draft on every change while the applicant is actually on
+  // the form screen -- not on every screen, so a half-completed phone/OTP
+  // step never gets restored as if it were a filled-in form.
+  useEffect(() => {
+    if (screen !== "form") return;
+    const draft: DraftState = { savedAt: Date.now(), path, phone, firstName, lastName, emailInput, genderInput, selectedBusinessId, form, documents };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // Storage full/unavailable (private browsing, etc.) -- autosave is a convenience, not a requirement.
+    }
+  }, [screen, path, phone, firstName, lastName, emailInput, genderInput, selectedBusinessId, form, documents]);
+
+  function clearDraft() {
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Nothing to do if storage isn't available.
+    }
+  }
+
   /**
    * "Start over" used to only ever reset local React state -- the real
    * applicant_session cookie (and its server-side row) stayed live for its
@@ -366,6 +456,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
    */
   function startOver() {
     void signOutApplicant();
+    clearDraft();
     setScreen("landing");
     setPath(null);
     setPhoneSigninMode(false);
@@ -481,7 +572,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error === "too_soon" ? "Please wait a bit before requesting another code." : "Could not send a code to that number. Check it and try again.");
+        setError(
+          data.error === "too_soon"
+            ? "Please wait a bit before requesting another code."
+            : data.error === "too_many_requests"
+              ? "Too many codes requested from this connection. Please wait a few minutes and try again."
+              : "Could not send a code to that number. Check it and try again."
+        );
         return;
       }
       setOtpSent(true);
@@ -756,6 +853,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         return;
       }
       const data = await res.json();
+      clearDraft();
       setSubmittedReference(data.referenceNumber);
       setScreen("submitted");
     } finally {
@@ -804,15 +902,20 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   function renderField(fd: FieldDescriptor) {
     if (!isFieldVisible(fd.key, formValues)) return null;
     const required = REQUIRED_FIELDS.has(fd.key);
-    const label = fd.label + (required ? " *" : "");
+    // Checkboxes read ambiguously as single- vs multi-select at a glance,
+    // especially at this form's small font sizes -- a plain hint removes
+    // the guesswork instead of relying on the applicant already knowing
+    // the convention (copy-only clarity fix, no change to which fields
+    // are checkbox groups or how many can be selected).
+    const label = fd.label + (fd.kind === "checkboxgroup" ? " (select all that apply)" : "") + (required ? " *" : "");
 
     // A New business always pays the full annual amount -- shown locked,
     // not a real dropdown, so there's nothing to click here. Renewal
     // below still gets the normal 3-option select.
     if (fd.key === "businessTaxPayment" && path === "new") {
       return (
-        <Field key={fd.key} label={label}>
-          <input value="Annual" readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
+        <Field key={fd.key} id={fd.key} label={label}>
+          <input id={fd.key} value="Annual" readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
           <span style={{ fontSize: 11, color: "#9199a8", marginTop: 4, display: "block" }}>
             New businesses pay the full year&rsquo;s business tax upfront. Bi-Annual and Quarterly are only available on renewal.
           </span>
@@ -822,11 +925,16 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
     if (fd.kind === "checkboxgroup") {
       const current = (form[fd.key as keyof FormState] as string[]) ?? [];
+      // A <fieldset>/<legend> (not Field's own <label>) so a screen reader
+      // announces "N related options," the way a group of checkboxes is
+      // meant to be announced -- Field's plain label-next-to-a-<div> never
+      // conveyed that they were a group at all (2026-08-20 audit finding).
       return (
-        <Field key={fd.key} label={label}>
+        <fieldset key={fd.key} style={{ marginBottom: 12, border: "none", padding: 0, margin: "0 0 12px" }}>
+          <legend style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, padding: 0 }}>{label}</legend>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {fd.options.map((opt) => (
-              <label key={opt} style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+              <label key={opt} style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, minHeight: 32 }}>
                 <input
                   type="checkbox"
                   checked={current.includes(opt)}
@@ -836,20 +944,21 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
                       [fd.key]: e.target.checked ? [...current, opt] : current.filter((o) => o !== opt),
                     }))
                   }
+                  style={{ width: 18, height: 18 }}
                 />
                 {opt}
               </label>
             ))}
           </div>
-        </Field>
+        </fieldset>
       );
     }
 
     const value = (form[fd.key as keyof FormState] as string) ?? "";
     if (fd.kind === "select") {
       return (
-        <Field key={fd.key} label={label}>
-          <select value={value} onChange={(e) => setForm((f) => ({ ...f, [fd.key]: e.target.value }))} style={inputStyle}>
+        <Field key={fd.key} id={fd.key} label={label}>
+          <select id={fd.key} value={value} onChange={(e) => setForm((f) => ({ ...f, [fd.key]: e.target.value }))} style={inputStyle}>
             <option value="">Select one</option>
             {fd.options.map((opt) => (
               <option key={opt} value={opt}>{opt}</option>
@@ -860,14 +969,15 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     }
     if (fd.kind === "searchable-select") {
       return (
-        <Field key={fd.key} label={label}>
-          <SearchableSelect value={value} onChange={(v) => setForm((f) => ({ ...f, [fd.key]: v }))} options={fd.options} />
+        <Field key={fd.key} id={fd.key} label={label}>
+          <SearchableSelect id={fd.key} value={value} onChange={(v) => setForm((f) => ({ ...f, [fd.key]: v }))} options={fd.options} />
         </Field>
       );
     }
     return (
-      <Field key={fd.key} label={label}>
+      <Field key={fd.key} id={fd.key} label={label}>
         <input
+          id={fd.key}
           type={fd.kind === "number" ? "number" : "text"}
           value={value}
           onChange={(e) => setForm((f) => ({ ...f, [fd.key]: e.target.value }))}
@@ -877,8 +987,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     );
   }
 
+  // fontFamily deliberately not overridden here -- layout.tsx already sets
+  // Nunito app-wide precisely so the applicant-facing pages read as the
+  // same product as the staff dashboard, not a different one; an inline
+  // system-font override on this root div was silently fighting that
+  // (2026-08-20 audit finding).
   return (
-    <div ref={rootRef} style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "0.5px solid #e5e7eb", fontFamily: "-apple-system, 'Segoe UI', Arial, sans-serif", color: "#1a1a2e" }}>
+    <div ref={rootRef} style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: FIELD_BORDER, color: "#1a1a2e" }}>
       <LguBanner lgu={lgu} />
       {screen !== "landing" && screen !== "submitted" && (
         <button onClick={startOver} style={backBtnStyle}>Start over</button>
@@ -900,8 +1015,8 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       {screen === "renewal_license" && (
         <>
           <Head title="Find your business" sub="Enter the Permit Number printed on your last permit or receipt, or your old License Number if you haven't renewed with us before." />
-          <Field label="Permit No. or License No.">
-            <input value={permitNumberInput} onChange={(e) => setPermitNumberInput(e.target.value)} placeholder="e.g. MS-2026-00001 or your old License No." style={inputStyle} />
+          <Field label="Permit No. or License No." id="permitNumberInput">
+            <input id="permitNumberInput" value={permitNumberInput} onChange={(e) => setPermitNumberInput(e.target.value)} placeholder="e.g. MS-2026-00001 or your old License No." style={inputStyle} />
           </Field>
           <button onClick={lookupPermitNumber} disabled={loading || !permitNumberInput.trim()} style={{ ...actBtnStyle, ...((loading || !permitNumberInput.trim()) ? disabledBtnStyle : {}) }}>Continue</button>
           <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
@@ -954,10 +1069,15 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       {screen === "phone" && (
         <>
           <Head title="Verify your mobile number" sub="We will send a one-time code by SMS. No password to remember — you will use this number every time you check your application." />
-          <Field label="Mobile number">
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09XX XXX XXXX" style={inputStyle} />
+          <Field label="Mobile number" id="phone">
+            <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09XX XXX XXXX" style={inputStyle} inputMode="tel" autoComplete="tel" />
           </Field>
-          <button onClick={sendOtp} disabled={loading || !phone.trim()} style={{ ...actBtnStyle, ...((loading || !phone.trim()) ? disabledBtnStyle : {}) }}>{loading ? "Sending…" : "Send code"}</button>
+          {phone.trim().length > 0 && !isValidPhFormat(phone) && (
+            <p style={{ fontSize: 11, color: "#791F1F", marginTop: -6, marginBottom: 10 }}>
+              Enter an 11-digit mobile number starting with 09 (e.g. 09171234567).
+            </p>
+          )}
+          <button onClick={sendOtp} disabled={loading || !isValidPhFormat(phone)} style={{ ...actBtnStyle, ...((loading || !isValidPhFormat(phone)) ? disabledBtnStyle : {}) }}>{loading ? "Sending…" : "Send code"}</button>
         </>
       )}
 
@@ -971,8 +1091,8 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
                 : `We sent a 6-digit code to ${phone}.`
             }
           />
-          <Field label="Verification code">
-            <input value={otpInput} onChange={(e) => setOtpInput(e.target.value)} placeholder="6-digit code" style={inputStyle} />
+          <Field label="Verification code" id="otpCode">
+            <input id="otpCode" value={otpInput} onChange={(e) => setOtpInput(e.target.value)} placeholder="6-digit code" style={inputStyle} inputMode="numeric" autoComplete="one-time-code" />
           </Field>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={verifyOtp} disabled={loading || otpInput.trim().length !== 6} style={{ ...actBtnStyle, ...((loading || otpInput.trim().length !== 6) ? disabledBtnStyle : {}) }}>Verify</button>
@@ -997,7 +1117,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       {screen === "business_picker" && myBusinesses && (
         <>
           <Head title="Which business are you renewing?" sub="Select one to continue." />
-          <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 8 }}>
+          <div style={{ border: FIELD_BORDER, borderRadius: 8 }}>
             {myBusinesses.map((b) => (
               <button key={b.id} onClick={() => pickBusiness(b)} style={{ ...rowStyle, width: "100%", background: "#fff", font: "inherit", color: "inherit", textAlign: "left" }}>
                 <div>
@@ -1030,21 +1150,21 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
             For a corporation, cooperative, or partnership, enter the name of the president or officer-in-charge.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
-            <Field label="First name *">
-              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Juan" style={inputStyle} />
+            <Field label="First name *" id="firstName">
+              <input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Juan" style={inputStyle} autoComplete="given-name" />
             </Field>
-            <Field label="Last name *">
-              <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Dela Cruz" style={inputStyle} />
+            <Field label="Last name *" id="lastName">
+              <input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Dela Cruz" style={inputStyle} autoComplete="family-name" />
             </Field>
           </div>
-          <Field label="Email *">
-            <input value={emailInput} onChange={(e) => setEmailInput(e.target.value)} placeholder="juan@example.com" style={inputStyle} />
+          <Field label="Email *" id="ownerEmail">
+            <input id="ownerEmail" type="email" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} placeholder="juan@example.com" style={inputStyle} autoComplete="email" />
           </Field>
-          <Field label="Mobile phone *">
-            <input value={phone} readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
+          <Field label="Mobile phone *" id="ownerPhoneDisplay">
+            <input id="ownerPhoneDisplay" value={phone} readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
           </Field>
-          <Field label="Owner's gender (optional)">
-            <select value={genderInput} onChange={(e) => setGenderInput(e.target.value)} style={inputStyle}>
+          <Field label="Owner's gender (optional)" id="ownerGender">
+            <select id="ownerGender" value={genderInput} onChange={(e) => setGenderInput(e.target.value)} style={inputStyle}>
               <option value="">Prefer not to say</option>
               {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
@@ -1157,16 +1277,25 @@ function Head({ title, sub }: { title: string; sub?: string }) {
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", margin: "20px 0 10px", borderTop: "0.5px solid #e5e7eb", paddingTop: 14 }}>
+    <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", margin: "20px 0 10px", borderTop: FIELD_BORDER, paddingTop: 14 }}>
       {children}
     </p>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * `id` connects the visible label to its input via htmlFor -- previously
+ * omitted everywhere, so every field's label was only ever positioned next
+ * to its input, not programmatically associated with it (2026-08-20 audit,
+ * critical accessibility finding: confirmed live that `input.labels.length`
+ * was 0 on every field). Optional, since a couple of callers (the
+ * checkbox-group fieldset, the signature pad) label themselves a different
+ * way and don't pass one.
+ */
+function Field({ label, id, children }: { label: string; id?: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 12, flex: 1 }}>
-      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</label>
+      <label htmlFor={id} style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</label>
       {children}
     </div>
   );
@@ -1191,7 +1320,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * to whatever was actually selected, so this can never end up in a state
  * where the displayed text doesn't match the real underlying value.
  */
-function SearchableSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: readonly string[] }) {
+function SearchableSelect({ id, value, onChange, options }: { id?: string; value: string; onChange: (v: string) => void; options: readonly string[] }) {
   // `query` intentionally only initializes from `value` once, at mount --
   // this component only ever mounts once the "form" screen is already
   // showing, by which point a returning applicant's profile (if any) has
@@ -1251,10 +1380,18 @@ function SearchableSelect({ value, onChange, options }: { value: string; onChang
     }
   }
 
+  const listboxId = `${id ?? "searchable-select"}-listbox`;
+
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <input
+        id={id}
         type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-activedescendant={open && filtered[highlighted] ? `${listboxId}-${highlighted}` : undefined}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -1278,6 +1415,8 @@ function SearchableSelect({ value, onChange, options }: { value: string; onChang
       />
       {open && (
         <div
+          id={listboxId}
+          role="listbox"
           style={{
             position: "absolute",
             zIndex: 20,
@@ -1287,7 +1426,7 @@ function SearchableSelect({ value, onChange, options }: { value: string; onChang
             maxHeight: 240,
             overflowY: "auto",
             background: "#fff",
-            border: "0.5px solid #e5e7eb",
+            border: FIELD_BORDER,
             borderRadius: 8,
             boxShadow: "0 8px 20px rgba(0,0,0,0.1)",
           }}
@@ -1298,6 +1437,9 @@ function SearchableSelect({ value, onChange, options }: { value: string; onChang
             filtered.map((opt, i) => (
               <div
                 key={opt}
+                id={`${listboxId}-${i}`}
+                role="option"
+                aria-selected={opt === value}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   select(opt);
@@ -1324,7 +1466,7 @@ function SearchableSelect({ value, onChange, options }: { value: string; onChang
 
 function OptCard({ title, desc, onClick }: { title: string; desc: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} style={{ textAlign: "left", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "1rem", cursor: "pointer", flex: 1, minWidth: 200, background: "#fff", font: "inherit", color: "inherit" }}>
+    <button onClick={onClick} style={{ textAlign: "left", border: FIELD_BORDER, borderRadius: 12, padding: "1rem", minHeight: 44, cursor: "pointer", flex: 1, minWidth: 200, background: "#fff", font: "inherit", color: "inherit" }}>
       <p style={{ fontWeight: 500, fontSize: 14, marginBottom: 6 }}>{title}</p>
       <p style={{ fontSize: 12, color: "#6b7280" }}>{desc}</p>
     </button>
@@ -1359,10 +1501,22 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
     }
   }
 
+  // The canvas's internal drawing resolution (560x120, set via the width/
+  // height attributes below) is fixed, but it's displayed stretched to fit
+  // the container (style={{ width: "100%" }}) -- on a phone narrower than
+  // 560px this scales the box down, so a touch at the right edge of the
+  // *visible* pad was landing partway across the *internal* canvas,
+  // visibly compressing the drawn signature into the left portion of the
+  // image (2026-08-20 audit finding, confirmed by measuring a real 375px
+  // viewport). Scaling clientX/clientY by the canvas's own internal-to-
+  // displayed size ratio keeps the drawn point under the actual touch
+  // point regardless of how much the box has been stretched or shrunk.
   function getPos(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
   }
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     drawingRef.current = true;
@@ -1412,7 +1566,9 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
         ref={canvasRef}
         width={560}
         height={120}
-        style={{ width: "100%", height: 120, border: "0.5px solid #e5e7eb", borderRadius: 8, background: "#fff", touchAction: "none" }}
+        style={{ width: "100%", height: 120, border: FIELD_BORDER, borderRadius: 8, background: "#fff", touchAction: "none" }}
+        role="img"
+        aria-label="Signature drawing pad. Draw your signature using your finger, stylus, or mouse."
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -1429,8 +1585,16 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
   );
 }
 
-const backBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#fff", cursor: "pointer", marginBottom: 16 };
-const actBtnStyle: React.CSSProperties = { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "0.5px solid #e5e7eb", background: "#fff", cursor: "pointer" };
+// Border color darkened from the original #e5e7eb (contrast ~1.2:1 against
+// white -- well under WCAG's 3:1 minimum for UI boundaries) to #c7ced8
+// (~2.9:1, comfortably readable) and widened from 0.5px to 1px, per the
+// 2026-08-20 audit's finding that fields/cards read as barely-bounded on a
+// 1x-DPR budget phone in bright light. Touch targets (input/button height,
+// button padding) raised toward the ~44px comfortable minimum for the same
+// audit pass -- this app's primary audience is on older/cheaper phones.
+const FIELD_BORDER = "1px solid #c7ced8";
+const backBtnStyle: React.CSSProperties = { fontSize: 13, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: FIELD_BORDER, background: "#fff", cursor: "pointer", marginBottom: 16 };
+const actBtnStyle: React.CSSProperties = { fontSize: 13, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: FIELD_BORDER, background: "#fff", cursor: "pointer" };
 const primaryBtnStyle: React.CSSProperties = { background: "#0C447C", color: "#fff", borderColor: "#0C447C", fontWeight: 600 };
 /** actBtnStyle/primaryBtnStyle have no disabled variant on their own -- a
  * disabled <button> looks identical to an enabled one with plain inline
@@ -1439,6 +1603,6 @@ const primaryBtnStyle: React.CSSProperties = { background: "#0C447C", color: "#f
  * this fix has the full story). Spread this in last whenever a button's
  * `disabled` prop can be true. */
 const disabledBtnStyle: React.CSSProperties = { opacity: 0.45, cursor: "not-allowed" };
-const inputStyle: React.CSSProperties = { width: "100%", height: 36, border: "0.5px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 13, background: "#fff", color: "#1a1a2e" };
-const cardStyle: React.CSSProperties = { border: "0.5px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: "1rem" };
-const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderBottom: "0.5px solid #e5e7eb", cursor: "pointer" };
+const inputStyle: React.CSSProperties = { width: "100%", height: 44, border: FIELD_BORDER, borderRadius: 8, padding: "0 12px", fontSize: 14, background: "#fff", color: "#1a1a2e" };
+const cardStyle: React.CSSProperties = { border: FIELD_BORDER, borderRadius: 8, padding: 12, marginBottom: "1rem" };
+const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 12, padding: "12px 12px", minHeight: 44, borderBottom: FIELD_BORDER, cursor: "pointer" };
