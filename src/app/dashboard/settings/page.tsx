@@ -89,7 +89,7 @@ export default async function SettingsPage() {
       </SettingsGroup>
 
       <SettingsGroup icon={<BuildingIcon className="size-4" />} title="Data Import" description="Bring in your existing business roster from a previous system.">
-        <CollapsibleSection title="Import Businesses" sub="Upload an Excel/CSV export of your businesses -- turns into self-service renewals immediately for any row with a mobile number.">
+        <CollapsibleSection title="Import Businesses" sub="Upload an Excel/CSV export of your businesses — turns into self-service renewals immediately for any row with a mobile number.">
           <BusinessImportCard />
         </CollapsibleSection>
       </SettingsGroup>
@@ -97,7 +97,7 @@ export default async function SettingsPage() {
       <SettingsGroup icon={<span className="text-[15px] leading-none">₱</span>} title="Fee Rates" description="How much each fee actually costs.">
       <CollapsibleSection
         title="Business Tax & Mayor's Permit Fee Setup"
-        sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself -- download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed. This is also where LBT categories come from: each row in the Local Business Tax file adds one category, which then shows up wherever staff pick a business's category."
+        sub="Set or update your LGU's Local Business Tax and Mayor's Permit Fee rates yourself — download the current rates, edit them in Excel/Sheets, upload the file back. No developer needed. This is also where LBT categories come from: each row in the Local Business Tax file adds one category, which then shows up wherever staff pick a business's category."
       >
         <div className="flex flex-col gap-3">
           <FeeRuleImportCard feeType="lbt" label="Local Business Tax" />
@@ -107,7 +107,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="Regulatory Fee Flat Amounts"
-        sub="Flat, always-included fees on top of Local Business Tax and Mayor's Permit Fee -- CNC, Health Permit Fee, Inspection Fee, Plate Fee, Sanitary Fee, whatever your LGU charges. Every fee here is added to every assessment automatically."
+        sub="Flat, always-included fees on top of Local Business Tax and Mayor's Permit Fee — CNC, Health Permit Fee, Inspection Fee, Plate Fee, Sanitary Fee, whatever your LGU charges. Every fee here is added to every assessment automatically."
       >
         <Card className="flex flex-col gap-4 p-5">
           {regulatoryFees.length === 0 ? (
@@ -172,7 +172,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="Business Tax Installment Reminders"
-        sub="A New application always pays the full annual Business Tax. A Renewal that chooses Bi-Annually or Quarterly pays the first installment now; MuniServe texts (and emails, if on file) a reminder for the rest, on the dates below. Applicants still pay the remaining balance the usual way -- these dates aren't the same for every LGU, so nothing is reminded until you set them."
+        sub="A New application always pays the full annual Business Tax. A Renewal that chooses Bi-Annually or Quarterly pays the first installment now; MuniServe texts (and emails, if on file) a reminder for the rest, on the dates below. Applicants still pay the remaining balance the usual way — these dates aren't the same for every LGU, so nothing is reminded until you set them."
       >
         <Card className="p-5">
           <form action={updateInstallmentReminderDates} className="flex flex-col gap-4">
@@ -241,7 +241,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="Barangay Clearance"
-        sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below -- an override always wins over the uniform rate for that barangay."
+        sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below — an override always wins over the uniform rate for that barangay."
       >
         <Card className="flex flex-col gap-4 p-5">
           <div>
@@ -379,7 +379,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="CEDULA (Community Tax Certificate)"
-        sub="CEDULA's own amount is fixed by national law and never changes here -- this only controls how it's collected."
+        sub="CEDULA's own amount is fixed by national law and never changes here — this only controls how it's collected."
       >
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
@@ -405,7 +405,7 @@ export default async function SettingsPage() {
       <SettingsGroup icon={<BellIcon className="size-4" />} title="Documents & Alerts" description="What gets printed, and what MuniServe texts out.">
       <CollapsibleSection
         title="Permit No. Format"
-        sub="How your reference number looks, e.g. SMB-2026-000056 -- three fields: a prefix you choose, the year, and an auto-incrementing number that resets every January. Applies to every new application going forward; permits already issued keep the number they were given."
+        sub="How your reference number looks, e.g. SMB-2026-000056 — three fields: a prefix you choose, the year, and an auto-incrementing number that resets every January. Applies to every new application going forward; permits already issued keep the number they were given."
       >
         <PermitNumberFormatCard
           key={`${lgu.referencePrefix}|${lgu.referenceYearDigits}|${lgu.referenceCounterDigits}`}
@@ -465,7 +465,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="Accepted Payment Methods"
-        sub="What applicants are told when their assessment is finalized -- turn on as many as you actually accept. Cash at the counter is on by default, matching how every LGU starts out; GCash, Bank Transfer, and an Online Portal are each optional, with their own details shown once turned on."
+        sub="What applicants are told when their assessment is finalized — turn on as many as you actually accept. Cash at the counter is on by default, matching how every LGU starts out; GCash, Bank Transfer, and an Online Portal are each optional, with their own details shown once turned on."
       >
         <PaymentMethodsCard
           key={[lgu.acceptsCashCounter, lgu.acceptsGcash, lgu.gcashNumber, lgu.gcashName, lgu.acceptsBankTransfer, lgu.bankName, lgu.bankAccountNumber, lgu.bankAccountName, lgu.acceptsOnlinePortal, lgu.onlinePortalUrl].join("|")}

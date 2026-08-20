@@ -197,6 +197,15 @@ function isValidPhFormat(value: string): boolean {
   return /^09\d{9}$/.test(value.replace(/[\s-]/g, ""));
 }
 
+/** Peso amount fields (capital investment, gross sales) had no thousands-separator display, making a mistyped extra/missing zero easy to miss (2026-08-20 audit finding). Live preview only -- the underlying stored value/validation is unchanged. */
+const CURRENCY_FIELD_KEYS = new Set<FieldKey>(["capitalInvestment", "grossSales"]);
+function formatPesoPreview(raw: string): string | null {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return `≈ ₱${n.toLocaleString("en-PH")}`;
+}
+
 /**
  * Autosaves the in-progress ~40-field form to the browser's own storage so
  * a dropped connection, an accidental back-swipe, or the phone's OS killing
@@ -974,6 +983,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         </Field>
       );
     }
+    const pesoPreview = CURRENCY_FIELD_KEYS.has(fd.key) ? formatPesoPreview(value) : null;
     return (
       <Field key={fd.key} id={fd.key} label={label}>
         <input
@@ -983,6 +993,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           onChange={(e) => setForm((f) => ({ ...f, [fd.key]: e.target.value }))}
           style={inputStyle}
         />
+        {pesoPreview && <span style={{ fontSize: 11, color: "#6b7280", marginTop: 4, display: "block" }}>{pesoPreview}</span>}
       </Field>
     );
   }

@@ -14,9 +14,10 @@ import type { LguDisplay } from "@/lib/lgu";
 export function ApplyPausedNotice({ lgu }: { lgu: LguDisplay }) {
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#f4f6fb" }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 420, width: "100%", textAlign: "center", border: "0.5px solid #e5e7eb" }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 420, width: "100%", textAlign: "center", border: "1px solid #c7ced8" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>🛠️</div>
-        <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Applications Temporarily Unavailable</h1>
+        {/* Sentence case, matching every other heading on these pages (2026-08-20 audit finding -- this was the one holdout still in Title Case). */}
+        <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Applications temporarily unavailable</h1>
         <p style={{ fontSize: 13.5, color: "#6b7280", lineHeight: 1.6 }}>
           Online business permit applications for <strong>{lgu.name}{lgu.province ? `, ${lgu.province}` : ""}</strong> are
           temporarily unavailable. Please visit the {lgu.bploOfficeName} in person, or check back later.

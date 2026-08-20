@@ -123,7 +123,7 @@ export default async function PerformanceStatsPage({
           </div>
 
           <div className="mb-9">
-            <SectionHead title="Department turnaround" sub="Average time from when a department is assigned to when it decides -- sorted slowest first." />
+            <SectionHead title="Department turnaround" sub="Average time from when a department is assigned to when it decides — sorted slowest first." />
             {stats.departmentTurnaround.length === 0 ? (
               <EmptyState>No department decisions recorded in this range.</EmptyState>
             ) : (
