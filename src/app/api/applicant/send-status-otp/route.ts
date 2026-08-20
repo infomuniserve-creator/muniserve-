@@ -1,5 +1,6 @@
 import { sendOtpCode } from "@/lib/otp";
 import { createServiceClient } from "@/lib/supabase/service";
+import { checkOtpIpRateLimit, getClientIp } from "@/lib/rate-limit";
 import { NextResponse } from "next/server";
 
 /**
@@ -15,6 +16,14 @@ export async function POST(request: Request) {
   const applicationId = String(body?.applicationId ?? "").trim();
   if (!applicationId) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
+  // Same per-IP throttle as send-otp/route.ts (2026-08-20 audit finding) --
+  // lower risk here since the destination phone is already server-resolved
+  // rather than client-supplied, but defense-in-depth is cheap and this is
+  // still a real, billed SMS per call.
+  if (!(await checkOtpIpRateLimit(getClientIp(request)))) {
+    return NextResponse.json({ error: "too_many_requests" }, { status: 429 });
   }
 
   const supabase = createServiceClient();
