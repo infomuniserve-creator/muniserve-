@@ -138,18 +138,28 @@ export async function openDepartmentReviewRound(
 export async function areAllDepartmentsCleared(applicationId: string): Promise<boolean> {
   const supabase = createServiceClient();
 
-  const { data: rounds } = await supabase
+  // QA sweep finding (2026-08-20): both queries below used to destructure
+  // only `data`, never checking `error` -- a genuine transient query
+  // failure (network blip, connection exhaustion) looked identical to
+  // "nothing to wait for yet," silently reporting `false` with no error
+  // trail. Fails safe (blocks progress rather than wrongly advancing an
+  // application), but produces an unexplained "why won't this move to
+  // assessment" support case. Now throws on a real error, distinct from a
+  // legitimately empty result.
+  const { data: rounds, error: roundsError } = await supabase
     .from("review_rounds")
     .select("id, round_number")
     .eq("application_id", applicationId)
     .order("round_number", { ascending: false });
+  if (roundsError) throw roundsError;
   if (!rounds || rounds.length === 0) return false;
 
   const roundIds = rounds.map((r) => r.id);
-  const { data: reviews } = await supabase
+  const { data: reviews, error: reviewsError } = await supabase
     .from("department_reviews")
     .select("department, decision, review_round_id")
     .in("review_round_id", roundIds);
+  if (reviewsError) throw reviewsError;
   if (!reviews) return false;
 
   const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));
@@ -189,19 +199,23 @@ export async function areAllDepartmentsCleared(applicationId: string): Promise<b
 export async function getEngineeringAssessedAmount(applicationId: string): Promise<number | null> {
   const service = createServiceClient();
 
-  const { data: rounds } = await service
+  // QA sweep finding (2026-08-20): see areAllDepartmentsCleared's identical
+  // comment above -- same silent-failure gap, same fix.
+  const { data: rounds, error: roundsError } = await service
     .from("review_rounds")
     .select("id, round_number")
     .eq("application_id", applicationId)
     .order("round_number", { ascending: false });
+  if (roundsError) throw roundsError;
   if (!rounds || rounds.length === 0) return null;
 
   const roundIds = rounds.map((r) => r.id);
-  const { data: reviews } = await service
+  const { data: reviews, error: reviewsError } = await service
     .from("department_reviews")
     .select("decision, assessed_amount, review_round_id")
     .eq("department", "Engineering")
     .in("review_round_id", roundIds);
+  if (reviewsError) throw reviewsError;
   if (!reviews || reviews.length === 0) return null;
 
   const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));

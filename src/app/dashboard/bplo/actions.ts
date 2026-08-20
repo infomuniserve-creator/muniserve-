@@ -73,6 +73,13 @@ export async function submitInitialReview(formData: FormData) {
       initial_review_notes: notes,
       initial_review_by: staff.id,
       initial_review_at: new Date().toISOString(),
+      // QA sweep finding (2026-08-20): a straight Reject goes to "archived"
+      // directly (above), but never recorded WHICH stage it was archived
+      // from -- reopenApplication's own fallback (`archived_from_status ??
+      // "returned_to_applicant"`) then restored the wrong stage on reopen.
+      // Stamped here the same way archiveApplication already does for
+      // every other transition into archived.
+      ...(newStatus === "archived" ? { archived_from_status: "pending_bplo_initial" } : {}),
     })
     .eq("id", applicationId)
     .eq("status", "pending_bplo_initial")

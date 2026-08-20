@@ -181,13 +181,27 @@ export async function computeRevenueReport(
     };
   });
 
+  // QA sweep finding (2026-08-20): the essential-commodity discount (its
+  // own "discount" fee_category, a reduction specifically against the LBT
+  // line -- see fee-engine.ts) used to be folded into "Other regulatory
+  // fees" here, which has nothing to do with it. Grand totals were never
+  // wrong (the discount's amount landed in the actual_permit bucket total
+  // either way), but the two sub-numbers below were: Local Business Tax
+  // read too high (not netted against its own discount) and Other
+  // regulatory fees read too low (absorbing a discount that isn't a
+  // regulatory charge). Netted against Local Business Tax instead, matching
+  // how the fee engine itself already treats this discount as a reduction
+  // of the LBT line, not a regulatory adjustment.
   const actualPermitLines = lines.filter((l) => l.bucket === "actual_permit");
   const actualPermitBreakdown = [
-    { label: "Local Business Tax", total: actualPermitLines.filter((l) => l.subCategory === "lbt").reduce((s, l) => s + l.amount, 0) },
+    {
+      label: "Local Business Tax",
+      total: actualPermitLines.filter((l) => l.subCategory === "lbt" || l.subCategory === "discount").reduce((s, l) => s + l.amount, 0),
+    },
     { label: "Mayor's Permit Fee", total: actualPermitLines.filter((l) => l.subCategory === "mayors_permit").reduce((s, l) => s + l.amount, 0) },
     {
       label: "Other regulatory fees",
-      total: actualPermitLines.filter((l) => l.subCategory === "other_regulatory" || l.subCategory === "discount").reduce((s, l) => s + l.amount, 0),
+      total: actualPermitLines.filter((l) => l.subCategory === "other_regulatory").reduce((s, l) => s + l.amount, 0),
     },
   ];
 

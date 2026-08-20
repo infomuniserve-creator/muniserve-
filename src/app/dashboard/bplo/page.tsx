@@ -616,7 +616,22 @@ async function AssessmentCard({
   // engine itself could compute LBT/Mayor's Permit -- Engineering's
   // figure is real either way, so it's added even when result is blocked
   // (Automated Assessment off, the blocked reason is just a warning here).
-  const engineeringAmount = buildingPermitFeeEnabled ? await getEngineeringAssessedAmount(applicationId) : null;
+  // getEngineeringAssessedAmount now throws on a genuine query error
+  // (2026-08-20 QA sweep fix, review-workflow.ts) rather than silently
+  // returning null -- correct for finalizeAssessment's one-shot write,
+  // but this is a live PREVIEW rendered per-application in a list with no
+  // per-card error boundary here; a single transient blip throwing would
+  // take down the whole Assessment review tab instead of just this one
+  // card's Engineering line. Caught locally so this preview keeps its
+  // original graceful-degrade behavior either way.
+  let engineeringAmount: number | null = null;
+  if (buildingPermitFeeEnabled) {
+    try {
+      engineeringAmount = await getEngineeringAssessedAmount(applicationId);
+    } catch (err) {
+      console.error("getEngineeringAssessedAmount failed for", applicationId, err);
+    }
+  }
   const engineeringLine: FeeLineResult | null =
     engineeringAmount != null
       ? { feeRuleId: null, feeCategory: "regulatory", displayLabel: buildingPermitFeeLabel, amount: engineeringAmount, includedInTotal: true, isManualEligible: false, acctCode: null }
