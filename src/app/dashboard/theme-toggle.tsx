@@ -27,12 +27,21 @@ import { useEffect, useState } from "react";
 export function ThemeToggle() {
   const [isDark, setIsDark] = useState(false);
 
+  // Deliberate, not an oversight: see the doc comment above. This effect
+  // reads a runtime-only fact (matchMedia/the shell's own data-theme
+  // attribute) that genuinely can't be known during the synchronous render
+  // pass, and the resulting "one brief icon flip on first load" is an
+  // accepted, documented tradeoff rather than a bug (2026-08-20 audit
+  // finding: this was the codebase's one real, previously-unaddressed lint
+  // error -- fixed by computing the value first so there's exactly one
+  // setState call for the disable comment to actually cover, rather than
+  // three, which is also just clearer code).
   useEffect(() => {
     const shell = document.getElementById("dashboard-shell");
     const explicit = shell?.getAttribute("data-theme");
-    if (explicit === "dark") setIsDark(true);
-    else if (explicit === "light") setIsDark(false);
-    else setIsDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const dark = explicit === "dark" ? true : explicit === "light" ? false : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsDark(dark);
   }, []);
 
   function toggle() {

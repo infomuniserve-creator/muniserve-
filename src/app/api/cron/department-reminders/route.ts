@@ -73,7 +73,15 @@ export async function GET(request: Request) {
       .eq("lgu_id", application.lgu_id)
       .eq("role", "department")
       .eq("department", review.department)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      // Excludes a platform admin's "View as" proxy row (2026-08-20 audit
+      // finding) -- its email is a synthetic admin-proxy+<id>@internal.
+      // muniserve.ph address never meant to actually receive mail, the
+      // same exclusion CLAUDE.md 7o already established for the roster
+      // page, the last-active-BPLO guard, and the department-rejection
+      // email fan-out. This reminder query had the identical shape but
+      // wasn't one of the three sites originally fixed.
+      .eq("is_admin_proxy", false);
 
     const business = application.business as unknown as { business_name: string } | null;
     const subject = `Reminder: ${review.department} review pending for ${application.reference_number}`;
