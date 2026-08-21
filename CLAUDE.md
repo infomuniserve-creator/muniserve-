@@ -1691,6 +1691,20 @@ The project owner asked for this ahead of the next real task (a staff Knowledge 
 
 ---
 
+## 7a22. The Knowledge Base itself, written (2026-08-21, same day)
+
+The real content for the placeholder page section 7a21's "Knowledge Base" link opened onto. Design (a full sidebar outline + two sample sections) was mocked up as a real Artifact and approved before any of this was written, per this project's own standing pattern for anything visual.
+
+**Every "screenshot" is a hand-built recreation using this app's own real design tokens, not a raster image** -- `src/app/dashboard/knowledge-base/kb-ui.tsx`'s own doc comment states the two reasons plainly: there's no reliable way to capture a screenshot of a live staff session in this build environment (every dashboard route needs a real Google OAuth login, the same limitation this whole project has worked around since section 7d by recreating real components with realistic mock data instead), and a hand-built recreation using the same classes as the real page can never go stale the way a static image would the next time the real UI changes. `MiniTopBar` recreates the top bar's own left-hand identity block; `BlurredMunicipality` renders a real-looking LGU name ("San Miguel, Bulacan") with Tailwind's `blur-sm` applied -- the project owner's own explicit ask, so every example reads as genuinely from a real, live MuniServe client without naming which one.
+
+**Structure**: one long page (`/dashboard/knowledge-base`) with anchor-link navigation, not separate routes per section -- no client JS needed for the nav itself, matching this app's own established preference for plain HTML mechanisms over client state wherever one will do (`CollapsibleSection`, the Audit Trail's own disclosure widgets, ...). Content is split across three files matching the outline's own natural groupings (`kb-content-workflow.tsx`: Getting Started, the Review Pipeline, Businesses; `kb-content-settings.tsx`: all 7 real Settings groups, cross-checked against the actual `settings/page.tsx` section titles rather than written from memory; `kb-content-reference.tsx`: Audit Trail & Stats, the notifications table, FAQ), open to every staff role rather than gated like Audit Trail/Stats, since the KB's whole point is teaching every role their own part of the system.
+
+**The notifications table is the one section most likely to need re-verifying against the code as notifications change** -- it enumerates all 11 real applicant-facing trigger points (OTP, BPLO/department/Treasury request-more-info and rejection, the FSIF notice, assessment finalized, payment recorded, permit signed, permit released, the installment reminder), each with its actual channels and a faithful paraphrase of its real content -- cross-checked against the actual notification code built earlier this same day (sections 7a15/7a16/7a20), not written from memory alone.
+
+**Verified against the real components, not just type-checked**: since the real route needs a live staff session that can't be driven here, a temporary fixture (deleted immediately after) rendered the exact same section components directly and confirmed via `get_page_text` that every section's real copy renders correctly, and via computed styles that `BlurredMunicipality` genuinely applies `filter: blur(8px)` (not just markup) in both light and dark mode, and that tone-colored tip boxes (`bg-warn-bg`/`text-warn-ink`, etc.) resolve to real, legible, distinct colors in dark mode rather than blending into the page background. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 35 routes (the one new real route), fixture deleted afterward.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
