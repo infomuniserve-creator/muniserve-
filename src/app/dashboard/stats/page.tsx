@@ -44,7 +44,6 @@ export default async function PerformanceStatsPage({
 
   const maxStageDays = Math.max(1, ...stats.stageAverages.map((s) => s.avgDays ?? 0));
   const maxDeptDays = Math.max(1, ...stats.departmentTurnaround.map((d) => d.avgDays ?? 0));
-  const slowestDept = stats.departmentTurnaround.find((d) => d.avgDays != null);
 
   function fmtDays(d: number | null): string {
     if (d == null) return "—";
@@ -92,11 +91,18 @@ export default async function PerformanceStatsPage({
             </StatGrid>
           </div>
 
-          {slowestDept && (
+          {stats.bottleneck && (
             <div className="mb-6 rounded-2xl bg-warn-bg px-5 py-3.5">
               <p className="text-[13px] font-bold text-warn-ink">
-                ⚠ Current bottleneck: <strong>{slowestDept.department}</strong> averages {fmtDays(slowestDept.avgDays)} to decide
-                {slowestDept.pendingCount > 0 ? ` (${slowestDept.pendingCount} still pending right now)` : ""}.
+                ⚠ Current bottleneck: <strong>{stats.bottleneck.stage}</strong> averages {fmtDays(stats.bottleneck.avgDays)}.
+                {stats.bottleneck.slowestDepartment && (
+                  <>
+                    {" "}
+                    Within that, <strong>{stats.bottleneck.slowestDepartment.department}</strong> is the slowest department to decide, averaging{" "}
+                    {fmtDays(stats.bottleneck.slowestDepartment.avgDays)}
+                    {stats.bottleneck.slowestDepartment.pendingCount > 0 ? ` (${stats.bottleneck.slowestDepartment.pendingCount} still pending right now)` : ""}.
+                  </>
+                )}
               </p>
             </div>
           )}

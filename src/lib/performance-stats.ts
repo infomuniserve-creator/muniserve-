@@ -30,6 +30,19 @@ export type PerformanceStats = {
   stageAverages: { stage: string; avgDays: number | null; sampleSize: number }[];
   departmentTurnaround: { department: string; avgDays: number | null; medianDays: number | null; sampleSize: number; pendingCount: number }[];
   stuckApplications: { id: string; referenceNumber: string; businessName: string; status: string; daysStuck: number }[];
+  /**
+   * The genuine pipeline bottleneck -- whichever of the 7 stageAverages
+   * entries is actually largest, not just "whichever department is
+   * slowest relative to the other 4 departments" (a real, previously-
+   * shipped bug: the dashboard used to always headline the slowest
+   * department as "the bottleneck" even when Payment or Printing took far
+   * longer overall -- department review being internally imbalanced
+   * doesn't mean it's the pipeline's real time sink). slowestDepartment is
+   * only ever populated when "Departments review" itself is the winning
+   * stage -- it's a drill-down into *why* that stage is slow, not a
+   * second, independent claim about being "the" bottleneck.
+   */
+  bottleneck: { stage: string; avgDays: number; sampleSize: number; slowestDepartment: { department: string; avgDays: number; pendingCount: number } | null } | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -120,6 +133,7 @@ export async function computePerformanceStats(
       stageAverages: [],
       departmentTurnaround: [],
       stuckApplications,
+      bottleneck: null,
     };
   }
 
@@ -253,6 +267,26 @@ export async function computePerformanceStats(
     }))
     .sort((a, b) => (b.avgDays ?? -1) - (a.avgDays ?? -1));
 
+  // ---- The real bottleneck: whichever STAGE is actually largest, not
+  // automatically whichever department is slowest relative to the other
+  // departments (see PerformanceStats.bottleneck's own doc comment).
+  const stagesWithData = stageAverages.filter((s): s is { stage: string; avgDays: number; sampleSize: number } => s.avgDays != null);
+  const bottleneckStage = stagesWithData.length > 0 ? stagesWithData.reduce((max, s) => (s.avgDays > max.avgDays ? s : max)) : null;
+  // departmentTurnaround is already sorted slowest-first, so its first
+  // entry with real data is the one to drill into.
+  const slowestDeptEntry = departmentTurnaround.find((d) => d.avgDays != null) ?? null;
+  const bottleneck = bottleneckStage
+    ? {
+        stage: bottleneckStage.stage,
+        avgDays: bottleneckStage.avgDays,
+        sampleSize: bottleneckStage.sampleSize,
+        slowestDepartment:
+          bottleneckStage.stage === "Departments review" && slowestDeptEntry
+            ? { department: slowestDeptEntry.department, avgDays: slowestDeptEntry.avgDays as number, pendingCount: slowestDeptEntry.pendingCount }
+            : null,
+      }
+    : null;
+
   return {
     totalApplications: applications.length,
     releasedCount: released.length,
@@ -262,6 +296,7 @@ export async function computePerformanceStats(
     stageAverages,
     departmentTurnaround,
     stuckApplications,
+    bottleneck,
   };
 }
 

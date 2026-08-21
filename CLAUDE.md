@@ -1617,6 +1617,18 @@ Confirmed directly before removing anything: both `bfp_contact_email`/`bfp_conta
 
 ---
 
+## 7a17. Stats & Reports: the "Current bottleneck" banner was answering the wrong question (2026-08-21, same day)
+
+The project owner looked at their own live Performance page and asked directly why it named MPDO as "the bottleneck" (averaging 1 hr) when the chart right below it showed Payment (12 hrs) and Printing (9 hrs) taking far longer. A real, confirmed bug, not a misreading -- traced the actual code before answering: `stats/page.tsx`'s banner was computed from `departmentTurnaround[0]` (`performance-stats.ts`), which only ever ranks the 5 reviewing departments **against each other**, then unconditionally headlines whichever one is slowest as "the bottleneck" -- with zero comparison against the other 6 pipeline stages (Initial review, Assessment, Payment, Printing, Mayor's signature, Release) rendered in the very next section. MPDO really was San Miguel's own slowest-deciding department in that data; department review being internally imbalanced just never meant it was the pipeline's actual time sink.
+
+**Fixed at the source, not just the label**: `PerformanceStats` gained a new `bottleneck` field, computed by comparing all 7 `stageAverages` entries directly and picking whichever is genuinely largest -- the same real question the banner claims to answer. `slowestDepartment` (the existing department-ranking data) is only ever attached as a drill-down *when "Departments review" itself turns out to be the winning stage* -- an explanation of *why* that specific stage is slow, never a second, independent "bottleneck" claim standing on its own. The existing standalone "Department turnaround" section (its own chart, correctly labeled, already ranking all 5 departments slowest-first) is untouched -- it was never the bug, only the top banner's mislabeled reuse of its data was.
+
+**`stats/page.tsx`**: the banner now reads "Current bottleneck: `<stage>` averages `<X>`." unconditionally, with an added sentence ("Within that, `<department>` is the slowest department to decide...") only when the drill-down actually applies.
+
+**Verified against San Miguel's own real live data** (the exact date range from the project owner's own screenshot, 2026-05-23 to 2026-08-21), not synthetic: a temporary fixture (deleted immediately after) called the real, unmodified `computePerformanceStats()` and confirmed the bottleneck now correctly resolves to `{ stage: "Payment (applicant)", avgDays: ~0.49 (≈11.8 hrs), slowestDepartment: null }` -- matching the chart's own "12 hrs" bar exactly, with `slowestDepartment` correctly omitted since Departments review isn't the real winner in this data. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 34 routes, fixture route deleted afterward.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
