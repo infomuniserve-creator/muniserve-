@@ -2,7 +2,6 @@
 
 import { requireUnpausedStaff } from "@/lib/staff";
 import { submitDepartmentDecision } from "@/lib/review-workflow";
-import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
 type Decision = "approved" | "approved_with_condition" | "request_more_info" | "rejected";
@@ -23,15 +22,4 @@ export async function submitOwnDepartmentDecision(formData: FormData) {
   });
 
   revalidatePath("/dashboard/department");
-}
-
-// Exposed for the department dashboard to look up documents for a given application.
-export async function getApplicationDocuments(applicationId: string) {
-  const supabase = createServiceClient();
-  const { data } = await supabase
-    .from("documents")
-    .select("id, document_type, file_url, uploaded_at")
-    .eq("application_id", applicationId)
-    .order("uploaded_at", { ascending: false });
-  return data ?? [];
 }

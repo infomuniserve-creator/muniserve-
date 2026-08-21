@@ -1,0 +1,21 @@
+-- Real gap the project owner reported (2026-08-21): when a department,
+-- BPLO, or Treasury asks for something specific and the applicant sends
+-- it, the resulting document lands in the same flat "Documents
+-- submitted" list as every document from the original application --
+-- nothing distinguishes "here's what you asked for" from the rest of
+-- the bundle. Staff get notified (that part already worked, see
+-- resolveOpenInfoRequests), but then have to guess which file, if any,
+-- is actually the response.
+--
+-- resolveOpenInfoRequests (src/lib/info-requests.ts) already resolves
+-- every open info_requests row the moment ANY document is uploaded in
+-- response -- deliberately all-at-once, not asked which request a given
+-- upload answers (CLAUDE.md 7ll: "the upload widget has no such
+-- selector, and sending a document back to two departments when only
+-- one asked is a far cheaper mistake than the reverse"). This column
+-- records which specific document resolved a given request, so the
+-- document list can show exactly which upload was the response and to
+-- what -- one document can resolve several requests at once (already
+-- true today), but each info_requests row points at exactly the one
+-- document that closed it.
+alter table info_requests add column resolved_by_document_id uuid references documents(id);

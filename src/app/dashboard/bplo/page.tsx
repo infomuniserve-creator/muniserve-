@@ -1,6 +1,6 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
-import { getEngineeringAssessedAmount, getSignedDocumentUrl } from "@/lib/review-workflow";
+import { getApplicationDocuments, getEngineeringAssessedAmount, getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { getLbtCategoryOptions } from "@/lib/lbt-categories";
 import { computeApplicationFees, type FeeComputationResult, type FeeLineResult } from "@/lib/fee-engine";
@@ -11,7 +11,7 @@ import {
   BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, CollapsibleSection, DocumentList,
   EmptyState, InfoIcon, MiniButton, PrimaryButton, Row, SectionHead, StatCard, TonePill, UserIcon, WorkflowStepper,
 } from "../ui";
-import { archiveApplication, finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, reopenApplication, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo } from "./actions";
+import { archiveApplication, finalizeAssessment, markPrinted, markReleased, reopenApplication, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo } from "./actions";
 import type { ManualFieldSpec } from "./assessment-manual-fields";
 import { AssessmentLineItems } from "./assessment-line-items";
 import { AwaitingPaymentSection } from "../payment-queue";
@@ -710,7 +710,7 @@ async function InitialReviewCard({
   lbtCategoryOptions: { value: string; label: string }[];
 }) {
   const documents = await getApplicationDocuments(applicationId);
-  const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
+  const signedUrls = await Promise.all(documents.map((d) => (d.file_url ? getSignedDocumentUrl(d.file_url) : Promise.resolve(null))));
 
   return (
     <Card className="p-5">

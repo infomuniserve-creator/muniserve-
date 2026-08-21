@@ -51,10 +51,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found_or_not_yours" }, { status: 403 });
   }
 
-  const { error: insertError } = await supabase
+  const { data: newDocument, error: insertError } = await supabase
     .from("documents")
-    .insert({ application_id: applicationId, document_type: documentType, file_url: path });
-  if (insertError) {
+    .insert({ application_id: applicationId, document_type: documentType, file_url: path })
+    .select("id")
+    .single();
+  if (insertError || !newDocument) {
     return NextResponse.json({ error: "record_failed" }, { status: 500 });
   }
 
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
   // status" heuristic below. Only fall back to that heuristic when
   // nothing was actually outstanding (e.g. the BFP payment-proof case --
   // an unprompted upload nobody formally asked for).
-  const resolvedCount = await resolveOpenInfoRequests(supabase, application.id, application.lgu_id);
+  const resolvedCount = await resolveOpenInfoRequests(supabase, application.id, application.lgu_id, newDocument.id);
   if (resolvedCount > 0) {
     if (business.owner?.phone) {
       await notifyApplicantSms(

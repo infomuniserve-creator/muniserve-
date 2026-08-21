@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import { getSignedDocumentUrl } from "@/lib/review-workflow";
+import { getApplicationDocuments, getSignedDocumentUrl } from "@/lib/review-workflow";
 import { Card, DocumentList, EmptyState, MiniButton, NotesField, OutlineButton, PrimaryButton, WorkflowStepper, peso } from "./ui";
 import { recordPayment, requestPaymentInfo } from "./treasury/actions";
-import { archiveApplication, getApplicationDocuments } from "./bplo/actions";
+import { archiveApplication } from "./bplo/actions";
 
 type FeeLine = { display_label: string; computed_amount: number; overridden_amount: number | null; included_in_total: boolean; is_manual: boolean };
 
@@ -100,7 +100,7 @@ async function PaymentQueueRow({
   lines: FeeLine[]; total: number; showArchive: boolean;
 }) {
   const documents = await getApplicationDocuments(applicationId);
-  const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
+  const signedUrls = await Promise.all(documents.map((d) => (d.file_url ? getSignedDocumentUrl(d.file_url) : Promise.resolve(null))));
 
   return (
     <Card className="p-5">

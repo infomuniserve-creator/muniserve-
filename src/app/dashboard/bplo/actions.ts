@@ -742,17 +742,6 @@ export async function setLbtCategory(formData: FormData) {
   revalidatePath("/dashboard/bplo");
 }
 
-// Exposed for the BPLO dashboard to look up documents for a given application.
-export async function getApplicationDocuments(applicationId: string) {
-  const supabase = createServiceClient();
-  const { data } = await supabase
-    .from("documents")
-    .select("id, document_type, file_url, uploaded_at")
-    .eq("application_id", applicationId)
-    .order("uploaded_at", { ascending: false });
-  return data ?? [];
-}
-
 // Every status Archive can close out from -- every non-terminal stage
 // BEFORE a permit is actually issued. Deliberately excludes
 // pending_release: the Mayor has already signed by that point (permits/

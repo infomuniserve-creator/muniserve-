@@ -155,8 +155,17 @@ export async function reopenDepartmentRound(supabase: SupabaseClient, applicatio
  * OWN generic "notify whoever can currently act" fallback when this
  * already notified the right people more precisely -- avoids double-
  * notifying the same recipient with two different messages for one upload.
+ *
+ * `documentId` (2026-08-21, real gap the project owner reported): staff
+ * were being notified correctly, but the resulting document then landed
+ * in the same flat list as everything from the original application --
+ * nothing showed which upload actually answered their request. Stamped
+ * onto every info_requests row this resolves (documents.ts's DocumentList
+ * reads it back to highlight exactly that document and show what was
+ * asked for) -- one document can still resolve several requests at once
+ * (unchanged), it's just now recorded which one did.
  */
-export async function resolveOpenInfoRequests(supabase: SupabaseClient, applicationId: string, lguId: string): Promise<number> {
+export async function resolveOpenInfoRequests(supabase: SupabaseClient, applicationId: string, lguId: string, documentId: string): Promise<number> {
   const { data: open } = await supabase
     .from("info_requests")
     .select("id, requested_by_role, department")
@@ -167,7 +176,7 @@ export async function resolveOpenInfoRequests(supabase: SupabaseClient, applicat
 
   const { error: resolveError } = await supabase
     .from("info_requests")
-    .update({ resolved_at: new Date().toISOString() })
+    .update({ resolved_at: new Date().toISOString(), resolved_by_document_id: documentId })
     .eq("application_id", applicationId)
     .is("resolved_at", null);
   if (resolveError) throw resolveError;

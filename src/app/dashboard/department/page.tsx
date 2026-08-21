@@ -1,12 +1,12 @@
 import { getCurrentStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
-import { getSignedDocumentUrl } from "@/lib/review-workflow";
+import { getApplicationDocuments, getSignedDocumentUrl } from "@/lib/review-workflow";
 import { BUSINESS_PROFILE_COLUMNS, mapBusinessProfile } from "@/lib/business-profile";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BusinessProfileBlock, Card, ClockIcon, DocumentList, EmptyState, SectionHead, StatCard, StatGrid, WorkflowStepper } from "../ui";
 import { DepartmentReviewActions } from "../department-review-actions";
-import { getApplicationDocuments, submitOwnDepartmentDecision } from "./actions";
+import { submitOwnDepartmentDecision } from "./actions";
 
 /**
  * Department dashboard -- redesigned per the approved design concept.
@@ -100,7 +100,7 @@ async function DepartmentReviewCard({
   department: string; buildingPermitFeeEnabled: boolean; buildingPermitFeeLabel: string;
 }) {
   const documents = applicationId ? await getApplicationDocuments(applicationId) : [];
-  const signedUrls = await Promise.all(documents.map((d) => getSignedDocumentUrl(d.file_url)));
+  const signedUrls = await Promise.all(documents.map((d) => (d.file_url ? getSignedDocumentUrl(d.file_url) : Promise.resolve(null))));
 
   return (
     <Card className="p-5">

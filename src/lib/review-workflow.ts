@@ -486,3 +486,54 @@ export async function getSignedDocumentUrl(filePath: string): Promise<string | n
   if (error || !data) return null;
   return data.signedUrl;
 }
+
+export type ResolvedInfoRequestSummary = { requestedByRole: string; department: string | null; notes: string | null };
+export type ApplicationDocument = {
+  id: string;
+  document_type: string | null;
+  file_url: string | null;
+  uploaded_at: string | null;
+  resolvedRequests: ResolvedInfoRequestSummary[];
+};
+
+/**
+ * Every document uploaded against an application, for the three staff
+ * surfaces that show them (BPLO's initial review, a department's own
+ * review, the shared payment queue) -- previously duplicated verbatim in
+ * bplo/actions.ts and department/actions.ts, consolidated here (2026-08-21)
+ * since both copies needed the identical fix below.
+ *
+ * `resolvedRequests` (real gap the project owner reported, 2026-08-21):
+ * staff were already notified when a document answered their info
+ * request, but the document itself then landed in the same flat list as
+ * everything from the original application -- nothing showed WHICH
+ * upload was the actual response, or what had been asked for. Joins
+ * against `info_requests.resolved_by_document_id` (migration 0058) --
+ * one document can resolve several open requests at once (unchanged
+ * behavior, see resolveOpenInfoRequests), so this is an array per
+ * document, not a single flag.
+ */
+export async function getApplicationDocuments(applicationId: string): Promise<ApplicationDocument[]> {
+  const supabase = createServiceClient();
+  const { data: documents } = await supabase
+    .from("documents")
+    .select("id, document_type, file_url, uploaded_at")
+    .eq("application_id", applicationId)
+    .order("uploaded_at", { ascending: false });
+  if (!documents || documents.length === 0) return [];
+
+  const { data: resolved } = await supabase
+    .from("info_requests")
+    .select("resolved_by_document_id, requested_by_role, department, notes")
+    .in("resolved_by_document_id", documents.map((d) => d.id));
+
+  const byDocumentId = new Map<string, ResolvedInfoRequestSummary[]>();
+  for (const r of resolved ?? []) {
+    if (!r.resolved_by_document_id) continue;
+    const list = byDocumentId.get(r.resolved_by_document_id) ?? [];
+    list.push({ requestedByRole: r.requested_by_role, department: r.department, notes: r.notes });
+    byDocumentId.set(r.resolved_by_document_id, list);
+  }
+
+  return documents.map((d) => ({ ...d, resolvedRequests: byDocumentId.get(d.id) ?? [] }));
+}

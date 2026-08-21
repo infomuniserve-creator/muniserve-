@@ -748,37 +748,86 @@ export function BusinessProfileBlock({
 // department review card.
 // ============================================================
 
+/** What a document's own info-request badge shows -- who asked, and what for. Matches ResolvedInfoRequestSummary (review-workflow.ts) minus the type import, to keep this file's own dependency surface small. */
+type DocResolvedRequest = { requestedByRole: string; department: string | null; notes: string | null };
+
+function requesterLabel(r: DocResolvedRequest): string {
+  if (r.requestedByRole === "department") return r.department ?? "A department";
+  if (r.requestedByRole === "treasury") return "Treasury";
+  return "BPLO";
+}
+
+/**
+ * Real gap the project owner reported (2026-08-21): staff were already
+ * notified the moment a document answered their info request, but the
+ * document itself then landed in the same flat list as everything from
+ * the original application -- nothing showed which upload was the actual
+ * response, or what had been asked for. `resolvedRequests` (populated by
+ * getApplicationDocuments, review-workflow.ts, joined against
+ * info_requests.resolved_by_document_id) gets a distinct highlighted
+ * treatment -- a colored card instead of a plain pill, with the
+ * requester and their original note right on it -- so it reads as
+ * "this answers what you asked for" at a glance instead of blending in.
+ * Documents with nothing to highlight keep the original compact-pill look.
+ */
 export function DocumentList({
   documents, signedUrls,
 }: {
-  documents: { id: string; document_type: string | null }[];
+  documents: { id: string; document_type: string | null; resolvedRequests?: DocResolvedRequest[] }[];
   signedUrls: (string | null)[];
 }) {
+  const flagged = documents.map((d, i) => ({ d, url: signedUrls[i], i })).filter((x) => (x.d.resolvedRequests?.length ?? 0) > 0);
+  const plain = documents.map((d, i) => ({ d, url: signedUrls[i], i })).filter((x) => (x.d.resolvedRequests?.length ?? 0) === 0);
+
   return (
     <div className="mb-4">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-soft">Documents submitted</p>
       {documents.length === 0 ? (
         <p className="text-[12.5px] text-ink-faint">No documents uploaded.</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {documents.map((d, i) =>
-            signedUrls[i] ? (
-              <a
-                key={d.id}
-                href={signedUrls[i]!}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[12.5px] font-bold text-ink transition-colors hover:border-brand-teal hover:bg-good-bg"
-              >
-                <FileIcon className="size-3.5 text-good" />
-                {d.document_type}
-              </a>
-            ) : (
-              <span key={d.id} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12.5px] font-bold text-ink-faint">
-                <FileIcon className="size-3.5" />
-                {d.document_type} (link unavailable)
-              </span>
-            )
+        <div className="flex flex-col gap-2">
+          {flagged.map(({ d, url }) => (
+            <div key={d.id} className="rounded-xl border border-info bg-info-bg px-3 py-2">
+              {d.resolvedRequests!.map((r, ri) => (
+                <p key={ri} className="mb-1 text-[11.5px] font-bold text-info-ink">
+                  ↩ Sent in response to {requesterLabel(r)}&rsquo;s request{r.notes ? `: "${r.notes}"` : ""}
+                </p>
+              ))}
+              {url ? (
+                <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-ink underline decoration-info/50 hover:decoration-info">
+                  <FileIcon className="size-3.5 text-good" />
+                  {d.document_type}
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-ink-faint">
+                  <FileIcon className="size-3.5" />
+                  {d.document_type} (link unavailable)
+                </span>
+              )}
+            </div>
+          ))}
+          {plain.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {plain.map(({ d, url }) =>
+                url ? (
+                  <a
+                    key={d.id}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[12.5px] font-bold text-ink transition-colors hover:border-brand-teal hover:bg-good-bg"
+                  >
+                    <FileIcon className="size-3.5 text-good" />
+                    {d.document_type}
+                  </a>
+                ) : (
+                  <span key={d.id} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12.5px] font-bold text-ink-faint">
+                    <FileIcon className="size-3.5" />
+                    {d.document_type} (link unavailable)
+                  </span>
+                )
+              )}
+            </div>
           )}
         </div>
       )}
