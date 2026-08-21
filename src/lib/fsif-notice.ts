@@ -58,31 +58,41 @@ export async function notifyApplicantOfFsifIfDue(supabase: SupabaseClient, param
       params.applicationId,
       params.lguId,
       owner.phone,
-      `Your application ${ref} needs one more payment: the Fire Safety Inspection Fee (FSIF), paid directly to the Bureau of Fire Protection (BFP), separate from MuniServe. Check your email or status page for how to pay.`
+      `Your application ${ref} needs one more payment: the Fire Safety Inspection Fee (FSIF), paid directly to the Bureau of Fire Protection (BFP), separate from MuniServe. Check your email or status page to pay and upload your proof.`
     );
   }
 
   if (owner?.email) {
     const lgu = await getLguDisplay(supabase, params.lguId);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const statusUrl = `${appUrl}/status/${ref}`;
 
-    const sendProofStep =
+    // The real, functional path in MuniServe: an upload here is what BFP's
+    // own department review queue actually reads from (getApplicationDocuments,
+    // the same mechanism CLAUDE.md 7c/7ll's info-request uploads already
+    // use) -- so this is the CTA, not a plain link to the payment portal
+    // itself. Direct email/SMS to BFP (bfpContactEmail/bfpContactPhone) is
+    // offered only as a supplementary option when BPLO has actually
+    // configured it, never the primary instruction, since MuniServe has no
+    // way to confirm BFP ever saw a message sent outside the system.
+    const directContactLine =
       lgu.bfpContactEmail || lgu.bfpContactPhone
-        ? `<p style="margin:0 0 4px;">3. Send your proof of payment to BFP:</p><p style="margin:0 0 14px;padding-left:14px;">${[
+        ? `<p style="margin:16px 0 0;">You can also send a copy directly to BFP — include your Permit ID (<strong>${ref}</strong>) so they can match it:<br />${[
             lgu.bfpContactEmail ? `Email: ${lgu.bfpContactEmail}` : null,
             lgu.bfpContactPhone ? `Phone/SMS: ${lgu.bfpContactPhone}` : null,
           ]
             .filter(Boolean)
             .join("<br />")}</p>`
-        : `<p style="margin:0 0 14px;">3. Bring your proof of payment to the BFP office.</p>`;
+        : "";
 
-    const bodyHtml = `<p style="margin:0 0 14px;">Your application (<strong>${ref}</strong>) is now being reviewed by every department at once, including the <strong>Bureau of Fire Protection (BFP)</strong>.</p><p style="margin:0 0 14px;"><strong>BFP works independently from the local government</strong> — so the Fire Safety Inspection Fee (FSIF), required by law (RA 9514, the Fire Code of the Philippines), must be paid directly to BFP. This is separate from anything else on your application.</p><p style="margin:0 0 6px;"><strong>How to pay the FSIF:</strong></p><p style="margin:0 0 4px;">1. Pay online at ${FSIF_PORTAL_URL}, or in person at the BFP office.</p><p style="margin:0 0 14px;">2. Save your official receipt, transaction reference number, or a screenshot if you paid online.</p>${sendProofStep}<p style="margin:0;">4. Include your Permit ID (<strong>${ref}</strong>) so BFP can match your payment to your application.</p>`;
+    const bodyHtml = `<p style="margin:0 0 14px;">Your application (<strong>${ref}</strong>) is now being reviewed by every department at once, including the <strong>Bureau of Fire Protection (BFP)</strong>.</p><p style="margin:0 0 14px;"><strong>BFP works independently from the local government</strong> — so the Fire Safety Inspection Fee (FSIF), required by law (RA 9514, the Fire Code of the Philippines), must be paid directly to BFP. This is separate from anything else on your application.</p><p style="margin:0 0 6px;"><strong>How to pay the FSIF:</strong></p><p style="margin:0 0 4px;">1. Pay online at ${FSIF_PORTAL_URL}, or in person at the BFP office.</p><p style="margin:0 0 14px;">2. Save your official receipt, transaction reference number, or a screenshot if you paid online.</p><p style="margin:0;">3. Upload it using the button below — BFP will see it automatically and can continue reviewing your application.</p>${directContactLine}`;
 
     const html = renderApplicantEmailHtml({
       lgu,
       officeLabel: lgu.bploOfficeName,
       greetingName: firstNameOf(owner.full_name),
       bodyHtml,
-      cta: { label: "Pay the Fire Safety Inspection Fee", href: FSIF_PORTAL_URL },
+      cta: { label: "Upload your payment proof", href: statusUrl },
     });
     await notifyApplicantEmail(params.applicationId, owner.email, `Action needed: pay the Fire Safety Inspection Fee — ${ref}`, html);
   }
