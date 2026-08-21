@@ -1,4 +1,4 @@
-import { rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { rgb, type PDFDocument, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 
 /**
  * Shared pdf-lib layout helpers -- extracted (2026-08-20 audit) from four
@@ -92,6 +92,41 @@ export function drawLabelValueRow(
     vy -= opts.lineGap;
   }
   return y - rowHeight;
+}
+
+/**
+ * Fetches and embeds an LGU's uploaded logo (migration 0059, Settings ->
+ * "LGU Logo") into a pdf-lib document -- shared so every PDF generator
+ * that wants to show it (starting with order-of-payment-pdf.ts, 2026-08-21)
+ * does the same fetch-then-try-PNG-then-JPG dance once, not per-file.
+ * Best-effort, matching this codebase's own standing "an asset failure
+ * must never block the real document" convention (permit-pdf.ts's own
+ * QR/PDF generation, same reasoning) -- returns null on any failure
+ * (network, a format pdf-lib can't embed) rather than throwing, so a
+ * broken/slow logo URL can never prevent the actual document from
+ * generating.
+ *
+ * Only PNG and JPEG can be embedded -- pdf-lib has no WEBP support. The
+ * upload form (logo-actions.ts) accepts WEBP too (fine for email, which
+ * renders it as a plain <img>), so a WEBP logo simply won't appear on a
+ * PDF; this tries PNG first, falls back to JPEG, and gives up silently
+ * rather than guessing a third format.
+ */
+export async function embedLguLogo(pdfDoc: PDFDocument, logoUrl: string | null): Promise<PDFImage | null> {
+  if (!logoUrl) return null;
+  try {
+    const res = await fetch(logoUrl);
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    try {
+      return await pdfDoc.embedPng(bytes);
+    } catch {
+      return await pdfDoc.embedJpg(bytes);
+    }
+  } catch (err) {
+    console.error("Could not embed LGU logo in PDF", err);
+    return null;
+  }
 }
 
 export function formatManilaDate(d: Date | string): string {

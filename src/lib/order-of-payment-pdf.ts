@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import type { LguDisplay } from "@/lib/lgu";
-import { centerText, drawLabelValueRow, formatManilaDate, wrapText } from "@/lib/pdf-doc-utils";
+import { centerText, drawLabelValueRow, embedLguLogo, formatManilaDate, wrapText } from "@/lib/pdf-doc-utils";
 
 /**
  * The itemized assessment slip BPLO hands (or emails) to an applicant right
@@ -90,6 +90,30 @@ export async function generateOrderOfPaymentPdf(input: OrderOfPaymentInput): Pro
   // --- Letterhead banner ---
   const bannerHeight = 110;
   page.drawRectangle({ x: 0, y: PAGE_HEIGHT - bannerHeight, width: PAGE_WIDTH, height: bannerHeight, color: NAVY });
+
+  // LGU logo (2026-08-21) -- the project owner's own reasoning: a real
+  // seal makes this slip read as genuinely coming from the LGU, the same
+  // trust signal already added to the email notifications. A white circle
+  // badge in the banner's left margin, well clear of the centered
+  // Republic/LGU-name text block below -- absent entirely (not a
+  // placeholder icon) for an LGU that hasn't uploaded one yet.
+  const logoImage = await embedLguLogo(pdfDoc, input.lgu.logoUrl);
+  if (logoImage) {
+    const badgeRadius = 28;
+    const badgeCenterX = MARGIN + badgeRadius;
+    const badgeCenterY = PAGE_HEIGHT - bannerHeight / 2;
+    page.drawEllipse({ x: badgeCenterX, y: badgeCenterY, xScale: badgeRadius, yScale: badgeRadius, color: rgb(1, 1, 1) });
+    const maxDim = badgeRadius * 2 - 8;
+    const scale = Math.min(maxDim / logoImage.width, maxDim / logoImage.height);
+    const imgWidth = logoImage.width * scale;
+    const imgHeight = logoImage.height * scale;
+    page.drawImage(logoImage, {
+      x: badgeCenterX - imgWidth / 2,
+      y: badgeCenterY - imgHeight / 2,
+      width: imgWidth,
+      height: imgHeight,
+    });
+  }
 
   let y = PAGE_HEIGHT - 28;
   centerText(page, PAGE_WIDTH, "Republic of the Philippines", y, font, 10.5, rgb(1, 1, 1));
