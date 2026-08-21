@@ -1677,6 +1677,20 @@ The project owner tested the FSIF flow end to end and reported the real gap dire
 
 ---
 
+## 7a21. Profile menu (name + sign out) and a Knowledge Base link (2026-08-21, same day)
+
+The project owner asked for this ahead of the next real task (a staff Knowledge Base) so the KB would have a real, discoverable home before its content gets built. Two changes to the dashboard top bar's own right-hand side:
+
+**The avatar circle is now a real menu, not a static badge.** It always showed `initials` (`officeIdentity()`, `src/lib/staff.ts` -- e.g. "BP" for BPLO, "TR" for Treasury, department initials) -- that's the OFFICE's own initials, never a personal one, so clicking it previously did nothing. New `src/app/dashboard/profile-menu.tsx` (client component, the same click-outside/Escape-to-close pattern already established by `ApplyPageClient.tsx`'s `SearchableSelect` rather than a second technique) opens a small dropdown naming the actual signed-in person (`staff.full_name`, threaded through as a new `fullName` prop -- `dashboard/layout.tsx` -> `PersistentTopBar` -> `DashboardTopBar`) with "Sign out" underneath it.
+
+**"Sign out" moved out of its own separate pill**, freeing that exact spot in the top bar for a new **"Knowledge Base"** link -- opens `/dashboard/knowledge-base` in a real new tab (`target="_blank"`), so the dashboard stays open behind it. `sign-out-button.tsx` itself is untouched and still used as-is on the three pre-dashboard-shell screens that have no top bar at all (Not Provisioned, Paused, and `/admin`'s own separate header) -- only its usage inside the top bar moved.
+
+**New `/dashboard/knowledge-base` route** -- open to every staff role (not gated to BPLO/Mayor the way Audit Trail/Stats are), since the KB is meant to teach every role their own part of the system. Deliberately just a placeholder page for this pass ("Content is on its way") -- the real content is the next task, this just gives the new link somewhere real to go instead of a dead route.
+
+**Verified interactively, not just by reading the code** -- since the real dashboard needs a Google-OAuth staff session that can't be driven here, a temporary fixture (deleted immediately after) rendered the real, unmodified `DashboardTopBar` component directly with mock props (`fullName="Juan Dela Cruz"`). Confirmed via a real dispatched click that the menu opens showing "Juan Dela Cruz" and "Sign out"; confirmed a click outside the menu and a real `Escape` keydown both close it (each needed a short wait for the state update to flush into the DOM, not a bug -- the same class of timing quirk already flagged once before in this project, CLAUDE.md 7nn); and confirmed the Knowledge Base link's real `target="_blank"`/`rel="noopener noreferrer"` attributes. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 35 routes (the one new real route), fixture deleted afterward.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

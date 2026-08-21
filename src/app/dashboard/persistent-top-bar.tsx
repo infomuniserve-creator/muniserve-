@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { DashboardTopBar } from "./ui";
-import { SignOutButton } from "./sign-out-button";
 
 /**
  * Hoists DashboardTopBar out of every individual page.tsx and into
@@ -43,6 +42,7 @@ export function PersistentTopBar({
   officeLabel,
   officeSub,
   initials,
+  fullName,
   applicationsHref,
   settingsHref,
   auditHref,
@@ -51,6 +51,7 @@ export function PersistentTopBar({
   officeLabel: string;
   officeSub: string;
   initials: string;
+  fullName: string;
   applicationsHref: string;
   settingsHref?: string;
   auditHref?: string;
@@ -62,12 +63,27 @@ export function PersistentTopBar({
       officeLabel={officeLabel}
       officeSub={officeSub}
       initials={initials}
+      fullName={fullName}
       active={deriveActiveTab(pathname)}
       applicationsHref={applicationsHref}
       settingsHref={settingsHref}
       auditHref={auditHref}
       statsHref={statsHref}
-      rightSlot={<SignOutButton />}
+      rightSlot={
+        // Took over the spot the plain "Sign out" pill used to occupy
+        // (2026-08-21, project owner's own request) -- sign-out itself
+        // moved into ProfileMenu, under the avatar. A real new tab, not
+        // this one, since staff likely still want the dashboard open
+        // behind it while reading.
+        <a
+          href="/dashboard/knowledge-base"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-bold text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          Knowledge Base
+        </a>
+      }
     />
   );
 }

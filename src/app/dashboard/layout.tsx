@@ -73,6 +73,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         officeLabel={office.label}
         officeSub={`${lgu.name}, ${lgu.province}`}
         initials={office.initials}
+        fullName={staff.full_name ?? "Staff"}
         applicationsHref={office.homeHref}
         settingsHref={staff.role === "bplo" ? "/dashboard/settings" : undefined}
         auditHref={staff.role === "bplo" || staff.role === "mayor" ? "/dashboard/audit" : undefined}

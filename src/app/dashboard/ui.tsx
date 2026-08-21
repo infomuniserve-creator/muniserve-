@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { BusinessProfile } from "@/lib/business-profile";
 import { DOCUMENT_PURPOSE_LABELS } from "@/lib/document-purpose";
 import { ThemeToggle } from "./theme-toggle";
+import { ProfileMenu } from "./profile-menu";
 import { GhostButton, MiniButton, NavLinkPendingHint, OutlineButton, PrimaryButton } from "./pending-ui";
 export type { BusinessProfile };
 export { GhostButton, MiniButton, OutlineButton, PrimaryButton };
@@ -394,6 +395,7 @@ export function DashboardTopBar({
   officeLabel,
   officeSub,
   initials,
+  fullName,
   active,
   applicationsHref,
   settingsHref,
@@ -404,6 +406,8 @@ export function DashboardTopBar({
   officeLabel: string;
   officeSub: string;
   initials: string;
+  /** The signed-in staff member's own name (2026-08-21) -- shown inside ProfileMenu's dropdown, distinct from `initials` (the OFFICE's own initials, e.g. "BP" for BPLO -- staff.ts's officeIdentity()), which was never a personal avatar to begin with. */
+  fullName: string;
   active: "applications" | "businesses" | "settings" | "audit" | "stats";
   applicationsHref: string;
   /** Only BPLO has settings (src/app/dashboard/settings) -- staff-account management lives there too now (2026-08-15), no longer its own top-nav tab. Rendered as an icon button, not a nav pill, since it's a shortcut rather than a primary section. */
@@ -489,9 +493,7 @@ export function DashboardTopBar({
         )}
         <ThemeToggle />
         {rightSlot}
-        <div className="flex size-8.5 items-center justify-center rounded-full border border-border-strong bg-surface-3 font-display text-[12.5px] font-bold text-brand-navy">
-          {initials}
-        </div>
+        <ProfileMenu fullName={fullName} initials={initials} />
       </div>
     </div>
   );
