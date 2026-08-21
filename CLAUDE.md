@@ -1703,6 +1703,10 @@ The real content for the placeholder page section 7a21's "Knowledge Base" link o
 
 **Verified against the real components, not just type-checked**: since the real route needs a live staff session that can't be driven here, a temporary fixture (deleted immediately after) rendered the exact same section components directly and confirmed via `get_page_text` that every section's real copy renders correctly, and via computed styles that `BlurredMunicipality` genuinely applies `filter: blur(8px)` (not just markup) in both light and dark mode, and that tone-colored tip boxes (`bg-warn-bg`/`text-warn-ink`, etc.) resolve to real, legible, distinct colors in dark mode rather than blending into the page background. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 35 routes (the one new real route), fixture deleted afterward.
 
+**Same-day follow-up: a live search box for the sidebar.** The project owner asked directly after seeing it live -- since the whole page is real text, not screenshots, the browser's own Ctrl+F already finds any exact word, so the actual gap was finding the right *section* without scrolling past everything first. New `kb-sidebar-nav.tsx` (`KbSidebarNav`) filters the section list as you type, matching each link's own label plus a curated `keywords` string of terms that appear inside that section but aren't necessarily its own title (e.g. "FSIF" or "sign out" find the right section even though neither word is a section name) -- the exact same instant-filter pattern this codebase already established for `SearchableSelect` (`ApplyPageClient.tsx`), not a second technique. A "no matches" state and a clear (×) button round it out.
+
+Verified interactively (a temporary fixture, deleted immediately after, replicating the real page's sidebar + search + all 7 sections): typing "fsif" correctly narrowed the list to just "What Applicants Are Told"; a nonsense query correctly showed "No matches — try a different word."; and clicking Clear correctly restored all 7 links. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 35 routes, fixture deleted afterward.
+
 ---
 
 ## 8. UI reference

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { BusinessesSection, GettingStartedSection, PipelineSection } from "./kb-content-workflow";
 import { SettingsSection } from "./kb-content-settings";
 import { FaqSection, NotificationsSection, ReportingSection } from "./kb-content-reference";
+import { KbSidebarNav, type KbNavGroup } from "./kb-sidebar-nav";
 
 /**
  * Staff Knowledge Base (2026-08-21) -- linked from the top bar's own
@@ -25,14 +26,87 @@ import { FaqSection, NotificationsSection, ReportingSection } from "./kb-content
  * own doc comment for why (no reliable way to screenshot a live staff
  * session in this build environment, and a recreation never goes stale).
  */
-const NAV_GROUPS: { title: string; links: { href: string; label: string }[] }[] = [
-  { title: "Start here", links: [{ href: "#getting-started", label: "Getting Started" }] },
-  { title: "Applications", links: [{ href: "#pipeline", label: "The Review Pipeline" }] },
-  { title: "Businesses", links: [{ href: "#businesses", label: "Businesses" }] },
-  { title: "Settings", links: [{ href: "#settings", label: "Settings (BPLO)" }] },
-  { title: "Reporting", links: [{ href: "#reporting", label: "Audit Trail & Stats" }] },
-  { title: "Notifications", links: [{ href: "#notifications", label: "What Applicants Are Told" }] },
-  { title: "Help", links: [{ href: "#faq", label: "FAQ & Troubleshooting" }] },
+/**
+ * `keywords` (2026-08-21, powers KbSidebarNav's own live search) is a
+ * curated blob of terms that actually appear inside each section but
+ * aren't necessarily in its own short title -- e.g. searching "FSIF" or
+ * "sign out" should still find the right section even though neither
+ * word is the section's own name.
+ */
+const NAV_GROUPS: KbNavGroup[] = [
+  {
+    title: "Start here",
+    links: [
+      {
+        href: "#getting-started",
+        label: "Getting Started",
+        keywords: "sign in google account roles bplo department treasury mayor top bar dark mode theme sign out profile menu knowledge base initials",
+      },
+    ],
+  },
+  {
+    title: "Applications",
+    links: [
+      {
+        href: "#pipeline",
+        label: "The Review Pipeline",
+        keywords:
+          "initial review departments review assessment payment printing mayor's signature release approve approved with condition reject rejected request more info notes required lbt category archive archived returned to applicant engineering building permit fee bi-annually quarterly mode of payment stages",
+      },
+    ],
+  },
+  {
+    title: "Businesses",
+    links: [
+      {
+        href: "#businesses",
+        label: "Businesses",
+        keywords: "business registry walk-in walk in claim unclaim legacy permit history lbt category active needs renewal inactive in progress owner phone",
+      },
+    ],
+  },
+  {
+    title: "Settings",
+    links: [
+      {
+        href: "#settings",
+        label: "Settings (BPLO)",
+        keywords:
+          "staff access data import fee rates barangays barangay clearance assessment rules automated assessment cedula documents alerts lgu logo permit number format order of payment accepted payment methods gcash sms usage sms notifications sender name public application form embed",
+      },
+    ],
+  },
+  {
+    title: "Reporting",
+    links: [
+      {
+        href: "#reporting",
+        label: "Audit Trail & Stats",
+        keywords: "audit trail stats reports performance bottleneck revenue csv export",
+      },
+    ],
+  },
+  {
+    title: "Notifications",
+    links: [
+      {
+        href: "#notifications",
+        label: "What Applicants Are Told",
+        keywords:
+          "sms email notification otp fsif fire safety inspection fee bfp assessment finalized payment received permit signed permit released installment reminder upload proof",
+      },
+    ],
+  },
+  {
+    title: "Help",
+    links: [
+      {
+        href: "#faq",
+        label: "FAQ & Troubleshooting",
+        keywords: "faq troubleshooting can't approve blank note no text no email act on behalf",
+      },
+    ],
+  },
 ];
 
 export default async function KnowledgeBasePage() {
@@ -46,18 +120,9 @@ export default async function KnowledgeBasePage() {
           <p className="font-display text-[12px] font-extrabold uppercase tracking-wide text-brand-teal">Staff Knowledge Base</p>
           <h1 className="font-display text-[24px] font-bold text-ink">How to use MuniServe</h1>
         </div>
-        <nav className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface p-4 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.title}>
-              <p className="mb-1 px-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-faint">{group.title}</p>
-              {group.links.map((l) => (
-                <a key={l.href} href={l.href} className="block rounded-xl px-2 py-1.5 text-[12.5px] font-bold text-ink-soft transition-colors hover:bg-info-bg hover:text-info-ink">
-                  {l.label}
-                </a>
-              ))}
-            </div>
-          ))}
-        </nav>
+        <div className="rounded-3xl border border-border bg-surface p-4 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+          <KbSidebarNav groups={NAV_GROUPS} />
+        </div>
       </aside>
 
       <div className="min-w-0 max-w-[760px] flex-1">
