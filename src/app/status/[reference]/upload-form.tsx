@@ -31,7 +31,13 @@ import { createClient } from "@/lib/supabase/client";
  * cleanup-orphaned-uploads job) -- no separate cleanup needed for
  * someone who uploads then navigates away without sending.
  */
-export function AdditionalDocumentUpload({ applicationId, defaultLabel }: { applicationId: string; defaultLabel: string }) {
+export function AdditionalDocumentUpload({
+  applicationId, defaultLabel, purpose,
+}: {
+  applicationId: string; defaultLabel: string;
+  /** A known key from document-purpose.ts's DOCUMENT_PURPOSE_LABELS -- flags this upload for a distinct highlighted treatment on staff's own DocumentList, since e.g. an FSIF or GCash proof-of-payment upload has no info_requests row to key that off of. */
+  purpose?: string;
+}) {
   const [documentType, setDocumentType] = useState(defaultLabel);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -98,7 +104,7 @@ export function AdditionalDocumentUpload({ applicationId, defaultLabel }: { appl
       const registerRes = await fetch("/api/applicant/upload-additional-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: staged.path, documentType, applicationId }),
+        body: JSON.stringify({ path: staged.path, documentType, applicationId, purpose }),
       });
       if (!registerRes.ok) {
         setError("Could not send that upload. Try again.");

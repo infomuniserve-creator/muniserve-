@@ -494,6 +494,7 @@ export type ApplicationDocument = {
   file_url: string | null;
   uploaded_at: string | null;
   resolvedRequests: ResolvedInfoRequestSummary[];
+  purpose: string | null;
 };
 
 /**
@@ -517,7 +518,7 @@ export async function getApplicationDocuments(applicationId: string): Promise<Ap
   const supabase = createServiceClient();
   const { data: documents } = await supabase
     .from("documents")
-    .select("id, document_type, file_url, uploaded_at")
+    .select("id, document_type, file_url, uploaded_at, purpose")
     .eq("application_id", applicationId)
     .order("uploaded_at", { ascending: false });
   if (!documents || documents.length === 0) return [];

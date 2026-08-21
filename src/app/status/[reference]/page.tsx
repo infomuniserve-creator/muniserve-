@@ -140,6 +140,7 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
       {application.status === "pending_dept_review" && (
         <>
           <OpenInfoRequestsCard applicationId={application.id} />
+          <FsifPaymentSection applicationId={application.id} />
           <UploadCard applicationId={application.id} />
         </>
       )}
@@ -254,7 +255,13 @@ async function OpenInfoRequestsCard({ applicationId, fallbackTitle }: { applicat
  * common case outright; the field stays editable for the unprompted-upload
  * case, which has nothing sensible to pre-fill.
  */
-async function UploadCard({ applicationId, promptOverride, defaultLabelOverride }: { applicationId: string; promptOverride?: string; defaultLabelOverride?: string }) {
+async function UploadCard({
+  applicationId, promptOverride, defaultLabelOverride, purpose,
+}: {
+  applicationId: string; promptOverride?: string; defaultLabelOverride?: string;
+  /** A known key from document-purpose.ts -- flags this specific upload for a highlighted card on staff's own DocumentList (no info_requests row exists for a proactive-notice-driven upload like this, unlike the request-more-info loop). */
+  purpose?: string;
+}) {
   const supabase = createServiceClient();
   const { data: openRequest } = await supabase
     .from("info_requests")
@@ -271,7 +278,58 @@ async function UploadCard({ applicationId, promptOverride, defaultLabelOverride 
       <p style={{ fontSize: 12, color: "#6b7280" }}>
         {promptOverride ?? "Upload it here -- if a department, BPLO, or Treasury asked for something specific, it’ll be sent straight back to them."}
       </p>
-      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel={openRequest?.notes || defaultLabelOverride || ""} />
+      <AdditionalDocumentUpload applicationId={applicationId} defaultLabel={openRequest?.notes || defaultLabelOverride || ""} purpose={purpose} />
+    </Card>
+  );
+}
+
+/**
+ * Fire Safety Inspection Fee (FSIF) payment-proof upload (2026-08-21) --
+ * the applicant already got a branded email right after BPLO's initial
+ * approval explaining BFP works independently and linking back to this
+ * exact page (fsif-notice.ts); this is that page's own upload prompt,
+ * tagged with purpose="fsif_payment_proof" so the resulting document gets
+ * a distinct highlighted card on BFP's own department review queue
+ * instead of blending into the rest of the application's documents (the
+ * project owner's own direct report -- "nothing would make BFP staff
+ * realize the applicant already paid").
+ *
+ * Gated on real data, not a query param from the notice email's own
+ * link -- renders only while BFP genuinely still has a pending decision
+ * in the application's current review round, so this doesn't linger on
+ * the page (or invite a redundant upload) once BFP has actually decided,
+ * and doesn't depend on however the applicant navigated back here.
+ */
+async function FsifPaymentSection({ applicationId }: { applicationId: string }) {
+  const supabase = createServiceClient();
+  const { data: latestRound } = await supabase
+    .from("review_rounds")
+    .select("id")
+    .eq("application_id", applicationId)
+    .order("round_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!latestRound) return null;
+
+  const { data: bfpReview } = await supabase
+    .from("department_reviews")
+    .select("decision")
+    .eq("review_round_id", latestRound.id)
+    .ilike("department", "BFP")
+    .maybeSingle();
+  if (!bfpReview || bfpReview.decision !== "pending") return null;
+
+  return (
+    <Card>
+      <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Fire Safety Inspection Fee (FSIF)</p>
+      <p style={{ fontSize: 12, color: "#6b7280" }}>
+        The Bureau of Fire Protection (BFP) requires this fee paid directly to them, separate from MuniServe. Already paid? Upload your receipt or screenshot below so BFP can verify it.
+      </p>
+      <AdditionalDocumentUpload
+        applicationId={applicationId}
+        defaultLabel="Fire Safety Inspection Fee (FSIF) — payment proof"
+        purpose="fsif_payment_proof"
+      />
     </Card>
   );
 }
@@ -308,6 +366,7 @@ async function PendingPaymentSection({ applicationId, lguId }: { applicationId: 
         applicationId={applicationId}
         promptOverride={needsProof ? "Paid via GCash, Bank Transfer, or online? Upload your receipt or screenshot here so staff can confirm it." : undefined}
         defaultLabelOverride={needsProof ? "Payment receipt/screenshot" : undefined}
+        purpose={needsProof ? "payment_proof" : undefined}
       />
     </>
   );

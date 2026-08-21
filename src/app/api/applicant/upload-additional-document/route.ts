@@ -3,6 +3,7 @@ import { verifyUploadedObject } from "@/lib/document-upload";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { resolveOpenInfoRequests } from "@/lib/info-requests";
+import { DOCUMENT_PURPOSE_LABELS } from "@/lib/document-purpose";
 import { NextResponse } from "next/server";
 
 /**
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
   const path = String(body?.path ?? "");
   const documentType = String(body?.documentType ?? "");
   const applicationId = String(body?.applicationId ?? "");
+  // Never trust the client's claimed purpose outright -- only a known key
+  // from DOCUMENT_PURPOSE_LABELS is ever persisted, so a stray/tampered
+  // value can't fabricate a highlighted card on staff's own DocumentList.
+  const purposeRaw = body?.purpose;
+  const purpose = typeof purposeRaw === "string" && purposeRaw in DOCUMENT_PURPOSE_LABELS ? purposeRaw : null;
 
   if (!path.startsWith(`${ownerId}/`) || !documentType || !applicationId) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -53,7 +59,7 @@ export async function POST(request: Request) {
 
   const { data: newDocument, error: insertError } = await supabase
     .from("documents")
-    .insert({ application_id: applicationId, document_type: documentType, file_url: path })
+    .insert({ application_id: applicationId, document_type: documentType, file_url: path, purpose })
     .select("id")
     .single();
   if (insertError || !newDocument) {

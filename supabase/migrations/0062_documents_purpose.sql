@@ -1,0 +1,16 @@
+-- Flags a document with a known, structural reason it was uploaded --
+-- distinct from `document_type`, which is free text the applicant types
+-- themselves and can't be relied on for staff-facing UI logic. The first
+-- two real cases (2026-08-21): an FSIF payment-proof upload nudged by the
+-- Fire Safety Inspection Fee notice (fsif-notice.ts, right after BPLO's
+-- initial approval) and a GCash/Bank/Online payment-proof upload nudged
+-- by the Accepted Payment Methods notice (payment-methods.ts) -- neither
+-- creates an info_requests row (nobody formally "asked" for it the way
+-- CLAUDE.md 7ll's request-more-info loop does), so there was previously
+-- no way for DocumentList to distinguish either from a document uploaded
+-- as part of the original application. Nullable, no check constraint --
+-- the known values live in code (review-workflow.ts's
+-- DOCUMENT_PURPOSE_LABELS), not enforced at the schema level, matching
+-- this schema's own existing convention for similar free-text
+-- categorical columns (e.g. audit_log.action).
+alter table documents add column purpose text;

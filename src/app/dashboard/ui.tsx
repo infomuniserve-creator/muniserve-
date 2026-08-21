@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { BusinessProfile } from "@/lib/business-profile";
+import { DOCUMENT_PURPOSE_LABELS } from "@/lib/document-purpose";
 import { ThemeToggle } from "./theme-toggle";
 import { GhostButton, MiniButton, NavLinkPendingHint, OutlineButton, PrimaryButton } from "./pending-ui";
 export type { BusinessProfile };
@@ -773,11 +774,15 @@ function requesterLabel(r: DocResolvedRequest): string {
 export function DocumentList({
   documents, signedUrls,
 }: {
-  documents: { id: string; document_type: string | null; resolvedRequests?: DocResolvedRequest[] }[];
+  documents: { id: string; document_type: string | null; resolvedRequests?: DocResolvedRequest[]; purpose?: string | null }[];
   signedUrls: (string | null)[];
 }) {
-  const flagged = documents.map((d, i) => ({ d, url: signedUrls[i], i })).filter((x) => (x.d.resolvedRequests?.length ?? 0) > 0);
-  const plain = documents.map((d, i) => ({ d, url: signedUrls[i], i })).filter((x) => (x.d.resolvedRequests?.length ?? 0) === 0);
+  function purposeLabel(d: { purpose?: string | null }): string | null {
+    return d.purpose ? (DOCUMENT_PURPOSE_LABELS[d.purpose] ?? null) : null;
+  }
+  const isFlagged = (d: { resolvedRequests?: DocResolvedRequest[]; purpose?: string | null }) => (d.resolvedRequests?.length ?? 0) > 0 || purposeLabel(d) != null;
+  const flagged = documents.map((d, i) => ({ d, url: signedUrls[i], i })).filter((x) => isFlagged(x.d));
+  const plain = documents.map((d, i) => ({ d, url: signedUrls[i], i })).filter((x) => !isFlagged(x.d));
 
   return (
     <div className="mb-4">
@@ -788,11 +793,12 @@ export function DocumentList({
         <div className="flex flex-col gap-2">
           {flagged.map(({ d, url }) => (
             <div key={d.id} className="rounded-xl border border-info bg-info-bg px-3 py-2">
-              {d.resolvedRequests!.map((r, ri) => (
+              {(d.resolvedRequests ?? []).map((r, ri) => (
                 <p key={ri} className="mb-1 text-[11.5px] font-bold text-info-ink">
                   ↩ Sent in response to {requesterLabel(r)}&rsquo;s request{r.notes ? `: "${r.notes}"` : ""}
                 </p>
               ))}
+              {purposeLabel(d) && <p className="mb-1 text-[11.5px] font-bold text-info-ink">{purposeLabel(d)}</p>}
               {url ? (
                 <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-ink underline decoration-info/50 hover:decoration-info">
                   <FileIcon className="size-3.5 text-good" />
