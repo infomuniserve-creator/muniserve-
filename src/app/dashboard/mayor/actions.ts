@@ -3,7 +3,8 @@
 import { requireUnpausedStaff } from "@/lib/staff";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
-import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
+import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
+import { firstNameOf, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -98,7 +99,7 @@ export async function signPermit(formData: FormData) {
     .from("applications")
     .select(
       `reference_number, application_year, application_type, form_inputs, business_id,
-       business:businesses(business_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, organization_type, business_tax_payment, legacy_license_no, legacy_owner_name, owner:owners(full_name, gender, phone))`
+       business:businesses(business_name, unit_street, city_town, barangay, province, zip_code, address, nature_of_business, organization_type, business_tax_payment, legacy_license_no, legacy_owner_name, owner:owners(full_name, gender, phone, email))`
     )
     .eq("id", applicationId)
     .eq("status", "pending_mayor")
@@ -137,7 +138,7 @@ export async function signPermit(formData: FormData) {
     business_tax_payment: string | null;
     legacy_license_no: string | null;
     legacy_owner_name: string | null;
-    owner: { full_name: string; gender: string | null; phone: string | null } | null;
+    owner: { full_name: string; gender: string | null; phone: string | null; email: string | null } | null;
   } | null;
   const formInputs = application.form_inputs as { capital_investment?: number | null; gross_sales?: number | null } | null;
 
@@ -168,9 +169,9 @@ export async function signPermit(formData: FormData) {
   const address = structuredAddress || business?.address || "";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const verifyUrl = `${appUrl}/verify/${application.reference_number}`;
+  const lgu = await getLguDisplay(supabase, staff.lgu_id);
 
   try {
-    const lgu = await getLguDisplay(supabase, staff.lgu_id);
     const { pdf, qrPng } = await generatePermitAssets({
       referenceNumber: application.reference_number,
       businessName: business?.business_name ?? "(business record missing)",
@@ -234,8 +235,18 @@ export async function signPermit(formData: FormData) {
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.`
+      `Your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.`
     );
+  }
+  if (business?.owner?.email) {
+    const html = renderApplicantEmailHtml({
+      lgu,
+      officeLabel: lgu.bploOfficeName,
+      greetingName: firstNameOf(business.owner.full_name),
+      bodyHtml: `<p style="margin:0;">Your business permit (<strong>${application.reference_number}</strong>) has been signed and is ready for pickup. Please visit the BPLO office to claim it.</p>`,
+      cta: { label: "View your application status", href: `${appUrl}/status/${application.reference_number}` },
+    });
+    await notifyApplicantEmail(applicationId, business.owner.email, `Your permit is ready for pickup — ${application.reference_number}`, html);
   }
 
   await logAuditEvent(supabase, {

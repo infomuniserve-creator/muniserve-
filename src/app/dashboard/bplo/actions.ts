@@ -5,10 +5,11 @@ import { getEngineeringAssessedAmount, openDepartmentReviewRound } from "@/lib/r
 import { computeApplicationFees } from "@/lib/fee-engine";
 import { getLguDisplay } from "@/lib/lgu";
 import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
+import { firstNameOf, renderApplicantEmailHtml, noteBoxHtml, amountDetailBoxHtml } from "@/lib/applicant-email-template";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categories";
 import { generateOrderOfPaymentPdf } from "@/lib/order-of-payment-pdf";
-import { formatPaymentChannelsForEmailHtml, formatPaymentChannelsForSms, getEnabledPaymentChannels } from "@/lib/payment-methods";
+import { anyChannelNeedsProofUpload, formatPaymentChannelsForEmailHtml, formatPaymentChannelsForSms, getEnabledPaymentChannels } from "@/lib/payment-methods";
 import { createInfoRequest, reopenDepartmentRound } from "@/lib/info-requests";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -129,26 +130,30 @@ export async function submitInitialReview(formData: FormData) {
     // resubmit).
     const { data: app } = await supabase
       .from("applications")
-      .select("reference_number, business:businesses(owner:owners(phone, email))")
+      .select("reference_number, business:businesses(owner:owners(phone, email, full_name))")
       .eq("id", applicationId)
       .single();
-    const owner = (app?.business as unknown as { owner: { phone: string | null; email: string | null } | null } | null)?.owner;
+    const owner = (app?.business as unknown as { owner: { phone: string | null; email: string | null; full_name: string | null } | null } | null)?.owner;
     const ref = app?.reference_number ?? updated.reference_number;
     if (owner?.phone) {
       await notifyApplicantSms(
         applicationId,
         staff.lgu_id,
         owner.phone,
-        `your application ${ref} was rejected by BPLO and is now closed. Visit the BPLO office if you'd like to proceed.`
+        `Your application ${ref} was not approved and is now closed. Please visit the BPLO office if you have questions.`
       );
     }
     if (owner?.email) {
-      await notifyApplicantEmail(
-        applicationId,
-        owner.email,
-        `Application rejected: ${ref}`,
-        `<p>Your application <strong>${ref}</strong> was rejected by BPLO and is now closed.</p>${notes ? `<p>Reason: ${notes}</p>` : ""}<p>Please visit the BPLO office if you&rsquo;d like to proceed.</p>`
-      );
+      const lgu = await getLguDisplay(supabase, staff.lgu_id);
+      const html = renderApplicantEmailHtml({
+        lgu,
+        officeLabel: lgu.bploOfficeName,
+        greetingName: firstNameOf(owner.full_name),
+        bodyHtml: `<p style="margin:0 0 14px;">Your application (<strong>${ref}</strong>) was not approved this time, and is now closed.</p>${
+          notes ? `<p style="margin:0 0 6px;">Here's why:</p>${noteBoxHtml(notes)}` : ""
+        }<p style="margin:0;">If you'd like to apply again, or you have questions, please visit the BPLO office.</p>`,
+      });
+      await notifyApplicantEmail(applicationId, owner.email, `Update on your application ${ref}`, html);
     }
   }
 
@@ -544,7 +549,7 @@ export async function finalizeAssessment(formData: FormData) {
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `your application ${application.reference_number} has been assessed. Total due: PHP ${totalDue.toLocaleString()}. ${formatPaymentChannelsForSms(paymentChannels)}`
+      `Your application ${application.reference_number} has been assessed. Total to pay: PHP ${totalDue.toLocaleString()}. ${formatPaymentChannelsForSms(paymentChannels)}`
     );
   }
 
@@ -573,11 +578,36 @@ export async function finalizeAssessment(formData: FormData) {
         totalDue,
         lgu,
       });
+
+      // Real gap the project owner reported (2026-08-21): this email never
+      // told the applicant HOW to actually get their proof of payment back
+      // to us for GCash/Bank Transfer/Online -- the status page has always
+      // had the upload box (info-requests.ts's pattern), there was just no
+      // link to it here. anyChannelNeedsProofUpload() is the same check
+      // the status page itself uses (payment-methods.ts), so the two can
+      // never disagree about when this link should show.
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+      const statusUrl = `${appUrl}/status/${application.reference_number}`;
+      const needsProof = anyChannelNeedsProofUpload(paymentChannels);
+
+      const html = renderApplicantEmailHtml({
+        lgu,
+        officeLabel: lgu.bploOfficeName,
+        greetingName: firstNameOf(business.owner.full_name),
+        bodyHtml: `<p style="margin:0 0 6px;">Good news — your application (<strong>${application.reference_number}</strong>) has been assessed. Here's your total:</p>${amountDetailBoxHtml(
+          lineRows.filter((l) => l.included_in_total).map((l) => ({ label: l.display_label ?? "Fee", amount: l.overridden_amount ?? l.computed_amount })),
+          totalDue
+        )}<p style="margin:0 0 14px;">The attached PDF (Order of Payment) has the full breakdown — bring it when you pay.</p>${formatPaymentChannelsForEmailHtml(
+          paymentChannels
+        )}${needsProof ? `<p style="margin:16px 0 0;">Already paid via GCash, Bank Transfer, or online? Upload your receipt or screenshot on your application status page.</p>` : ""}`,
+        cta: needsProof ? { label: "Upload your payment proof", href: statusUrl } : undefined,
+      });
+
       await notifyApplicantEmail(
         applicationId,
         business.owner.email,
-        `Order of Payment -- ${application.reference_number}`,
-        `<p>Your application <strong>${application.reference_number}</strong> has been assessed. Total due: <strong>PHP ${totalDue.toLocaleString()}</strong>.</p><p>The attached Order of Payment lists the full breakdown.</p>${formatPaymentChannelsForEmailHtml(paymentChannels)}`,
+        `Your permit assessment is ready — ${application.reference_number}`,
+        html,
         [{ filename: `${application.reference_number}-order-of-payment.pdf`, content: Buffer.from(orderOfPaymentPdf).toString("base64") }]
       );
     } catch (err) {
@@ -672,18 +702,30 @@ export async function markReleased(formData: FormData) {
     .update({ status: "released", released_at: new Date().toISOString(), released_by: staff.id })
     .eq("id", applicationId)
     .eq("status", "pending_release")
-    .select("reference_number, business:businesses(owner:owners(phone))")
+    .select("reference_number, business:businesses(owner:owners(phone, email, full_name))")
     .single();
   if (error || !updated) throw error ?? new Error("Update failed");
 
-  const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
+  const business = updated.business as unknown as { owner: { phone: string | null; email: string | null; full_name: string | null } | null } | null;
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
+      `Your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
     );
+  }
+  if (business?.owner?.email) {
+    const lgu = await getLguDisplay(supabase, staff.lgu_id);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const html = renderApplicantEmailHtml({
+      lgu,
+      officeLabel: lgu.bploOfficeName,
+      greetingName: firstNameOf(business.owner.full_name),
+      bodyHtml: `<p style="margin:0;">Your business permit (<strong>${updated.reference_number}</strong>) has been released to you. Thank you for using MuniServe!</p>`,
+      cta: { label: "View your permit", href: `${appUrl}/status/${updated.reference_number}` },
+    });
+    await notifyApplicantEmail(applicationId, business.owner.email, `Your business permit has been released — ${updated.reference_number}`, html);
   }
 
   await logAuditEvent(supabase, {

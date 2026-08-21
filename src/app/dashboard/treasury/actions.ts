@@ -1,9 +1,11 @@
 "use server";
 
 import { requireUnpausedStaff } from "@/lib/staff";
-import { notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
+import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createInfoRequest } from "@/lib/info-requests";
+import { getLguDisplay } from "@/lib/lgu";
+import { firstNameOf, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -64,7 +66,7 @@ export async function recordPayment(formData: FormData) {
     .update({ status: "pending_printing" })
     .eq("id", applicationId)
     .eq("status", "pending_payment")
-    .select("reference_number, business:businesses(owner:owners(phone))")
+    .select("reference_number, business:businesses(owner:owners(phone, email, full_name))")
     .single();
   if (statusError || !updated) throw statusError ?? new Error("This application isn't awaiting payment.");
 
@@ -104,14 +106,24 @@ export async function recordPayment(formData: FormData) {
     .eq("requested_by_role", "treasury")
     .is("resolved_at", null);
 
-  const business = updated.business as unknown as { owner: { phone: string | null } | null } | null;
+  const business = updated.business as unknown as { owner: { phone: string | null; email: string | null; full_name: string | null } | null } | null;
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `we received your payment for application ${updated.reference_number}. Your permit is now being printed.`
+      `We received your payment for application ${updated.reference_number}. Your permit is now being printed.`
     );
+  }
+  if (business?.owner?.email) {
+    const lgu = await getLguDisplay(supabase, staff.lgu_id);
+    const html = renderApplicantEmailHtml({
+      lgu,
+      officeLabel: "Office of the Municipal Treasurer",
+      greetingName: firstNameOf(business.owner.full_name),
+      bodyHtml: `<p style="margin:0;">Good news — we received your payment for application (<strong>${updated.reference_number}</strong>). Your permit is now being printed. We'll let you know once it's ready.</p>`,
+    });
+    await notifyApplicantEmail(applicationId, business.owner.email, `Payment received — ${updated.reference_number}`, html);
   }
 
   // CLAUDE.md 7w -- BPLO previously had no signal an application was

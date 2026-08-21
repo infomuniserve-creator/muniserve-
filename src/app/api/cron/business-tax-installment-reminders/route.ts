@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyApplicantEmail, notifyApplicantSms } from "@/lib/notifications";
+import { getLguDisplay } from "@/lib/lgu";
+import { firstNameOf, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 import { NextResponse } from "next/server";
 
 /**
@@ -40,31 +42,37 @@ export async function GET(request: Request) {
     try {
       const { data: application } = await supabase
         .from("applications")
-        .select("reference_number, business:businesses(business_name, owner:owners(phone, email))")
+        .select("reference_number, business:businesses(business_name, owner:owners(phone, email, full_name))")
         .eq("id", reminder.application_id)
         .maybeSingle();
       if (!application) continue;
 
-      const business = application.business as unknown as { business_name: string; owner: { phone: string | null; email: string | null } | null } | null;
+      const business = application.business as unknown as {
+        business_name: string;
+        owner: { phone: string | null; email: string | null; full_name: string | null } | null;
+      } | null;
       const owner = business?.owner;
       const amountText = Number(reminder.amount).toLocaleString();
+      const businessName = business?.business_name ?? "your business";
 
       if (owner?.phone) {
         await notifyApplicantSms(
           reminder.application_id,
           reminder.lgu_id,
           owner.phone,
-          `your next Business Tax installment for ${application.reference_number} (${business?.business_name ?? "your business"}) is due: PHP ${amountText}. Pay at the Treasurer's Office.`
+          `Your next Business Tax installment for ${application.reference_number} (${businessName}) is due: PHP ${amountText}. Pay at the Treasurer's Office.`
         );
         sentCount++;
       }
       if (owner?.email) {
-        await notifyApplicantEmail(
-          reminder.application_id,
-          owner.email,
-          `Business Tax installment due -- ${application.reference_number}`,
-          `<p>This is a reminder that the next Business Tax installment for <strong>${application.reference_number}</strong> (${business?.business_name ?? "your business"}) is now due: <strong>PHP ${amountText}</strong>.</p><p>Pay at the Treasurer's Office to stay current.</p>`
-        );
+        const lgu = await getLguDisplay(supabase, reminder.lgu_id);
+        const html = renderApplicantEmailHtml({
+          lgu,
+          officeLabel: "Office of the Municipal Treasurer",
+          greetingName: firstNameOf(owner.full_name),
+          bodyHtml: `<p style="margin:0;">This is a reminder that the next Business Tax installment for <strong>${application.reference_number}</strong> (${businessName}) is now due: <strong>₱${amountText}</strong>. Please pay at the Treasurer's Office to stay current.</p>`,
+        });
+        await notifyApplicantEmail(reminder.application_id, owner.email, `Business Tax installment due — ${application.reference_number}`, html);
       }
 
       // Marked sent whether or not the owner had a phone/email on file --

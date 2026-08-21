@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyApplicantEmail, notifyApplicantSms, notifyStaffByRole } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/audit-log";
+import { getLguDisplay } from "@/lib/lgu";
+import { firstNameOf, noteBoxHtml, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 
 /**
  * Closes the "request more info" loop (2026-08-16) -- one shared record
@@ -52,15 +54,16 @@ export async function createInfoRequest(
 
   const { data: application } = await supabase
     .from("applications")
-    .select("reference_number, business:businesses(owner:owners(phone, email))")
+    .select("reference_number, business:businesses(owner:owners(phone, email, full_name))")
     .eq("id", params.applicationId)
     .single();
   if (!application) return;
-  const owner = (application.business as unknown as { owner: { phone: string | null; email: string | null } | null } | null)?.owner;
+  const owner = (application.business as unknown as { owner: { phone: string | null; email: string | null; full_name: string | null } | null } | null)?.owner;
   const ref = application.reference_number;
 
-  const verb = params.isRejection ? `was rejected by ${params.roleLabel}` : `needs more information from ${params.roleLabel}`;
-  const smsMessage = `your application ${ref} ${verb}. Check your email or your application status page for details and to upload what's needed.`;
+  const smsMessage = params.isRejection
+    ? `Your application ${ref} was not approved by ${params.roleLabel}. Check your email or status page for details.`
+    : `${params.roleLabel} needs one more thing from you for application ${ref}. Check your email or status page to upload it.`;
 
   if (owner?.phone) {
     await notifyApplicantSms(params.applicationId, params.lguId, owner.phone, smsMessage);
@@ -69,10 +72,22 @@ export async function createInfoRequest(
   if (owner?.email) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     const statusUrl = `${appUrl}/status/${ref}`;
-    const subject = params.isRejection ? `Application update: ${ref}` : `More info needed: ${ref}`;
-    const html = `<p><strong>${params.roleLabel}</strong> ${params.isRejection ? "has rejected" : "is requesting more information on"} your application <strong>${ref}</strong>.</p>${
-      params.notes ? `<p>Note: ${params.notes}</p>` : ""
-    }<p><a href="${statusUrl}">View your application status and upload what's needed</a>.</p>`;
+    const lgu = await getLguDisplay(supabase, params.lguId);
+    const subject = params.isRejection ? `Update on your application ${ref}` : `One more document needed — ${ref}`;
+    const bodyHtml = params.isRejection
+      ? `<p style="margin:0 0 6px;">Your application (<strong>${ref}</strong>) was not approved by <strong>${params.roleLabel}</strong>.</p>${
+          params.notes ? noteBoxHtml(params.notes) : ""
+        }<p style="margin:0;">If you have questions, please visit the BPLO office.</p>`
+      : `<p style="margin:0 0 6px;"><strong>${params.roleLabel}</strong> is reviewing your application (<strong>${ref}</strong>) and needs one more thing from you:</p>${
+          params.notes ? noteBoxHtml(params.notes) : ""
+        }<p style="margin:0;">Everything else on your application is fine — once you upload this, ${params.roleLabel} will automatically continue reviewing it. You don't need to call or visit.</p>`;
+    const html = renderApplicantEmailHtml({
+      lgu,
+      officeLabel: params.roleLabel,
+      greetingName: firstNameOf(owner.full_name),
+      bodyHtml,
+      cta: { label: params.isRejection ? "View your application status" : "Upload the document now", href: statusUrl },
+    });
     await notifyApplicantEmail(params.applicationId, owner.email, subject, html);
   }
 }

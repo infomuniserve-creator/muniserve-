@@ -60,10 +60,11 @@ export type LguDisplay = {
   bankAccountName: string | null;
   acceptsOnlinePortal: boolean;
   onlinePortalUrl: string | null; // e.g. a Landbank LinkBiz URL
+  logoUrl: string | null; // migration 0059 -- a public URL in the lgu-logos bucket, shown in the header of every applicant-facing email (applicant-email-template.ts). No generic fallback -- same reasoning as mayorName/treasurerName, there's no sensible default seal for a real LGU that hasn't uploaded one yet.
 };
 
 const LGU_SELECT_COLUMNS =
-  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates, accepts_cash_counter, accepts_gcash, gcash_number, gcash_name, accepts_bank_transfer, bank_name, bank_account_number, bank_account_name, accepts_online_portal, online_portal_url";
+  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates, accepts_cash_counter, accepts_gcash, gcash_number, gcash_name, accepts_bank_transfer, bank_name, bank_account_number, bank_account_name, accepts_online_portal, online_portal_url, logo_url";
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
 function withFallback(row: {
@@ -75,6 +76,7 @@ function withFallback(row: {
   accepts_cash_counter: boolean; accepts_gcash: boolean; gcash_number: string | null; gcash_name: string | null;
   accepts_bank_transfer: boolean; bank_name: string | null; bank_account_number: string | null; bank_account_name: string | null;
   accepts_online_portal: boolean; online_portal_url: string | null;
+  logo_url: string | null;
 }, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
@@ -108,6 +110,7 @@ function withFallback(row: {
     bankAccountName: row.bank_account_name,
     acceptsOnlinePortal: row.accepts_online_portal,
     onlinePortalUrl: row.online_portal_url,
+    logoUrl: row.logo_url,
   };
 }
 

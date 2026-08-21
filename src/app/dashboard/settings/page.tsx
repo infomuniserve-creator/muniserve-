@@ -12,6 +12,7 @@ import { PrintTemplateUpload } from "./print-template-upload";
 import { BusinessImportCard } from "./business-import";
 import { PermitNumberFormatCard } from "./permit-number-format";
 import { PaymentMethodsCard } from "./payment-methods";
+import { LogoUpload } from "./logo-upload";
 import { SmsUsageCard } from "./sms-usage-card";
 import { getCurrentMonthSmsCount, SMS_FREE_MONTHLY_LIMIT } from "@/lib/sms-usage";
 import type { SectionStatus } from "../ui";
@@ -475,6 +476,16 @@ export default async function SettingsPage() {
       </SettingsGroup>
 
       <SettingsGroup icon={<BellIcon className="size-4" />} title="Documents & Alerts" description="What gets printed, and what MuniServe texts out.">
+      <CollapsibleSection
+        title="LGU Logo"
+        sub="Shown in the header of every email sent to applicants, so it's instantly recognizable as really coming from your office."
+        status={lgu.logoUrl ? { label: "Logo set", tone: "good" } : { label: "No logo yet", tone: "neutral" }}
+      >
+        <Card className="p-5">
+          <LogoUpload logoUrl={lgu.logoUrl} lguName={lgu.name} />
+        </Card>
+      </CollapsibleSection>
+
       <CollapsibleSection
         title="Permit No. Format"
         sub="How your reference number looks, e.g. SMB-2026-000056 — three fields: a prefix you choose, the year, and an auto-incrementing number that resets every January. Applies to every new application going forward; permits already issued keep the number they were given."

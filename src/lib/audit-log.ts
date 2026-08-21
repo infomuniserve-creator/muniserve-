@@ -59,7 +59,8 @@ export type AuditAction =
   | "installment_reminder_dates_updated"
   | "payment_methods_updated"
   | "lgu_department_added"
-  | "lgu_department_updated";
+  | "lgu_department_updated"
+  | "lgu_logo_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --
