@@ -11,6 +11,7 @@ import { requireLbtCategorySet, setBusinessLbtCategory } from "@/lib/lbt-categor
 import { generateOrderOfPaymentPdf } from "@/lib/order-of-payment-pdf";
 import { anyChannelNeedsProofUpload, formatPaymentChannelsForEmailHtml, formatPaymentChannelsForSms, getEnabledPaymentChannels } from "@/lib/payment-methods";
 import { createInfoRequest, reopenDepartmentRound } from "@/lib/info-requests";
+import { notifyApplicantOfFsifIfDue } from "@/lib/fsif-notice";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -103,6 +104,13 @@ export async function submitInitialReview(formData: FormData) {
 
   if (newStatus === "pending_dept_review") {
     await openDepartmentReviewRound(supabase, applicationId, staff.lgu_id);
+    // Fire Safety Inspection Fee notice (2026-08-21) -- a no-op unless
+    // this LGU has an active "BFP" department, matching CLAUDE.md 7c's
+    // "BFP works independently, paid on their own portal" reality. Scoped
+    // deliberately to this one entry point (BPLO's own initial approval),
+    // not the walk-in path or a resubmission reopening BFP's round --
+    // see fsif-notice.ts's own doc comment for why.
+    await notifyApplicantOfFsifIfDue(supabase, { applicationId, lguId: staff.lgu_id });
   } else if (newStatus === "returned_to_applicant") {
     // Closes the "request more info" loop (2026-08-16 follow-up) --
     // previously a dead-end generic SMS with no note shown to the

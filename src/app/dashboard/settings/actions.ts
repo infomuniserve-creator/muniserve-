@@ -409,6 +409,34 @@ export async function updatePermitNumberFormat(formData: FormData) {
  * updateMayorName -- migration 0027's general "bplo can update their own
  * lgu's settings" policy already covers this column, no new policy.
  */
+/**
+ * Fire Department (BFP) Contact (2026-08-21) -- where an applicant's FSIF
+ * proof-of-payment actually goes (fsif-notice.ts's own notification).
+ * BFP's real office contact, not a MuniServe address -- no generic
+ * fallback, same reasoning as treasurerName/mayorName above.
+ */
+export async function updateBfpContact(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const bfpContactEmail = String(formData.get("bfpContactEmail") ?? "").trim() || null;
+  const bfpContactPhone = String(formData.get("bfpContactPhone") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lgus").update({ bfp_contact_email: bfpContactEmail, bfp_contact_phone: bfpContactPhone }).eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "bfp_contact_updated",
+    summary: bfpContactEmail || bfpContactPhone ? "BFP contact details updated" : "BFP contact details cleared",
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
 export async function updateSenderName(formData: FormData) {
   const staff = await requireUnpausedStaff();
   if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
