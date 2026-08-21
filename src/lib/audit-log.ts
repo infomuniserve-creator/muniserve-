@@ -60,8 +60,7 @@ export type AuditAction =
   | "payment_methods_updated"
   | "lgu_department_added"
   | "lgu_department_updated"
-  | "lgu_logo_updated"
-  | "bfp_contact_updated";
+  | "lgu_logo_updated";
 
 /**
  * Appends one row to the audit_log table (CLAUDE.md 7o follow-up) --

@@ -71,15 +71,30 @@ export async function notifyApplicantOfFsifIfDue(supabase: SupabaseClient, param
     // own department review queue actually reads from (getApplicationDocuments,
     // the same mechanism CLAUDE.md 7c/7ll's info-request uploads already
     // use) -- so this is the CTA, not a plain link to the payment portal
-    // itself. Direct email/SMS to BFP (bfpContactEmail/bfpContactPhone) is
-    // offered only as a supplementary option when BPLO has actually
-    // configured it, never the primary instruction, since MuniServe has no
-    // way to confirm BFP ever saw a message sent outside the system.
+    // itself. Direct email/SMS to BFP is offered only as a supplementary
+    // option, and only when a real BFP staff account with contact info
+    // actually exists (2026-08-21 follow-up -- a separate manually-typed
+    // Settings field would just duplicate what BPLO already enters when
+    // adding a BFP staff member, staff_users.email/phone, CLAUDE.md 7m/7w;
+    // this looks it up live instead). Excludes an admin-proxy row, same
+    // exclusion notifyStaffByRole already applies -- its email is a
+    // synthetic, unreachable placeholder.
+    const { data: bfpStaff } = await supabase
+      .from("staff_users")
+      .select("email, phone")
+      .eq("lgu_id", params.lguId)
+      .eq("role", "department")
+      .eq("department", bfpDept.name)
+      .eq("is_active", true)
+      .eq("is_admin_proxy", false);
+    const bfpEmails = [...new Set((bfpStaff ?? []).map((s) => s.email).filter((e): e is string => Boolean(e)))];
+    const bfpPhones = [...new Set((bfpStaff ?? []).map((s) => s.phone).filter((p): p is string => Boolean(p)))];
+
     const directContactLine =
-      lgu.bfpContactEmail || lgu.bfpContactPhone
+      bfpEmails.length > 0 || bfpPhones.length > 0
         ? `<p style="margin:16px 0 0;">You can also send a copy directly to BFP — include your Permit ID (<strong>${ref}</strong>) so they can match it:<br />${[
-            lgu.bfpContactEmail ? `Email: ${lgu.bfpContactEmail}` : null,
-            lgu.bfpContactPhone ? `Phone/SMS: ${lgu.bfpContactPhone}` : null,
+            bfpEmails.length > 0 ? `Email: ${bfpEmails.join(", ")}` : null,
+            bfpPhones.length > 0 ? `Phone/SMS: ${bfpPhones.join(", ")}` : null,
           ]
             .filter(Boolean)
             .join("<br />")}</p>`

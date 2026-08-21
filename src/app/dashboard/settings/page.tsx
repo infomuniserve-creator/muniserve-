@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
-import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBfpContact, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
+import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -601,41 +601,6 @@ export default async function SettingsPage() {
               ? `Texts currently show "${lgu.senderName}" as the sender — no "BPLO:" prefix is added, since the name itself already identifies who's texting.`
               : "No custom Sender Name set yet — texts currently arrive under MuniServe's shared Semaphore sender, prefixed \"BPLO:\" so recipients know who it's from."}{" "}
             A custom Sender Name has to be purchased and approved directly with Semaphore (MuniServe&rsquo;s SMS provider) first — enter the exact approved name here once that&rsquo;s done.
-          </p>
-        </Card>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Fire Department (BFP) Contact"
-        sub="Where an applicant sends their Fire Safety Inspection Fee (FSIF) proof of payment — shown in the notice they get right after BPLO's initial approval, if BFP is one of your active departments."
-        status={lgu.bfpContactEmail || lgu.bfpContactPhone ? { label: "Contact set", tone: "good" } : { label: "Not set", tone: "neutral" }}
-      >
-        <Card className="p-5">
-          <form action={updateBfpContact} className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-bold text-ink-soft">BFP email</span>
-              <input
-                name="bfpContactEmail"
-                type="email"
-                defaultValue={lgu.bfpContactEmail ?? ""}
-                placeholder="e.g. bfp.sanmiguel@bfp.gov.ph"
-                className="h-9 w-64 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-bold text-ink-soft">BFP phone/SMS</span>
-              <input
-                name="bfpContactPhone"
-                type="text"
-                defaultValue={lgu.bfpContactPhone ?? ""}
-                placeholder="e.g. 0917-123-4567"
-                className="h-9 w-48 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
-              />
-            </label>
-            <PrimaryButton type="submit">Save</PrimaryButton>
-          </form>
-          <p className="mt-3 text-[11.5px] text-ink-soft">
-            BFP works independently from your local government and only accepts the FSIF through its own national e-BFP portal. These fields are only for where an applicant sends their proof of payment afterward — leave either blank if you&rsquo;d rather applicants bring it to the BFP office in person.
           </p>
         </Card>
       </CollapsibleSection>
