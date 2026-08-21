@@ -156,21 +156,34 @@ export default async function BploDashboardPage() {
         <EmptyState>Nothing waiting at Initial review right now.</EmptyState>
       ) : (
         <div className="flex flex-col gap-4">
-          {initial.map((a) => (
-            <InitialReviewCard
-              key={a.id}
-              applicationId={a.id}
-              businessId={biz(a)?.id ?? null}
-              businessName={businessName(a)}
-              ownerName={ownerName(a)}
-              applicationType={a.application_type}
-              status={a.status}
-              legacyAddress={biz(a)?.address ?? null}
-              profile={biz(a) ? mapBusinessProfile(biz(a)!) : null}
-              basisAmount={basisAmount(a)}
-              lbtCategoryOptions={lbtCategoryOptions}
-            />
-          ))}
+          {initial.map((a) => {
+            const profile = biz(a) ? mapBusinessProfile(biz(a)!) : null;
+            return (
+              <InitialReviewCard
+                // React 19 resets a <form>'s own DOM elements after a
+                // successful action={fn} submit (same latent bug as
+                // PaymentMethodsCard/PermitNumberFormatCard, CLAUDE.md
+                // 2026-08-19 -- an uncontrolled <select defaultValue={...}>
+                // has the identical problem, not just a controlled one).
+                // Keying on lbtCategory too, not just the application id,
+                // forces a clean remount the instant setLbtCategory's own
+                // save actually changes it, so the dropdown reflects the
+                // real saved value instead of visually reverting to "not
+                // set" while the database write underneath is correct.
+                key={`${a.id}|${profile?.lbtCategory ?? ""}`}
+                applicationId={a.id}
+                businessId={biz(a)?.id ?? null}
+                businessName={businessName(a)}
+                ownerName={ownerName(a)}
+                applicationType={a.application_type}
+                status={a.status}
+                legacyAddress={biz(a)?.address ?? null}
+                profile={profile}
+                basisAmount={basisAmount(a)}
+                lbtCategoryOptions={lbtCategoryOptions}
+              />
+            );
+          })}
         </div>
       )}
     </div>

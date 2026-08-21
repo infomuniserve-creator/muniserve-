@@ -227,7 +227,12 @@ export default async function BusinessesPage({
         <div className="overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_1px_2px_rgba(23,33,66,0.05),0_10px_28px_-12px_rgba(23,33,66,0.14)]">
           {displayed.map(({ business: b, status, apps }) => (
             <RegistryRow
-              key={b.id}
+              // Same React 19 "form resets after action" gotcha as
+              // bplo/page.tsx's InitialReviewCard (2026-08-21) -- an
+              // uncontrolled <select defaultValue={...}> visually reverts
+              // to "not set" after a successful setLbtCategory save unless
+              // the saved value's own change forces a clean remount.
+              key={`${b.id}|${mapBusinessProfile(b).lbtCategory ?? ""}`}
               business={b}
               status={status}
               apps={apps}

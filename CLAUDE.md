@@ -1643,6 +1643,18 @@ The project owner asked directly, having looked at the live `/apply` page on a r
 
 ---
 
+## 7a19. LBT category dropdown visually reverted after a real save (2026-08-21, same day)
+
+The project owner reported it live, mid-test: on BPLO's Initial Review card, setting the LBT category and clicking Save "looks like it saved," but the dropdown itself flipped back to "— not set —" right after. The exact same bug CLAUDE.md's own "Fix Settings checkboxes/dropdowns visually reverting after a successful save" entry (2026-08-19) already found and fixed twice (`PaymentMethodsCard`, `PermitNumberFormatCard`) -- React 19 resets a `<form>`'s own DOM elements after a successful `action={fn}` submit, and without a `key` derived from the persisted data forcing a clean remount, the stale reset sticks even once the fresh server-rendered value comes back. That earlier fix only ever touched *controlled* inputs (`useState` + `value=`); this is the same root cause showing up on a plain **uncontrolled** `<select defaultValue={...}>` rendered directly from a Server Component -- confirming the bug class isn't limited to the controlled-component shape it was first diagnosed against.
+
+**Two call sites had the identical shape**, both found and fixed together rather than stopping at the one reported: `bplo/page.tsx`'s `InitialReviewCard` (what was actually tested) and `businesses/page.tsx`'s `RegistryRow` (the Business Registry's own LBT-category editor, CLAUDE.md 7p) -- both render a `<select name="lbtCategory" defaultValue={...}>` inside a plain `<form action={setLbtCategory}>`, both keyed only on the application/business id in their parent `.map()`, never on the category value itself.
+
+**Fixed the same way as the earlier two components**: each parent's `key` now also incorporates the current `lbtCategory` (`` `${a.id}|${profile?.lbtCategory ?? ""}` ``) -- a save that actually changes the value forces React to tear down and remount the row from scratch, so the fresh `defaultValue` from the just-revalidated data applies to a genuinely new DOM node instead of being silently ignored on a preserved one.
+
+**Verified the mechanism directly, not just re-read the source** -- same discipline as the original two fixes: a temporary fixture (deleted immediately after) reproduced the exact shape with a real Server Action + `revalidatePath`, rendering a "BUGGY" row (fixed key) side by side with a "FIXED" row (key includes the value). Selecting "Retailer" and saving on both, then reading each `<select>`'s real DOM `.value` afterward: the buggy row's `.value` reverted to `""` even though the underlying persisted value was genuinely `"Retailer"` (the bug, reproduced on demand) -- the fixed row's `.value` correctly read `"Retailer"` (the fix, confirmed working). `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 34 routes, fixture deleted afterward.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:
