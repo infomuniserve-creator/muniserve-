@@ -1583,6 +1583,12 @@ Two things prompted this pass, raised together by the project owner: a real repo
 
 **Verified against San Miguel's actual just-uploaded logo, not a synthetic one**: a temporary fixture route (deleted immediately after) called the real, unmodified `generateOrderOfPaymentPdf()` with San Miguel's real `lgu.logoUrl` and realistic line items, saved the real output PDF, and confirmed via a throwaway pdf-lib script that the generated file contains a genuine embedded Image XObject on page 1 (not silently skipped) and that its file size (382KB, versus a plain-text PDF's usual few KB) is consistent with a real embedded JPEG. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean; the fixture route and generated test PDFs deleted afterward.
 
+**Third same-day follow-up: the assessment-finalized SMS was doing too much.** The project owner's own direct feedback: listing every accepted payment channel's own detail inline in the SMS (`formatPaymentChannelsForSms`'s output -- "Pay via: Cash at the Treasurer's Office, or GCash 09171234567...") was more than a text message should carry, especially since the branded email sent alongside it already has the full itemized breakdown, the same "how to pay" list, and the upload-your-proof button. The SMS now just says to check email for both how to pay and how to submit proof of payment, when the owner actually has an email on file.
+
+**Deliberately kept the old, fuller wording as a fallback** for the one real case where "check your email" would be a dead end: an owner with no email at all (optional, unlike phone -- `notifications.ts`'s own standing reasoning, since phone is the applicant's guaranteed OTP-verified identity in this system). `finalizeAssessment` (`bplo/actions.ts`) now branches on `business.owner.email` before choosing the SMS body -- the email-present case gets the new short redirect, the no-email case keeps the original inline channel listing so that applicant still has actionable information from the one channel guaranteed to reach them.
+
+Verified with `npx tsc --noEmit`, `eslint`, and a full `next build`, all clean -- a plain conditional-string change with no new rendering path, so no fixture-driven UI verification was needed beyond that.
+
 ---
 
 ## 7a16. Fire Safety Inspection Fee (FSIF) notice, right after BPLO's initial approval (2026-08-21, same day)

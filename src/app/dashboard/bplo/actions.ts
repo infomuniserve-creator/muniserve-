@@ -553,12 +553,19 @@ export async function finalizeAssessment(formData: FormData) {
     // Use each line's FINAL amount (override if BPLO set one), not
     // result.total -- that total was computed before overrides, and
     // the applicant needs to know what they actually owe.
-    await notifyApplicantSms(
-      applicationId,
-      staff.lgu_id,
-      business.owner.phone,
-      `Your application ${application.reference_number} has been assessed. Total to pay: PHP ${totalDue.toLocaleString()}. ${formatPaymentChannelsForSms(paymentChannels)}`
-    );
+    //
+    // Real feedback (2026-08-21): listing every accepted payment
+    // channel's own detail in the SMS was too much for a text message --
+    // the branded email below already has the full "how to pay"
+    // breakdown plus the upload-your-proof button, so the SMS just
+    // points there now. Only falls back to listing the channels inline
+    // when the owner has no email on file at all (optional, unlike
+    // phone, notifications.ts's own standing reasoning) -- otherwise
+    // "check your email" would be a dead end with nothing to check.
+    const smsMessage = business.owner.email
+      ? `Your application ${application.reference_number} has been assessed. Total to pay: PHP ${totalDue.toLocaleString()}. Check your email for how to pay and how to submit your proof of payment.`
+      : `Your application ${application.reference_number} has been assessed. Total to pay: PHP ${totalDue.toLocaleString()}. ${formatPaymentChannelsForSms(paymentChannels)}`;
+    await notifyApplicantSms(applicationId, staff.lgu_id, business.owner.phone, smsMessage);
   }
 
   // Order of Payment email -- a deliberate exception to the "applicants
