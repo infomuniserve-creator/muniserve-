@@ -1629,6 +1629,20 @@ The project owner looked at their own live Performance page and asked directly w
 
 ---
 
+## 7a18. Applicant form: wider on desktop, larger text throughout (2026-08-21, same day)
+
+The project owner asked directly, having looked at the live `/apply` page on a real desktop browser: the form reads as small and under-using the available width, and might be genuinely hard to read for an older applicant -- but explicitly didn't want to risk the mobile responsiveness a separate earlier session had already fixed (CLAUDE.md 7a8). Checked the actual code before answering rather than guessing: the root container (`ApplyPageClient.tsx`) was hard-capped at `maxWidth: 640`, and nearly every label/body/caption `fontSize` in the file sat at 11-13px, with the one shared `inputStyle` (every text input, select, and the OTP/permit-number fields) at 14px.
+
+**Confirmed safe against the mobile work before changing anything**: the root container has no media query at all -- `maxWidth` only ever caps the *upper* bound, so a real phone viewport (375-428px, far below both the old 640 and the new 780) was already rendering at 100% width regardless of the cap's value, and stays exactly that way after this change. The public-form iframe embed (`embed.ts`'s `buildApplyEmbedSnippet`) uses `width:100%` with no fixed pixel assumption either, so widening the internal cap doesn't affect embedded instances on an LGU's own website.
+
+**Widened**: `maxWidth: 640` -> `780` on the one root div everything (the `LguBanner` letterhead, every screen, every field) renders inside -- confirmed via computed styles at a real 1280px viewport that the container now centers at 780px (250px of margin per side, down from 320px), not just a source-code change that might not have actually taken effect.
+
+**Every font size in the file bumped up one step on the same relative scale**, not just one arbitrarily-chosen spot -- 11->13, 12->14, 13->15, 14->16 (the shared `inputStyle`, so every typed/selected value an applicant reads back is also larger, not just static labels), 16->18 (the one `Head` title size). Done as a single mechanical placeholder-based substitution across all ~46 occurrences in one pass (temporary unique tokens per source size, then a second pass to the target sizes) specifically so an 11->13 conversion could never accidentally get re-matched and bumped again by a later 13->15 rule in the same pass. `inputStyle`'s own height nudged `44` -> `46` to give the now-larger 16px text a little more room, height and size raised together rather than leaving type visually cramped inside its own field.
+
+**Verified directly, not just by re-reading the source**: `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean. Then checked real computed styles in the browser preview at both ends of the range -- at a real 1280px desktop viewport, the container measures exactly 780px wide (not just "780 in the style prop"); at a real 375px mobile viewport, the container still measures the full 375px edge-to-edge, completely unaffected, exactly as the "no media query needed" reasoning above predicted.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

@@ -925,7 +925,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       return (
         <Field key={fd.key} id={fd.key} label={label}>
           <input id={fd.key} value="Annual" readOnly style={{ ...inputStyle, background: "#f4f6fb", color: "#6b7280" }} />
-          <span style={{ fontSize: 11, color: "#9199a8", marginTop: 4, display: "block" }}>
+          <span style={{ fontSize: 13, color: "#9199a8", marginTop: 4, display: "block" }}>
             New businesses pay the full year&rsquo;s business tax upfront. Bi-Annual and Quarterly are only available on renewal.
           </span>
         </Field>
@@ -940,10 +940,10 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       // conveyed that they were a group at all (2026-08-20 audit finding).
       return (
         <fieldset key={fd.key} style={{ marginBottom: 12, border: "none", padding: 0, margin: "0 0 12px" }}>
-          <legend style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, padding: 0 }}>{label}</legend>
+          <legend style={{ display: "block", fontSize: 14, color: "#6b7280", marginBottom: 4, padding: 0 }}>{label}</legend>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {fd.options.map((opt) => (
-              <label key={opt} style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, minHeight: 32 }}>
+              <label key={opt} style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 6, minHeight: 32 }}>
                 <input
                   type="checkbox"
                   checked={current.includes(opt)}
@@ -993,7 +993,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           onChange={(e) => setForm((f) => ({ ...f, [fd.key]: e.target.value }))}
           style={inputStyle}
         />
-        {pesoPreview && <span style={{ fontSize: 11, color: "#6b7280", marginTop: 4, display: "block" }}>{pesoPreview}</span>}
+        {pesoPreview && <span style={{ fontSize: 13, color: "#6b7280", marginTop: 4, display: "block" }}>{pesoPreview}</span>}
       </Field>
     );
   }
@@ -1004,13 +1004,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   // system-font override on this root div was silently fighting that
   // (2026-08-20 audit finding).
   return (
-    <div ref={rootRef} style={{ maxWidth: 640, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: FIELD_BORDER, color: "#1a1a2e" }}>
+    <div ref={rootRef} style={{ maxWidth: 780, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: FIELD_BORDER, color: "#1a1a2e" }}>
       <LguBanner lgu={lgu} />
       {screen !== "landing" && screen !== "submitted" && (
         <button onClick={startOver} style={backBtnStyle}>Start over</button>
       )}
       {error && (
-        <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 16 }}>{error}</div>
+        <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 14, padding: "8px 12px", borderRadius: 8, marginBottom: 16 }}>{error}</div>
       )}
 
       {screen === "landing" && (
@@ -1030,7 +1030,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
             <input id="permitNumberInput" value={permitNumberInput} onChange={(e) => setPermitNumberInput(e.target.value)} placeholder="e.g. MS-2026-00001 or your old License No." style={inputStyle} />
           </Field>
           <button onClick={lookupPermitNumber} disabled={loading || !permitNumberInput.trim()} style={{ ...actBtnStyle, ...((loading || !permitNumberInput.trim()) ? disabledBtnStyle : {}) }}>Continue</button>
-          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
+          <p style={{ fontSize: 13, color: "#6b7280", marginTop: 16 }}>
             Don&rsquo;t have either number handy?{" "}
             <a href="#" onClick={(e) => { e.preventDefault(); setPhoneSigninMode(true); setScreen("phone"); }} style={{ color: "#0C447C" }}>
               Sign in with your phone instead
@@ -1049,14 +1049,14 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           <>
             <Head title="Is this your business?" sub="This business is already registered. We'll text a one-time code to the mobile number on file." />
             <div style={cardStyle}>
-              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{claimedMatch.businessName}</p>
-              <p style={{ fontSize: 12, color: "#6b7280" }}>Registered mobile number ending in {claimedMatch.maskedPhone.slice(-4)}</p>
+              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{claimedMatch.businessName}</p>
+              <p style={{ fontSize: 14, color: "#6b7280" }}>Registered mobile number ending in {claimedMatch.maskedPhone.slice(-4)}</p>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={sendRenewalOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Send code to this number</button>
               <button onClick={() => { setClaimedMatch(null); setScreen("renewal_license"); }} style={actBtnStyle}>Not me</button>
             </div>
-            <p style={{ fontSize: 11, color: "#6b7280", marginTop: 16 }}>
+            <p style={{ fontSize: 13, color: "#6b7280", marginTop: 16 }}>
               That&rsquo;s not your number anymore? Please visit the BPLO office to have it updated.
             </p>
           </>
@@ -1064,8 +1064,8 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           <>
             <Head title="Is this your business?" sub="We found a record under that number. Confirm before continuing." />
             <div style={cardStyle}>
-              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{matchedLegacy.businessName}</p>
-              <p style={{ fontSize: 12, color: "#6b7280" }}>
+              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{matchedLegacy.businessName}</p>
+              <p style={{ fontSize: 14, color: "#6b7280" }}>
                 Owner on file: {matchedLegacy.ownerNameMasked} · {matchedLegacy.barangay} · {matchedLegacy.natureOfBusiness}
               </p>
             </div>
@@ -1084,7 +1084,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
             <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09XX XXX XXXX" style={inputStyle} inputMode="tel" autoComplete="tel" />
           </Field>
           {phone.trim().length > 0 && !isValidPhFormat(phone) && (
-            <p style={{ fontSize: 11, color: "#791F1F", marginTop: -6, marginBottom: 10 }}>
+            <p style={{ fontSize: 13, color: "#791F1F", marginTop: -6, marginBottom: 10 }}>
               Enter an 11-digit mobile number starting with 09 (e.g. 09171234567).
             </p>
           )}
@@ -1109,7 +1109,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
             <button onClick={verifyOtp} disabled={loading || otpInput.trim().length !== 6} style={{ ...actBtnStyle, ...((loading || otpInput.trim().length !== 6) ? disabledBtnStyle : {}) }}>Verify</button>
             <button onClick={renewalOtpSent && claimedMatch ? sendRenewalOtp : sendOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Resend code</button>
           </div>
-          {otpSent && <p style={{ fontSize: 11, color: "#6b7280", marginTop: 10 }}>Code sent via SMS.</p>}
+          {otpSent && <p style={{ fontSize: 13, color: "#6b7280", marginTop: 10 }}>Code sent via SMS.</p>}
         </>
       )}
 
@@ -1117,10 +1117,10 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         <>
           <Head title="We found an account" sub="A profile already exists for this mobile number." />
           <div style={cardStyle}>
-            <p style={{ fontSize: 13, fontWeight: 500 }}>Welcome back</p>
-            <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{businessCount} business{businessCount === 1 ? "" : "es"} currently on file</p>
+            <p style={{ fontSize: 15, fontWeight: 500 }}>Welcome back</p>
+            <p style={{ fontSize: 14, color: "#6b7280", marginTop: 4 }}>{businessCount} business{businessCount === 1 ? "" : "es"} currently on file</p>
           </div>
-          <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>This new business will be added to your existing profile, no separate account needed.</p>
+          <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 10 }}>This new business will be added to your existing profile, no separate account needed.</p>
           <button onClick={() => setScreen("form")} style={actBtnStyle}>Continue</button>
         </>
       )}
@@ -1132,8 +1132,8 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
             {myBusinesses.map((b) => (
               <button key={b.id} onClick={() => pickBusiness(b)} style={{ ...rowStyle, width: "100%", background: "#fff", font: "inherit", color: "inherit", textAlign: "left" }}>
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{b.businessName}</p>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{b.barangay} · {b.natureOfBusiness}</p>
+                  <p style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>{b.businessName}</p>
+                  <p style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>{b.barangay} · {b.natureOfBusiness}</p>
                 </div>
               </button>
             ))}
@@ -1146,7 +1146,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           <Head title="Business permit application" sub={`${path === "renewal" ? "Renewal" : "New application"} · ${lgu.name}, ${lgu.province}`} />
           {path === "renewal" && (
             <div style={{ ...cardStyle, background: "#f4f6fb", border: "none" }}>
-              <p style={{ fontSize: 12, color: "#6b7280" }}>Pre-filled from your existing record, update anything that has changed.</p>
+              <p style={{ fontSize: 14, color: "#6b7280" }}>Pre-filled from your existing record, update anything that has changed.</p>
             </div>
           )}
 
@@ -1157,7 +1157,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           {addressFieldsForRender.map(renderField)}
 
           <SectionHeading>Owner / representative info</SectionHeading>
-          <p style={{ fontSize: 11, color: "#6b7280", marginTop: -6, marginBottom: 12 }}>
+          <p style={{ fontSize: 13, color: "#6b7280", marginTop: -6, marginBottom: 12 }}>
             For a corporation, cooperative, or partnership, enter the name of the president or officer-in-charge.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
@@ -1180,7 +1180,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
               {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </Field>
-          <p style={{ fontSize: 11, color: "#6b7280", marginTop: -6, marginBottom: 14 }}>
+          <p style={{ fontSize: 13, color: "#6b7280", marginTop: -6, marginBottom: 14 }}>
             Your mobile number is tied to your verified sign-in and can&rsquo;t be changed here — use &ldquo;Start over&rdquo; if it&rsquo;s wrong.
           </p>
 
@@ -1192,7 +1192,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
               <SectionHeading>Documents to submit</SectionHeading>
               {DOCUMENT_FIELDS.filter((d) => isFieldVisible(d.key, formValues) && !(d.key === "cedulaDoc" && lgu.cedulaIncludedOnline)).map((d) => (
                 <div key={d.key} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12 }}>
+                  <span style={{ fontSize: 14 }}>
                     {d.label}{REQUIRED_FIELDS.has(d.key) ? " *" : ""}{documents[d.key] ? " ✓" : ""}
                   </span>
                   <label style={{ ...actBtnStyle, display: "inline-block" }}>
@@ -1213,8 +1213,8 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
               />
 
               <div style={{ ...cardStyle, marginTop: 12 }}>
-                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>{declarationText(lgu)}</p>
-                <label style={{ fontSize: 12, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{declarationText(lgu)}</p>
+                <label style={{ fontSize: 14, display: "flex", alignItems: "flex-start", gap: 6 }}>
                   <input type="checkbox" checked={declarationAccepted} onChange={(e) => setDeclarationAccepted(e.target.checked)} style={{ marginTop: 2 }} />
                   I have read and agree to the above.
                 </label>
@@ -1227,17 +1227,17 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
               >
                 {loading ? "Submitting…" : "Submit application"}
               </button>
-              <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8 }}>
+              <p style={{ fontSize: 13, color: "#6b7280", marginTop: 8 }}>
                 * required. If anything&rsquo;s missing, you&rsquo;ll see exactly what&rsquo;s missing right here after you submit.
               </p>
             </>
           ) : (
             <div style={{ ...cardStyle, background: "#f4f6fb", border: "none", marginTop: 20 }}>
-              <p style={{ fontSize: 12, color: "#6b7280" }}>
+              <p style={{ fontSize: 14, color: "#6b7280" }}>
                 Fill in the required fields above (marked *) to continue to document uploads, your signature, and submission.
               </p>
               {missingRequiredFields.length > 0 && (
-                <p style={{ fontSize: 11, color: "#6b7280", marginTop: 6 }}>
+                <p style={{ fontSize: 13, color: "#6b7280", marginTop: 6 }}>
                   Still needed: {missingRequiredFields.map(fieldLabel).join(", ")}.
                 </p>
               )}
@@ -1250,7 +1250,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         <>
           <Head title="Application submitted" sub={`Reference number ${submittedReference}`} />
           <div style={cardStyle}>
-            <p style={{ fontSize: 13 }}>BPLO will review your submitted documents first. You will get an SMS the moment there is an update, no need to keep checking.</p>
+            <p style={{ fontSize: 15 }}>BPLO will review your submitted documents first. You will get an SMS the moment there is an update, no need to keep checking.</p>
           </div>
           <a href={`/status/${submittedReference}`} style={{ ...actBtnStyle, display: "inline-block", textDecoration: "none" }}>View application status</a>
         </>
@@ -1264,15 +1264,15 @@ function LguBanner({ lgu }: { lgu: LguDisplay }) {
   const year = new Date().getFullYear();
   return (
     <div style={{ background: "#0C4DA2", color: "#fff", borderRadius: 12, padding: "18px 20px", marginBottom: 20, textAlign: "center" }}>
-      <p style={{ fontSize: 13, margin: 0 }}>Republic of Philippines</p>
-      {lgu.province && <p style={{ fontSize: 13, margin: 0 }}>Province of {lgu.province}</p>}
-      <p style={{ fontSize: 13, margin: 0 }}>{lgu.displayName}</p>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: "2px 0 0", textTransform: "uppercase" }}>
+      <p style={{ fontSize: 15, margin: 0 }}>Republic of Philippines</p>
+      {lgu.province && <p style={{ fontSize: 15, margin: 0 }}>Province of {lgu.province}</p>}
+      <p style={{ fontSize: 15, margin: 0 }}>{lgu.displayName}</p>
+      <p style={{ fontSize: 15, fontWeight: 700, margin: "2px 0 0", textTransform: "uppercase" }}>
         {lgu.bploOfficeName}
       </p>
       <div style={{ borderTop: "1px dashed rgba(255,255,255,0.55)", margin: "12px 0" }} />
-      <p style={{ fontSize: 13, fontWeight: 700, margin: 0, textTransform: "uppercase" }}>Unified Application Form for Business Permit</p>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: "2px 0 0", textTransform: "uppercase" }}>Tax Year {year}</p>
+      <p style={{ fontSize: 15, fontWeight: 700, margin: 0, textTransform: "uppercase" }}>Unified Application Form for Business Permit</p>
+      <p style={{ fontSize: 15, fontWeight: 700, margin: "2px 0 0", textTransform: "uppercase" }}>Tax Year {year}</p>
     </div>
   );
 }
@@ -1280,15 +1280,15 @@ function LguBanner({ lgu }: { lgu: LguDisplay }) {
 function Head({ title, sub }: { title: string; sub?: string }) {
   return (
     <div style={{ marginBottom: "1.25rem" }}>
-      <p style={{ fontWeight: 500, fontSize: 16, margin: 0 }}>{title}</p>
-      {sub && <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>{sub}</p>}
+      <p style={{ fontWeight: 500, fontSize: 18, margin: 0 }}>{title}</p>
+      {sub && <p style={{ fontSize: 15, color: "#6b7280", marginTop: 4 }}>{sub}</p>}
     </div>
   );
 }
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", margin: "20px 0 10px", borderTop: FIELD_BORDER, paddingTop: 14 }}>
+    <p style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", margin: "20px 0 10px", borderTop: FIELD_BORDER, paddingTop: 14 }}>
       {children}
     </p>
   );
@@ -1306,7 +1306,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 function Field({ label, id, children }: { label: string; id?: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 12, flex: 1 }}>
-      <label htmlFor={id} style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</label>
+      <label htmlFor={id} style={{ display: "block", fontSize: 14, color: "#6b7280", marginBottom: 4 }}>{label}</label>
       {children}
     </div>
   );
@@ -1443,7 +1443,7 @@ function SearchableSelect({ id, value, onChange, options }: { id?: string; value
           }}
         >
           {filtered.length === 0 ? (
-            <div style={{ padding: "10px 12px", fontSize: 13, color: "#9ca3af" }}>No matches — try a different spelling.</div>
+            <div style={{ padding: "10px 12px", fontSize: 15, color: "#9ca3af" }}>No matches — try a different spelling.</div>
           ) : (
             filtered.map((opt, i) => (
               <div
@@ -1458,7 +1458,7 @@ function SearchableSelect({ id, value, onChange, options }: { id?: string; value
                 onMouseEnter={() => setHighlighted(i)}
                 style={{
                   padding: "9px 12px",
-                  fontSize: 13,
+                  fontSize: 15,
                   cursor: "pointer",
                   background: i === highlighted ? "#f4f6fb" : "#fff",
                   color: opt === value ? "#0C447C" : "#1a1a2e",
@@ -1478,8 +1478,8 @@ function SearchableSelect({ id, value, onChange, options }: { id?: string; value
 function OptCard({ title, desc, onClick }: { title: string; desc: string; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{ textAlign: "left", border: FIELD_BORDER, borderRadius: 12, padding: "1rem", minHeight: 44, cursor: "pointer", flex: 1, minWidth: 200, background: "#fff", font: "inherit", color: "inherit" }}>
-      <p style={{ fontWeight: 500, fontSize: 14, marginBottom: 6 }}>{title}</p>
-      <p style={{ fontSize: 12, color: "#6b7280" }}>{desc}</p>
+      <p style={{ fontWeight: 500, fontSize: 16, marginBottom: 6 }}>{title}</p>
+      <p style={{ fontSize: 14, color: "#6b7280" }}>{desc}</p>
     </button>
   );
 }
@@ -1590,7 +1590,7 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
         <button type="button" onClick={save} disabled={saving} style={{ ...actBtnStyle, ...(saving ? disabledBtnStyle : {}) }}>
           {saving ? "Saving…" : "Save now"}
         </button>
-        {!saving && !saved && <span style={{ fontSize: 11, color: "#6b7280" }}>Saves automatically a moment after you finish signing.</span>}
+        {!saving && !saved && <span style={{ fontSize: 13, color: "#6b7280" }}>Saves automatically a moment after you finish signing.</span>}
       </div>
     </Field>
   );
@@ -1604,8 +1604,8 @@ function SignaturePad({ onSave, saving, saved }: { onSave: (file: File) => void;
 // button padding) raised toward the ~44px comfortable minimum for the same
 // audit pass -- this app's primary audience is on older/cheaper phones.
 const FIELD_BORDER = "1px solid #c7ced8";
-const backBtnStyle: React.CSSProperties = { fontSize: 13, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: FIELD_BORDER, background: "#fff", cursor: "pointer", marginBottom: 16 };
-const actBtnStyle: React.CSSProperties = { fontSize: 13, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: FIELD_BORDER, background: "#fff", cursor: "pointer" };
+const backBtnStyle: React.CSSProperties = { fontSize: 15, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: FIELD_BORDER, background: "#fff", cursor: "pointer", marginBottom: 16 };
+const actBtnStyle: React.CSSProperties = { fontSize: 15, padding: "10px 16px", minHeight: 44, borderRadius: 8, border: FIELD_BORDER, background: "#fff", cursor: "pointer" };
 const primaryBtnStyle: React.CSSProperties = { background: "#0C447C", color: "#fff", borderColor: "#0C447C", fontWeight: 600 };
 /** actBtnStyle/primaryBtnStyle have no disabled variant on their own -- a
  * disabled <button> looks identical to an enabled one with plain inline
@@ -1614,6 +1614,6 @@ const primaryBtnStyle: React.CSSProperties = { background: "#0C447C", color: "#f
  * this fix has the full story). Spread this in last whenever a button's
  * `disabled` prop can be true. */
 const disabledBtnStyle: React.CSSProperties = { opacity: 0.45, cursor: "not-allowed" };
-const inputStyle: React.CSSProperties = { width: "100%", height: 44, border: FIELD_BORDER, borderRadius: 8, padding: "0 12px", fontSize: 14, background: "#fff", color: "#1a1a2e" };
+const inputStyle: React.CSSProperties = { width: "100%", height: 46, border: FIELD_BORDER, borderRadius: 8, padding: "0 12px", fontSize: 16, background: "#fff", color: "#1a1a2e" };
 const cardStyle: React.CSSProperties = { border: FIELD_BORDER, borderRadius: 8, padding: 12, marginBottom: "1rem" };
 const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 12, padding: "12px 12px", minHeight: 44, borderBottom: FIELD_BORDER, cursor: "pointer" };
