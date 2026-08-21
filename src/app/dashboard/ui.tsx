@@ -558,26 +558,63 @@ export function DecisionButtons({ compact, disableApprove }: { compact?: boolean
 }
 
 /**
- * `hint` renders as persistent text under the field, not just inside the
- * placeholder -- a placeholder-only "required if..." message disappears
- * the moment someone starts typing, so a reviewer could submit Reject or
- * Request info with an effectively-blank notes field and never see the
- * requirement again once real content is in the box (2026-08-20 audit
- * finding). The four decision buttons share one form (CLAUDE.md 7bb), so
- * this can't be made conditionally `required` per-button without client
- * JS -- the persistent hint is the low-risk fix that doesn't touch that.
+ * Which of DecisionButtons' four values require real notes -- plain
+ * "approved" never does. Shared by every surface that gates on this
+ * (the client-side submit guard in ReviewNotesForm below, and the
+ * server-side enforcement in submitInitialReview/submitDepartmentDecision)
+ * so the three can't drift on which decisions actually require a reason.
+ *
+ * 2026-08-20 audit finding, closed for real (2026-08-21): the audit's own
+ * fix only made the "Notes (required if...)" hint persist visually
+ * instead of disappearing once someone typed -- it never actually
+ * enforced anything, client or server. Confirmed live: a reviewer could
+ * still submit Request info/Reject/Approve-with-condition with a
+ * completely blank notes field. This constant plus ReviewNotesForm (the
+ * real client-side guard) and matching server-side checks are the actual
+ * fix -- the hint text stays as a courtesy, not the only line of defense.
  */
-export function NotesField(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { hint?: string }) {
-  const { className = "", hint, ...rest } = props;
+export const NOTES_REQUIRED_DECISIONS = new Set(["approved_with_condition", "request_more_info", "rejected"]);
+
+/**
+ * `hint` renders as persistent text under the field; `error` (new,
+ * 2026-08-21) renders in the same spot in the `bad` tone when a submit
+ * attempt was actually blocked for missing notes -- see
+ * NOTES_REQUIRED_DECISIONS' own comment for why a hint alone was never
+ * enough. `error` takes precedence over `hint` when both are set.
+ */
+export function NotesField(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { hint?: string; error?: string }) {
+  const { className = "", hint, error, ...rest } = props;
   return (
     <div className="mb-3">
       <textarea
         {...rest}
-        className={`min-h-[52px] w-full resize-y rounded-2xl border border-border bg-surface px-3.5 py-2.5 text-[13px] text-ink placeholder:text-ink-faint ${className}`}
+        className={`min-h-[52px] w-full resize-y rounded-2xl border ${error ? "border-bad" : "border-border"} bg-surface px-3.5 py-2.5 text-[13px] text-ink placeholder:text-ink-faint ${className}`}
       />
-      {hint && <p className="mt-1 text-[11px] text-ink-faint">{hint}</p>}
+      {error ? <p className="mt-1 text-[11px] font-bold text-bad">{error}</p> : hint && <p className="mt-1 text-[11px] text-ink-faint">{hint}</p>}
     </div>
   );
+}
+
+/**
+ * The real client-side guard for the four-decision-buttons-in-one-form
+ * shape (DecisionButtons + NotesField sharing a single <form>, CLAUDE.md
+ * 7bb) -- reads which button was actually clicked via the native
+ * SubmitEvent's own `submitter`, and blocks the submit client-side when
+ * that decision needs notes and the field is blank. This is the UX
+ * convenience layer; submitInitialReview/submitDepartmentDecision/
+ * requestPaymentInfo enforce the same rule server-side regardless of
+ * whether this ever ran, matching this codebase's own standing
+ * "client-side is convenience, server-side is the real guarantee"
+ * pattern (the LBT-category gate, the Engineering-amount gate, ...).
+ */
+export function guardNotesRequired(e: React.FormEvent<HTMLFormElement>): string | null {
+  const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+  const decision = submitter?.getAttribute("value") ?? "";
+  if (!NOTES_REQUIRED_DECISIONS.has(decision)) return null;
+  const notes = String(new FormData(e.currentTarget).get("notes") ?? "").trim();
+  if (notes) return null;
+  e.preventDefault();
+  return "Notes are required for this decision.";
 }
 
 // ============================================================

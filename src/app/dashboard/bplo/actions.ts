@@ -36,6 +36,19 @@ export async function submitInitialReview(formData: FormData) {
   const decision = String(formData.get("decision")) as Decision;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
+  // Real audit finding, closed for real (2026-08-21): the 2026-08-20 audit
+  // pass's own fix only made the "Notes (required if...)" hint persist
+  // visually instead of vanishing once someone typed -- it never actually
+  // required anything. Confirmed live: BPLO could submit Request info/
+  // Reject/Approve-with-condition with a blank notes field. The primary
+  // guard is now the client-side check in InitialReviewDecisionForm
+  // (guardNotesRequired, ui.tsx); this is the actual guarantee, same
+  // "client-side is convenience, server-side is real" shape as every
+  // other gate in this codebase (LBT category, Engineering amount, ...).
+  if ((decision === "approved_with_condition" || decision === "request_more_info" || decision === "rejected") && !notes) {
+    throw new Error("Notes are required when requesting more info, approving with a condition, or rejecting.");
+  }
+
   const supabase = await createClient();
 
   // Audit finding (2026-08-17): "Reject" and "Request info" used to be

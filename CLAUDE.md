@@ -1411,6 +1411,116 @@ A full audit (UI/design, mobile, code quality, security, ops readiness, performa
 
 ---
 
+## 7a5. OTP SMS endpoints rate-limited by IP address (2026-08-20, same full-system audit)
+
+The audit's own explicit question ("could someone spam an SMS-sending endpoint and run up a real bill?") came back yes: `send-otp/route.ts`'s only abuse protection was a 30-second cooldown per phone number -- nothing stopped one visitor from working through many different numbers, each a real billed Semaphore SMS to a real third party who never asked for one. Two of the three related sign-in paths (renewal-by-permit-number, status-page re-verification) were already meaningfully safer, since they resolve the phone number server-side rather than trusting whatever the visitor typed -- this pass is about the plain phone-entry path (and its two siblings, for defense in depth) specifically.
+
+**`src/lib/rate-limit.ts`** (new) + migration `0057_otp_rate_limit_events.sql` (live in production): a per-IP throttle, 5 sends per 10 minutes, self-cleaning (old rows pruned as part of the check itself, no separate cron needed). Applied to all three OTP-send routes (`send-otp`, `send-renewal-otp`, `send-status-otp`) alongside the existing per-phone-number cooldown, not instead of it -- the two protect against different abuse shapes (one visitor cycling through many numbers vs. one number being hit repeatedly).
+
+**Verified**: `tsc`, `eslint`, and a full `next build` all clean. Live-checked against the actual dev server (not just read the code) -- confirmed via the real rendered page and console/network inspection that the throttle activates and the client shows a real, specific error message rather than a generic failure. Further live verification deliberately stopped short of actually exhausting the limit against a real phone number, to avoid spending a real Semaphore SMS credit purely for the sake of the test, matching this project's own standing rule about not spending real notification credits during verification passes.
+
+---
+
+## 7a6. Text-overlap bug fixed across all 4 PDF generators (2026-08-20, same audit)
+
+Three of this project's four PDF generators (`permit-pdf.ts`, `print-certificate.ts`, `order-of-payment-pdf.ts`) advanced each label/value row by a fixed height regardless of how many lines the actual value wrapped to -- a business name or address long enough to wrap onto a second line would visually overlap the very next row on the signed permit, the pre-signature printable certificate, or the Order of Payment slip. Nothing on the applicant form limits how long a business name can be, so this was never a rare edge case, only a matter of when a real filing would trigger it. A fourth, newer generator (`application-form-pdf.ts`) had already solved this correctly, but the fix was never carried back to the three older ones -- exactly the failure mode of four files duplicating the same row-layout logic instead of sharing it.
+
+**Fixed**: extracted the already-correct row-height calculation into a new shared `src/lib/pdf-doc-utils.ts`, and pointed all four generators at it (including `application-form-pdf.ts` itself, for full consistency going forward, not just the three that were actually broken).
+
+**Verified by actually rendering a real PDF with a long, wrapping business name** (a temporary script, deleted after use, matching this project's own established verification convention for every other PDF-generation change) -- confirmed the bug reproduced pre-fix (a 2-line/28pt-tall row only advancing 26pt) and confirmed clean, non-overlapping output post-fix. `tsc`/`eslint`/a full `next build` all clean.
+
+---
+
+## 7a7. A lint gate finally runs before every build, plus a narrow cron-recipient gap closed (2026-08-20, same audit)
+
+Next.js 16 stopped running ESLint automatically as part of `next build` -- confirmed directly, not assumed -- meaning a real lint error could reach a live production deploy with nothing in the pipeline failing. Found and fixed the one real (pre-existing, low-risk, already-understood) error this had let through: `theme-toggle.tsx`'s `set-state-in-effect` pattern, which had a comment already acknowledging the tradeoff but only actually covered one line of it -- restructured to a single `setState` call so the disable comment genuinely covers the whole thing. Also added `ignoreRestSiblings` to the ESLint config for a destructure-to-omit idiom (`const { x, ...rest } = obj`) already used consistently elsewhere in this codebase, which was tripping `no-unused-vars` as a false positive rather than a real issue.
+
+**Fixed**: a `prebuild` script (npm's own lifecycle hook, honored automatically by Vercel's default build command) runs `eslint .` before `next build` ever starts, so this gap can't reopen silently for any future change either.
+
+**Also closed in the same pass**: the department-reminder cron (`department-reminders/route.ts`) didn't exclude the platform admin's "View as" proxy accounts from its recipient list, the same exclusion already applied at three other similar call sites (its email is a synthetic address never meant to actually receive mail) -- a narrow, no-real-impact-yet gap, closed for consistency rather than because it had caused a real problem.
+
+**Verified**: `tsc`, `eslint` (confirmed clean after the fix, and confirmed the lint gate genuinely fires as part of `npm run build`, not just that the script exists), and a full `next build`, all clean.
+
+---
+
+## 7a8. Mobile UX and accessibility gaps fixed on every applicant-facing page (2026-08-20, same audit)
+
+The audit's highest-severity findings were concentrated here, on purpose -- this is the one surface real, non-technical applicants on real (often older, lower-end) phones actually use, tested live at real narrow viewports (down to 375px) rather than a resized desktop browser.
+
+- **Critical, accessibility**: every one of the ~40 form labels (plus the phone/OTP fields on every screen) was visually next to its input but not programmatically connected to it -- confirmed live, a screen reader announced nothing when a field was focused. Fixed at the shared field-rendering level (`Field`, `renderField()`, `SearchableSelect`) so every field gained a real `id`/`htmlFor` pairing at once, plus the hand-written fields (permit lookup, phone, OTP, name/email/gender) wired individually.
+- **Critical, mobile**: touch targets were well under the ~44px comfortable minimum (measured live: the Send Code button was 77×32px) -- raised across the shared input/button styling used throughout the form, one change fixing it everywhere.
+- **High, mobile**: the signature pad's drawing coordinates didn't scale by the ratio of the canvas's internal resolution to its displayed CSS size, so a signature drawn on a phone narrower than the canvas's internal 560px visibly compressed into the left half of the box. Fixed with a coordinate-scaling correction in the pad's own pointer-handling code.
+- **Medium, mobile** (the project owner's own direct question): a dropped connection, a killed background tab, or an accidental reload lost the entire in-progress ~40-field form, which had only ever lived in memory. Now periodically autosaves to the browser's own local storage (keyed to the verified session) and restores on reload.
+- **Medium, mobile**: the phone number field only checked for non-empty before spending a real, billed OTP SMS -- now checked against a real Philippine mobile format (11 digits, starts with 09) first.
+- **Medium, accessibility**: the Business Activity checkbox group had no grouping markup at all -- now a real `<fieldset>`/`<legend>`, so a screen reader announces it as a related set of options.
+- **Low, design**: an inline font override was silently fighting the Nunito/Quicksand set up app-wide in `layout.tsx`, making these pages read as a different, less-finished product than the rest of MuniServe -- dropped, plus the near-invisible `0.5px` borders (~1.2:1 contrast) darkened to something from the real palette (~2.9:1). Applied to `/apply`, `/status/[reference]`, and `/verify/[reference]` alike.
+
+**Verified**: `tsc`/`eslint`/a full `next build` clean, plus live browser verification of the critical fixes (label/input association, touch target sizing, the font/border change) rendered and confirmed directly, not just type-checked. Further verification (the deeper OTP-gated form screens specifically) was deliberately not pushed further than this to avoid spending a real SMS credit purely for the sake of testing.
+
+---
+
+## 7a9. Staff dashboard accessibility and design gaps fixed (2026-08-20, same audit)
+
+The staff-side half of the same audit pass -- read via source code rather than a live login (staff pages need real Google OAuth, which can't be driven in this environment), the same fallback this project has used throughout its history for session-gated UI.
+
+- **High, accessibility**: two mouse-only interactions -- Audit Trail's row expand and Permit History's column sort -- gained real keyboard support (focusable, `Enter`/`Space`-activatable) plus `aria-sort` on the sort headers.
+- **High, accessibility**: five of the seven main staff pages (Applications, Department Review, Treasury, Mayor, Audit Trail, Stats) had no page-level heading at all for a screen reader to announce "what page am I on" -- added to all five (plus Businesses/Settings already had one).
+- **Medium, design**: the four review-decision buttons (Approve / Approve with condition / Request info / Reject) were too visually similar -- only Approve was a solid filled button, and Request info/Approve with condition shared the same icon. Reject is now visually separated (a divider, bolder weight); Request info gets its own icon.
+- **Medium, accessibility**: ~15 previously placeholder-only inputs across Settings, the payment queue, and the Business Registry (fee override amounts, GCash/bank account fields, OR numbers, ...) gained a real `aria-label`, so the field still has a name for a screen reader once someone starts typing and the placeholder disappears.
+- **Medium, accessibility**: the Notes field's own "required if rejecting" claim was placeholder-only text, invisible again the instant someone started typing -- promoted to persistent helper text under the field (this was the audit's own fix for this finding; it did not yet make the requirement real, see section 7a12 below for the follow-up that actually did).
+- **Medium, accessibility**: BPLO's clickable pipeline-stage tabs and the Audit Trail's view-toggle were real, focusable buttons already, but weren't marked up with actual ARIA tab roles -- added, so arrow-key navigation between them now works as a screen reader would expect.
+- **Medium, design**: the Paused/Not-provisioned screens used raw hardcoded colors with no MuniServe branding at all, and ignored a staff member's dark-mode preference outright -- rebuilt on the shared design-token `Card` component.
+- **Low, accessibility**: the sort-arrow and pagination glyphs (▲ ▼ ‹ ›) on Permit History gained real `aria-label`s, matching a pattern already used correctly elsewhere in this codebase (the barangay-list "remove" button).
+
+**Verified**: `tsc`, `eslint`, and a full `next build` all clean.
+
+---
+
+## 7a10. Remaining low-severity audit findings closed (2026-08-20, same audit)
+
+The last batch of low-priority items from the same pass, done as one small cohesive commit after the higher-severity work above:
+
+- **Security headers**: `X-Content-Type-Options: nosniff` and `Strict-Transport-Security` added site-wide in `next.config.ts`, declared explicitly in both the default and the `/apply`-specific header blocks (rather than relying on assumed merge behavior between overlapping rules, since Next's own docs don't spell that out) -- verified live that `/apply` keeps its permissive `frame-ancestors` override for embeds while `/login` stays locked down, and both now carry the new headers.
+- **Heading-case consistency**: `ApplyPausedNotice` was the one remaining Title Case heading on the applicant side, matched to sentence case everywhere else, plus given the same border-visibility fix already applied to the other applicant pages (section 7a8).
+- **Dash-style consistency**: 9 instances of a plain `--` in Settings/Stats section subtitles normalized to a real em dash, matching the already-correct majority style in those same files.
+- **Currency legibility**: a live formatted preview (e.g. "≈ ₱1,234,567") added under Capital Investment and Gross Sales on the applicant form, so a mistyped extra or missing zero is easier to catch before submitting.
+
+**Deliberately left alone, flagged rather than silently folded in**: the "hardcoded colors instead of design tokens" finding across the applicant pages. Not a couple of spots -- most of `ApplyPageClient.tsx`'s few hundred inline style objects, and those pages are deliberately self-contained/single-theme by original design (no dark mode, not on the token system). Judged a large, real risk to a live government form for a purely cosmetic win if rushed into the same batch as everything else here -- worth its own dedicated pass if wanted, not this one.
+
+**Verified**: `tsc`/`eslint`/a full `next build` clean, plus live-confirmed the new headers on both a public (`/apply`) and staff (`/login`) route. The currency-preview hint only renders on the OTP-gated form screen (can't be reached without a real SMS credit), so it was verified by calling the real, unmodified formatting function directly instead of a full click-through.
+
+---
+
+## 7a11. Settings status pills -- a follow-up design pass, not an audit finding (2026-08-20, same day)
+
+Grew out of a direct question asked right after the audit's fixes shipped: "what do you think of how Settings is designed?" The information architecture (15 sections grouped into 6 labeled categories, section 7tt) was judged genuinely good, but everything defaults to collapsed with no status indicator -- there was no way to tell at a glance whether Automated Assessment is on, which payment methods are enabled, or the current permit number format without opening each section individually. Mocked up first as a real Artifact (using San Miguel's actual live settings data, not invented sample values) and approved before any component code changed.
+
+**`CollapsibleSection` (`ui.tsx`) gained an optional `status` prop** -- one or more small `TonePill`s next to the section title, fully additive (every other caller renders byte-identical to before). Wired up on all 15 `/dashboard/settings` sections, mostly reusing data the page was already fetching for each section's own content; two new lightweight queries (a business count, an active LBT/Mayor's-Permit-rate count) plus the existing `getCurrentMonthSmsCount()` helper cover the rest.
+
+**One real design difference from the mockup, on purpose**: the mockup put a "Treasurer not set" pill on both "Permit Certificate Details" and "Order of Payment Details," but the Treasurer's name only actually lives on the latter -- shipped with "Permit Certificate Details" carrying a Mayor-only status instead of reproducing the mockup's duplication.
+
+**A real, previously-invisible gap the pills themselves surfaced immediately**: San Miguel's real production settings currently have Automated Assessment turned **off** (manual entry mode) and no Treasurer name set -- both true today, both real, both impossible to notice before this without opening those two specific sections individually.
+
+**Verified** via a temporary fixture route (deleted immediately after, matching this project's established technique for staff-auth-gated UI): confirmed all three tone colors render with the exact correct design tokens and that click-to-expand/collapse still works unchanged. `tsc`, `eslint`, and a full `next build` (cleared `.next` fully first) all clean -- 34 routes, no fixture route left behind.
+
+---
+
+## 7a12. The "Notes required" fix from the audit never actually required anything -- fixed for real (2026-08-21)
+
+The project owner tested this directly the night after the audit's fixes shipped and found Request more info still submittable with a completely blank notes field -- despite section 7a9's own fix for this exact finding. Traced the actual code before assuming the earlier fix was simply incomplete: it wasn't a partial fix, it was a different, weaker fix than the one actually needed. The audit's own finding (correctly) diagnosed that the "Notes (required if requesting info or rejecting)" text disappeared once someone started typing, since it only ever lived inside the placeholder -- but its own recommended and implemented fix only promoted that text to a persistent hint below the field (`NotesField`'s own doc comment at the time said so explicitly: "this can't be made conditionally required per-button without client JS -- the persistent hint is the low-risk fix"). A more visible hint is not the same thing as an actual requirement, and nothing anywhere -- client or server -- had ever validated that notes was non-empty for any of the three decisions that need one (Approve with condition, Request more info, Reject), on any of the three surfaces that make this kind of decision (BPLO's own initial review, a department's own review, and Treasury's request-more-info).
+
+**Fixed on all three surfaces, client- and server-side, matching this codebase's own standing "client-side is convenience, server-side is the real guarantee" pattern** (the LBT-category gate, the Engineering-amount gate, ...):
+
+- **New `NOTES_REQUIRED_DECISIONS` constant + `guardNotesRequired()` helper** (`ui.tsx`) -- reads which specific button was actually clicked via the native `SubmitEvent.submitter`, and blocks the submit client-side (via `preventDefault()`) when that decision needs notes and the field is blank. `NotesField` gained a matching `error` prop (renders in the `bad` tone, taking precedence over the persistent `hint`) so a blocked attempt shows a real, specific message rather than just silently doing nothing.
+- **Department decisions** (`submitDepartmentDecision`, `review-workflow.ts`, shared by a department's own dashboard and BPLO's "act on a department's behalf" row): now throws server-side if notes is blank for `approved_with_condition`/`request_more_info`/`rejected`.
+- **A second, related gap closed in the same pass**: `DepartmentReviewActions`' compact ("act on behalf") variant had never rendered a notes field at all (`showNotes` simply wasn't passed at that call site) -- meaning BPLO could reject or request info on a department's behalf with literally no way to type a reason, on top of nothing requiring one. The `showNotes` prop is gone entirely; notes now render unconditionally in both the full and compact layouts, restructured so the compact row's textarea sits on its own line above the button row rather than trying to cram it into the existing button flex-row.
+- **BPLO's own initial review** (`submitInitialReview`, `bplo/actions.ts`): identical server-side check added. The client-side guard needed a real client component boundary this exact form didn't have before (it was a plain `<form>` inline inside a large async Server Component) -- extracted into a new `src/app/dashboard/bplo/initial-review-decision-form.tsx`, mirroring `DepartmentReviewActions`' shape minus the Engineering-amount field it doesn't need.
+- **Treasury's request-more-info** (`requestPaymentInfo`, `treasury/actions.ts`): this action IS a "please provide X" request by definition, so it now always requires notes, not conditionally -- a blank note here would mean the applicant gets a generic text with no actual specifics to act on. Its `NotesField` already had a native HTML `required` attribute (confirmed while investigating -- this surface's client-side story was already correct, only the server-side guarantee was missing), which is why the project owner's own live test of this specific surface may not have reproduced the bug the same way the department/BPLO surfaces did.
+
+**Verified interactively, not just type-checked**: a temporary fixture route (deleted immediately after) rendered the real `DepartmentReviewActions` component, both layouts, with a no-op logging action standing in for the real server action. Confirmed live: clicking "Request more info" with blank notes is blocked with the error message shown and nothing submitted; typing a note and clicking again submits successfully with the exact typed value; plain "Approve" submits fine with blank notes (correctly unrestricted); the compact ("BPLO on-behalf") variant's "Reject" is blocked identically to the full-size form. `tsc`, `eslint`, and a full `next build` (cleared `.next` fully) all ran clean, 34 routes, no fixture route left behind.
+
+---
+
 ## 8. UI reference
 
 Two working HTML prototypes exist in `reference/` and should be treated as the source of truth for screen flow, not just visual style:

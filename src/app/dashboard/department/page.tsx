@@ -137,7 +137,6 @@ async function DepartmentReviewCard({
         department={department}
         buildingPermitFeeEnabled={buildingPermitFeeEnabled}
         buildingPermitFeeLabel={buildingPermitFeeLabel}
-        showNotes
       />
     </Card>
   );

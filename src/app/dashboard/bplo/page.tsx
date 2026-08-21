@@ -8,16 +8,17 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, CollapsibleSection, DecisionButtons, DocumentList,
-  EmptyState, InfoIcon, MiniButton, NotesField, PrimaryButton, Row, SectionHead, StatCard, TonePill, UserIcon, WorkflowStepper,
+  BuildingIcon, BusinessProfileBlock, Card, CheckIcon, ClockIcon, CollapsibleSection, DocumentList,
+  EmptyState, InfoIcon, MiniButton, PrimaryButton, Row, SectionHead, StatCard, TonePill, UserIcon, WorkflowStepper,
 } from "../ui";
-import { archiveApplication, finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, reopenApplication, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo, submitInitialReview } from "./actions";
+import { archiveApplication, finalizeAssessment, getApplicationDocuments, markPrinted, markReleased, reopenApplication, resubmitToDepartments, setLbtCategory, submitDepartmentDecisionAsBplo } from "./actions";
 import type { ManualFieldSpec } from "./assessment-manual-fields";
 import { AssessmentLineItems } from "./assessment-line-items";
 import { AwaitingPaymentSection } from "../payment-queue";
 import { signPermit } from "../mayor/actions";
 import { DepartmentReviewActions } from "../department-review-actions";
 import { BploDashboardTabs, type BploTabDef } from "./dashboard-tabs";
+import { InitialReviewDecisionForm } from "./initial-review-decision-form";
 
 /**
  * BPLO dashboard -- redesigned per the approved design concept (card-based
@@ -755,11 +756,7 @@ async function InitialReviewCard({
         Download submitted form (PDF)
       </a>
 
-      <form action={submitInitialReview}>
-        <input type="hidden" name="applicationId" value={applicationId} />
-        <NotesField id={`notes-${applicationId}`} name="notes" placeholder="Notes" hint="Required if requesting info or rejecting." aria-label="Review notes" />
-        <DecisionButtons disableApprove={!profile?.lbtCategory} />
-      </form>
+      <InitialReviewDecisionForm applicationId={applicationId} disableApprove={!profile?.lbtCategory} />
     </Card>
   );
 }

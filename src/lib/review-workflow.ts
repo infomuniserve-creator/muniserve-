@@ -266,6 +266,17 @@ export async function submitDepartmentDecision(params: {
   actedOnBehalf: boolean;
 }) {
   const { departmentReviewId, decision, notes, assessedAmount, staff, actedOnBehalf } = params;
+
+  // Real audit finding, closed for real (2026-08-21): the 2026-08-20 audit
+  // pass's own fix only made the "Notes (required if...)" hint persist
+  // visually instead of vanishing once someone typed -- it never actually
+  // required anything, on this surface either. Confirmed live. The
+  // primary guard is the client-side check in DepartmentReviewActions
+  // (guardNotesRequired, ui.tsx); this is the actual guarantee.
+  if ((decision === "approved_with_condition" || decision === "request_more_info" || decision === "rejected") && !notes) {
+    throw new Error("Notes are required when requesting more info, approving with a condition, or rejecting.");
+  }
+
   const supabase = await createClient();
 
   // Fetch once up front: the department name (for the Engineering gate

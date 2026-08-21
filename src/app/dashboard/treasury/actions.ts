@@ -160,6 +160,15 @@ export async function requestPaymentInfo(formData: FormData) {
   const applicationId = String(formData.get("applicationId"));
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
+  // Real audit finding, closed for real (2026-08-21): this action IS a
+  // "please provide X" request by definition -- a blank note here means
+  // the applicant gets a generic "we need more info" text with no actual
+  // specifics to act on. The form's own NotesField already has a native
+  // `required` attribute (payment-queue.tsx), which blocks a normal
+  // browser submit, but that's convenience only; this is the real
+  // guarantee, same shape as every other gate in this codebase.
+  if (!notes) throw new Error("Notes are required -- describe what you need from the applicant.");
+
   const supabase = await createClient();
   const { data: app } = await supabase.from("applications").select("reference_number").eq("id", applicationId).single();
   const refNumber = app?.reference_number ?? applicationId;
