@@ -36,7 +36,7 @@ export default async function LoginPage() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#f4f6fb" }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 380, width: "100%", border: "0.5px solid #e5e7eb", textAlign: "center" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>MuniServe</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Staff Portal</h1>
         <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>
           {onOwnSubdomain ? `Staff sign-in — ${lgu.name}, ${lgu.province}` : "Staff sign-in"}
         </p>

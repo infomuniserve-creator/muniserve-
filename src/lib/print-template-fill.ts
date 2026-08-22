@@ -32,7 +32,7 @@ export async function inspectPdfFields(pdfBytes: Uint8Array): Promise<InspectRes
     return {
       ok: false,
       error:
-        "This PDF has no fillable form fields. It needs named text fields (e.g. added in Adobe Acrobat's \"Prepare Form\" tool, or a similar free PDF editor) before MuniServe can fill it in automatically.",
+        "This PDF has no fillable form fields. It needs named text fields (e.g. added in Adobe Acrobat's \"Prepare Form\" tool, or a similar free PDF editor) before it can be filled in automatically.",
     };
   }
 

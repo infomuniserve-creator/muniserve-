@@ -212,7 +212,7 @@ export function AuditTrailExplorer({
 
         <button
           type="button"
-          onClick={() => exportCSV(`MuniServe_AuditTrail_${from}_to_${to}.csv`, rows, (r) => [appInfoById.get(r.application_id ?? "")?.referenceNumber ?? ""])}
+          onClick={() => exportCSV(`AuditTrail_${from}_to_${to}.csv`, rows, (r) => [appInfoById.get(r.application_id ?? "")?.referenceNumber ?? ""])}
           className="ml-auto h-8 rounded-lg bg-brand-navy px-3 text-[12px] font-bold text-white hover:opacity-90"
         >
           ↓ Export all as CSV
@@ -301,7 +301,7 @@ export function AuditTrailExplorer({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  exportCSV(`MuniServe_${g.referenceNumber}_History.csv`, g.events);
+                                  exportCSV(`${g.referenceNumber}_History.csv`, g.events);
                                 }}
                                 className="h-7 rounded-lg border border-border-strong px-2.5 text-[11.5px] font-bold text-ink-soft hover:text-ink"
                               >

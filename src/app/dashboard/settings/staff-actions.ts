@@ -83,9 +83,9 @@ export async function addStaffMember(formData: FormData) {
   await notifyStaffEmail(
     null,
     email,
-    "You've been added to MuniServe",
+    `You've been added to ${lgu.displayName}'s Business Permit Portal`,
     `<p>${greeting}</p>
-     <p>You've been added as <strong>${roleLabel}</strong> staff on MuniServe, ${lgu.displayName}'s business permit system.</p>
+     <p>You've been added as <strong>${roleLabel}</strong> staff on ${lgu.displayName}'s business permit system.</p>
      <p>Sign in here using your Google account at this email address (<strong>${email}</strong>) -- no password needed:</p>
      <p><a href="${loginUrl}">${loginUrl}</a></p>`
   );

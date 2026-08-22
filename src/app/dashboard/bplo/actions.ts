@@ -727,7 +727,7 @@ export async function markReleased(formData: FormData) {
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `Your business permit (${updated.reference_number}) has been released. Thank you for using MuniServe!`
+      `Your business permit (${updated.reference_number}) has been released. Thank you!`
     );
   }
   if (business?.owner?.email) {
@@ -737,7 +737,7 @@ export async function markReleased(formData: FormData) {
       lgu,
       officeLabel: lgu.bploOfficeName,
       greetingName: firstNameOf(business.owner.full_name),
-      bodyHtml: `<p style="margin:0;">Your business permit (<strong>${updated.reference_number}</strong>) has been released to you. Thank you for using MuniServe!</p>`,
+      bodyHtml: `<p style="margin:0;">Your business permit (<strong>${updated.reference_number}</strong>) has been released to you. Thank you!</p>`,
       cta: { label: "View your permit", href: `${appUrl}/status/${updated.reference_number}` },
     });
     await notifyApplicantEmail(applicationId, business.owner.email, `Your business permit has been released — ${updated.reference_number}`, html);

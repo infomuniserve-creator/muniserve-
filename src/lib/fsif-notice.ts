@@ -58,7 +58,7 @@ export async function notifyApplicantOfFsifIfDue(supabase: SupabaseClient, param
       params.applicationId,
       params.lguId,
       owner.phone,
-      `Your application ${ref} needs one more payment: the Fire Safety Inspection Fee (FSIF), paid directly to the Bureau of Fire Protection (BFP), separate from MuniServe. Check your email or status page to pay and upload your proof.`
+      `Your application ${ref} needs one more payment: the Fire Safety Inspection Fee (FSIF), paid directly to the Bureau of Fire Protection (BFP), separately from this office. Check your email or status page to pay and upload your proof.`
     );
   }
 

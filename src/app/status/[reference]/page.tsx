@@ -323,7 +323,7 @@ async function FsifPaymentSection({ applicationId }: { applicationId: string }) 
     <Card>
       <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Fire Safety Inspection Fee (FSIF)</p>
       <p style={{ fontSize: 12, color: "#6b7280" }}>
-        The Bureau of Fire Protection (BFP) requires this fee paid directly to them, separate from MuniServe. Already paid? Upload your receipt or screenshot below so BFP can verify it.
+        The Bureau of Fire Protection (BFP) requires this fee paid directly to them, separately from this office. Already paid? Upload your receipt or screenshot below so BFP can verify it.
       </p>
       <AdditionalDocumentUpload
         applicationId={applicationId}

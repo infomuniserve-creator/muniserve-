@@ -118,7 +118,7 @@ export default async function KnowledgeBasePage() {
       <aside className="shrink-0 lg:sticky lg:top-6 lg:w-56">
         <div className="mb-3">
           <p className="font-display text-[12px] font-extrabold uppercase tracking-wide text-brand-teal">Staff Knowledge Base</p>
-          <h1 className="font-display text-[24px] font-bold text-ink">How to use MuniServe</h1>
+          <h1 className="font-display text-[24px] font-bold text-ink">How to use this system</h1>
         </div>
         <div className="rounded-3xl border border-border bg-surface p-4 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
           <KbSidebarNav groups={NAV_GROUPS} />

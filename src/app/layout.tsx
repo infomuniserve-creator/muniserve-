@@ -26,7 +26,7 @@ const quicksand = Quicksand({
 // opt the entire app out of static rendering just for a <meta> description
 // tag, not a trade worth making for SEO text nobody sees in the UI itself.
 export const metadata: Metadata = {
-  title: "MuniServe",
+  title: "Business Permits",
   description: "Electronic Business Permit and Licensing System for Philippine LGUs",
 };
 

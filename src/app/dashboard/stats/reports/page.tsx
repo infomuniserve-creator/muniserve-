@@ -88,14 +88,14 @@ export default async function RevenueReportsPage({
           </button>
         </form>
         <span className="text-[12px] text-ink-soft">{report.paidApplicationCount} application(s) paid in this range.</span>
-        <DownloadCsvButton lines={report.lines} filenamePrefix={`MuniServe_RevenueReport_${rangeSuffix}`} label="Download all as CSV" variant="solid" />
+        <DownloadCsvButton lines={report.lines} filenamePrefix={`RevenueReport_${rangeSuffix}`} label="Download all as CSV" variant="solid" />
       </Card>
 
       {!lgu.cedulaIncludedOnline && (
         <div className="mb-6 rounded-2xl bg-info-bg px-5 py-3.5">
           <p className="text-[12.5px] font-bold text-info-ink">
-            ℹ CEDULA is currently set to counter-paid for {lgu.name} (see Settings) -- the CEDULA figure below only reflects what&rsquo;s collected online through
-            MuniServe, which will read low or zero even though CEDULA is still genuinely being collected, just not through this system.
+            ℹ CEDULA is currently set to counter-paid for {lgu.name} (see Settings) -- the CEDULA figure below only reflects what&rsquo;s collected
+            online, which will read low or zero even though CEDULA is still genuinely being collected, just not through this system.
           </p>
         </div>
       )}
@@ -152,7 +152,7 @@ export default async function RevenueReportsPage({
                 </summary>
                 <div className="border-t border-border px-5 py-4">
                   <div className="mb-3 flex justify-end">
-                    <DownloadCsvButton lines={bucketLines} filenamePrefix={`MuniServe_${bucket?.label.replace(/\s+/g, "")}_${rangeSuffix}`} label="Download CSV" />
+                    <DownloadCsvButton lines={bucketLines} filenamePrefix={`${bucket?.label.replace(/\s+/g, "")}_${rangeSuffix}`} label="Download CSV" />
                   </div>
                   {groups.length === 0 ? (
                     <EmptyState>Nothing collected in this category for this range.</EmptyState>

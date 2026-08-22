@@ -124,7 +124,7 @@ export async function generatePermitAssets(input: PermitPdfInput): Promise<{ pdf
 
   // --- Footer ---
   page.drawText(
-    `Generated electronically via MuniServe. Verify at: ${input.verifyUrl}`,
+    `Generated electronically. Verify at: ${input.verifyUrl}`,
     { x: MARGIN, y: 40, font, size: 8, color: MUTED }
   );
 

@@ -33,10 +33,9 @@ export default async function DashboardRouterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <Card className="w-full max-w-[420px] p-10 text-center">
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-teal">MuniServe</p>
         <h1 className="mb-2 text-[18px] font-bold text-ink">Not provisioned</h1>
         <p className="mb-6 text-[13px] leading-relaxed text-ink-soft">
-          You&rsquo;re signed in with Google, but this account isn&rsquo;t set up as MuniServe staff yet
+          You&rsquo;re signed in with Google, but this account isn&rsquo;t set up as staff yet
           (or has been deactivated). Ask BPLO to add you as staff.
         </p>
         <SignOutButton />

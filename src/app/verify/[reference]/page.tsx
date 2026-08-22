@@ -56,7 +56,7 @@ export default async function VerifyPermitPage({ params }: { params: Promise<{ r
   return (
     <div style={{ maxWidth: 480, margin: "32px auto", background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #c7ced8", color: "#1a1a2e" }}>
       <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
-        MuniServe{lgu ? ` · ${lgu.name}, ${lgu.province}` : ""}
+        {lgu ? `${lgu.name}, ${lgu.province}` : ""}
       </p>
       <p style={{ fontWeight: 600, fontSize: 18, margin: "0 0 16px" }}>Permit verification</p>
 

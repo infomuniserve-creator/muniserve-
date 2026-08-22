@@ -35,5 +35,5 @@ export async function sendSms(phone: string, message: string, senderName?: strin
 }
 
 export function otpMessage(code: string): string {
-  return `Your MuniServe verification code is ${code}. This code expires in 5 minutes. Do not share this code with anyone.`;
+  return `Your verification code is ${code}. This code expires in 5 minutes. Do not share this code with anyone.`;
 }

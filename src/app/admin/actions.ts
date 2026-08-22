@@ -129,9 +129,9 @@ export async function createLguClient(formData: FormData) {
     await notifyStaffEmail(
       null,
       bploEmail,
-      "Welcome to MuniServe",
+      `Welcome to ${name}'s Business Permit Portal`,
       `<p>${greeting}</p>
-       <p>A MuniServe account for <strong>${name}</strong> has been set up, and you've been added as its first BPLO administrator.</p>
+       <p>An account for <strong>${name}</strong> has been set up, and you've been added as its first BPLO administrator.</p>
        <p>Sign in here using your Google account at this email address (<strong>${bploEmail}</strong>) -- no password needed:</p>
        <p><a href="${appUrl}/login">${appUrl}/login</a></p>
        <p>Once signed in, you can add the rest of your team from the Staff page.</p>

@@ -9,7 +9,7 @@ export function SettingsSection() {
       </KbCard>
 
       <KbCard title="Data Import">
-        <p>Bring in your existing business roster from a spreadsheet (an Excel/CSV export from whatever you used before MuniServe). A row with a phone number is claimed immediately, so that owner can renew online right away; a row with no phone number still imports, just unclaimed until someone attaches a number later.</p>
+        <p>Bring in your existing business roster from a spreadsheet (an Excel/CSV export from whatever you used before). A row with a phone number is claimed immediately, so that owner can renew online right away; a row with no phone number still imports, just unclaimed until someone attaches a number later.</p>
       </KbCard>
 
       <KbCard title="Fee Rates">
@@ -34,7 +34,7 @@ export function SettingsSection() {
       </KbCard>
 
       <KbCard title="Documents & Alerts">
-        <p>Everything that shapes what gets printed and what MuniServe sends out:</p>
+        <p>Everything that shapes what gets printed and what gets sent out:</p>
         <ul>
           <li><b>LGU Logo</b> — shown in the header of every applicant email and on the Order of Payment slip.</li>
           <li><b>Permit No. Format</b> — the prefix, year style, and counter width of your permit numbers (e.g. SMB-2026-000056).</li>

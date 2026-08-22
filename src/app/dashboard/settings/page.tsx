@@ -138,7 +138,7 @@ export default async function SettingsPage() {
     <>
       <div className="mb-7">
         <h1 className="font-display text-[26px] font-bold text-ink">Settings</h1>
-        <p className="mt-1.5 max-w-lg text-[14px] text-ink-soft">Everything that governs how {lgu.name} runs on MuniServe -- who has access, what things cost, and what applicants and staff see.</p>
+        <p className="mt-1.5 max-w-lg text-[14px] text-ink-soft">Everything that governs how {lgu.name} runs online -- who has access, what things cost, and what applicants and staff see.</p>
       </div>
 
       <SettingsGroup icon={<UserIcon className="size-4" />} title="Staff & Access" description="Who can sign in, and what they can do.">
@@ -239,7 +239,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="Business Tax Installment Reminders"
-        sub="A New application always pays the full annual Business Tax. A Renewal that chooses Bi-Annually or Quarterly pays the first installment now; MuniServe texts (and emails, if on file) a reminder for the rest, on the dates below. Applicants still pay the remaining balance the usual way — these dates aren't the same for every LGU, so nothing is reminded until you set them."
+        sub="A New application always pays the full annual Business Tax. A Renewal that chooses Bi-Annually or Quarterly pays the first installment now; a text (and email, if on file) reminds them of the rest, on the dates below. Applicants still pay the remaining balance the usual way — these dates aren't the same for every LGU, so nothing is reminded until you set them."
         status={installmentStatus}
       >
         <Card className="p-5">
@@ -271,7 +271,7 @@ export default async function SettingsPage() {
       </CollapsibleSection>
       </SettingsGroup>
 
-      <SettingsGroup icon={<PinIcon className="size-3.5" />} title="Barangays" description="The barangay list, and what MuniServe charges to generate a clearance.">
+      <SettingsGroup icon={<PinIcon className="size-3.5" />} title="Barangays" description="The barangay list, and what's charged to generate a clearance.">
       <CollapsibleSection
         title="Barangays"
         sub="Shown as a dropdown on your public application form. Without any listed here, applicants type their barangay in as free text instead."
@@ -310,7 +310,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="Barangay Clearance"
-        sub="Charged when an applicant asks MuniServe to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below — an override always wins over the uniform rate for that barangay."
+        sub="Charged when an applicant asks this office to generate their clearance instead of bringing their own from the barangay. Set one rate for every barangay, or override specific ones below — an override always wins over the uniform rate for that barangay."
         status={barangayClearanceStatus}
       >
         <Card className="flex flex-col gap-4 p-5">
@@ -475,7 +475,7 @@ export default async function SettingsPage() {
       </CollapsibleSection>
       </SettingsGroup>
 
-      <SettingsGroup icon={<BellIcon className="size-4" />} title="Documents & Alerts" description="What gets printed, and what MuniServe texts out.">
+      <SettingsGroup icon={<BellIcon className="size-4" />} title="Documents & Alerts" description="What gets printed, and what gets texted out.">
       <CollapsibleSection
         title="LGU Logo"
         sub="Shown in the header of every email sent to applicants, so it's instantly recognizable as really coming from your office."
@@ -579,7 +579,7 @@ export default async function SettingsPage() {
 
       <CollapsibleSection
         title="SMS Notifications"
-        sub="Every text MuniServe sends — OTP codes, status updates to applicants, alerts to staff."
+        sub="Every text sent — OTP codes, status updates to applicants, alerts to staff."
         status={lgu.senderName ? { label: `"${lgu.senderName}"`, tone: "good" } : { label: "Default “BPLO:” prefix", tone: "neutral" }}
       >
         <Card className="p-5">
@@ -599,8 +599,8 @@ export default async function SettingsPage() {
           <p className="mt-3 text-[11.5px] text-ink-soft">
             {lgu.senderName
               ? `Texts currently show "${lgu.senderName}" as the sender — no "BPLO:" prefix is added, since the name itself already identifies who's texting.`
-              : "No custom Sender Name set yet — texts currently arrive under MuniServe's shared Semaphore sender, prefixed \"BPLO:\" so recipients know who it's from."}{" "}
-            A custom Sender Name has to be purchased and approved directly with Semaphore (MuniServe&rsquo;s SMS provider) first — enter the exact approved name here once that&rsquo;s done.
+              : "No custom Sender Name set yet — texts currently arrive under a shared Semaphore sender, prefixed \"BPLO:\" so recipients know who it's from."}{" "}
+            A custom Sender Name has to be purchased and approved directly with Semaphore (the SMS provider used here) first — enter the exact approved name here once that&rsquo;s done.
           </p>
         </Card>
       </CollapsibleSection>
@@ -620,7 +620,7 @@ export default async function SettingsPage() {
                 {lgu.subdomain}.muniserve.ph/apply
               </a>
               <span className="text-[12px] text-ink-soft">
-                If this link isn&rsquo;t working yet, your domain is still being set up by MuniServe -- check back soon.
+                If this link isn&rsquo;t working yet, your domain is still being set up -- check back soon.
               </span>
             </div>
             <div className="border-t border-border pt-4">
@@ -633,7 +633,7 @@ export default async function SettingsPage() {
         </CollapsibleSection>
       ) : (
         <CollapsibleSection title="Your public application form">
-          <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact MuniServe support.</p>
+          <p className="text-[13px] text-ink-soft">No subdomain is set for your LGU yet -- contact support.</p>
         </CollapsibleSection>
       )}
       </SettingsGroup>

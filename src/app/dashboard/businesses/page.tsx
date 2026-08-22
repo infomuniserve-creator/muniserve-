@@ -291,7 +291,7 @@ function ownerLabel(b: BizRowType): string {
   if (b.owner?.full_name) return b.owner.full_name;
   if (b.legacy_owner_name) {
     const initials = b.legacy_owner_name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("·").toUpperCase();
-    return `${initials} (owner not yet on MuniServe)`;
+    return `${initials} (owner not yet claimed online)`;
   }
   return "Unknown owner";
 }
@@ -349,7 +349,7 @@ function RegistryRow({
         {status === "legacy" && (
           <div className="mb-3.5 flex items-start gap-2 rounded-2xl bg-surface-3 px-3.5 py-3 text-[12.5px] text-ink-soft">
             <InfoIcon className="mt-0.5 size-4 shrink-0 text-ink-faint" />
-            Imported from the old paper roster. No owner has claimed this business on MuniServe yet — it has no phone
+            Imported from the old paper roster. No owner has claimed this business online yet — it has no phone
             number on file, so it can&rsquo;t be looked up by SMS. If the owner is renewing in person, start it below instead.
           </div>
         )}

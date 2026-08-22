@@ -306,7 +306,7 @@ export async function generateApplicationFormPdf(input: ApplicationFormPdfInput)
   const pageCount = w.doc.getPageCount();
   for (let i = 0; i < pageCount; i++) {
     const page = w.doc.getPage(i);
-    page.drawText(`Generated electronically via MuniServe on ${formatDateTime(new Date())}. Not editable.`, {
+    page.drawText(`Generated electronically on ${formatDateTime(new Date())}. Not editable.`, {
       x: MARGIN, y: 30, font: w.font, size: 7.5, color: MUTED,
     });
     page.drawText(`Page ${i + 1} of ${pageCount}`, {

@@ -230,7 +230,7 @@ export async function generatePrePrintCertificate(input: PrintCertificateInput):
   }
 
   // --- Footer ---
-  page.drawText("Printed from MuniServe -- pending Mayor's signature.", { x: MARGIN, y: 40, font, size: 8, color: MUTED });
+  page.drawText("Pending Mayor's signature.", { x: MARGIN, y: 40, font, size: 8, color: MUTED });
 
   return pdfDoc.save();
 }

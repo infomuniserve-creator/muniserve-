@@ -5,7 +5,7 @@ export function GettingStartedSection() {
     <KbSection id="getting-started" icon="👋" title="Getting Started" sub="The basics before anything else — how to sign in, and who sees what.">
       <KbCard title="Signing in">
         <p>
-          MuniServe uses your office Google account — there&rsquo;s no separate MuniServe password to remember. Go to the
+          This system uses your office Google account — there&rsquo;s no separate password to remember. Go to the
           sign-in page and choose <b>Sign in with Google</b>, using the exact email address BPLO added you with. If it
           says you&rsquo;re not set up yet, ask BPLO to add you first (Settings &rarr; Staff &amp; Access).
         </p>
@@ -72,7 +72,7 @@ export function PipelineSection() {
         </p>
         <p>
           If your LGU has BFP as a department, applicants are told separately that the Fire Safety Inspection Fee is
-          paid directly to BFP, not through MuniServe — see <a href="#notifications" className="text-info-ink underline underline-offset-2">What Applicants Are Told</a>.
+          paid directly to BFP, not through this system — see <a href="#notifications" className="text-info-ink underline underline-offset-2">What Applicants Are Told</a>.
         </p>
       </KbCard>
 

@@ -21,7 +21,6 @@ export function PausedNotice() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <Card className="w-full max-w-[420px] p-10 text-center">
         <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-warn-bg text-2xl">⏸️</div>
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-teal">MuniServe</p>
         <h1 className="mb-2 text-[18px] font-bold text-ink">Account paused</h1>
         <p className="mb-6 text-[13.5px] leading-relaxed text-ink-soft">
           Your account is currently paused. Please contact your administrator for more information.

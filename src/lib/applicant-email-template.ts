@@ -72,7 +72,7 @@ ${bodyHtml}
 ${ctaBlock}
 <tr><td style="padding:22px 30px 26px;border-top:1px solid #eef1f5;font-family:${FONT_STACK};">
 <div style="font-size:12px;color:#5b6675;font-weight:bold;">${officeLabel}${location ? ` — ${location}` : ""}</div>
-<div style="font-size:12px;color:#8a93a1;margin-top:6px;">Sent via MuniServe on behalf of ${lgu.name}.</div>
+<div style="font-size:12px;color:#8a93a1;margin-top:6px;">This is an automated message from ${lgu.name}.</div>
 </td></tr>
 </table>
 </td></tr>

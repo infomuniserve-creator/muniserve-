@@ -1015,7 +1015,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
 
       {screen === "landing" && (
         <>
-          <Head title="MuniServe" sub={`${lgu.name}, ${lgu.province} · Business permit application`} />
+          <Head title="Business Permits" sub={`${lgu.name}, ${lgu.province} · Business permit application`} />
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <OptCard title="New business" desc="First time applying for a permit with this business." onClick={() => { setPath("new"); setPhoneSigninMode(false); setScreen("phone"); }} />
             <OptCard title="Renew existing permit" desc="Already have a business registered with the municipality." onClick={() => { setPath("renewal"); setPhoneSigninMode(false); setScreen("renewal_license"); }} />
