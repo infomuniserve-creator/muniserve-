@@ -231,72 +231,19 @@ export default async function BploDashboardPage() {
             const reviews = round ? reviewsByRound.get(round.id) ?? [] : [];
             const flagged = reviews.filter((r) => r.decision === "rejected" || r.decision === "request_more_info");
             return (
-              <Card key={a.id} className="p-5">
-                <p className="mb-3 font-display text-[15px] font-bold text-ink">
-                  {businessName(a)} <span className="font-sans text-[12.5px] font-normal text-ink-soft">· Owner: {ownerName(a)}</span>
-                </p>
-                <WorkflowStepper status={a.status} />
-
-                {/* Audit finding (2026-08-17): "approved with condition"'s
-                    own condition text used to vanish the moment
-                    department review opened -- visible nowhere except
-                    buried as unstructured JSON in the audit log. */}
-                {a.initial_review_decision === "approved_with_condition" && a.initial_review_notes && (
-                  <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
-                    BPLO&rsquo;s condition: {a.initial_review_notes}
-                  </div>
-                )}
-
-                <div className="mb-3 flex flex-col gap-1.5">
-                  {reviews.length === 0 ? (
-                    <span className="text-[12.5px] text-ink-faint">Waiting for department assignment.</span>
-                  ) : (
-                    reviews.map((r) => (
-                      <div key={r.department} className="flex flex-wrap items-center gap-2">
-                        <TonePill
-                          dot
-                          tone={r.decision === "approved" || r.decision === "approved_with_condition" ? "good" : r.decision === "rejected" ? "bad" : r.decision === "request_more_info" ? "info" : "neutral"}
-                          label={`${r.department} · ${r.decision.replace(/_/g, " ")}${r.acted_on_behalf ? " (BPLO)" : ""}`}
-                        />
-                        {r.notes && <span className="text-[12px] text-ink-soft">{r.notes}</span>}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {reviews.filter((r) => r.decision === "pending").map((r) => (
-                  <div key={r.id} className="flex flex-wrap items-center gap-1.5">
-                    <span className="mr-1 text-[11px] font-bold text-ink-soft">Act for {r.department}:</span>
-                    <DepartmentReviewActions
-                      action={submitDepartmentDecisionAsBplo}
-                      departmentReviewId={r.id}
-                      department={r.department}
-                      buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
-                      buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
-                      compact
-                    />
-                  </div>
-                ))}
-
-                {flagged.length > 0 && (
-                  <form action={resubmitToDepartments} className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warn-bg px-4 py-3">
-                    <input type="hidden" name="applicationId" value={a.id} />
-                    {flagged.map((r) => (
-                      <input key={r.department} type="hidden" name="departments" value={r.department} />
-                    ))}
-                    <p className="text-[12.5px] font-bold text-warn-ink">
-                      Applicant resubmitted — notify {flagged.map((r) => r.department).join(", ")}
-                    </p>
-                    <button type="submit" className="rounded-full bg-warn px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#b87f15]">
-                      Notify
-                    </button>
-                  </form>
-                )}
-                <form action={archiveApplication} className="mt-3">
-                  <input type="hidden" name="applicationId" value={a.id} />
-                  <MiniButton type="submit" tone="neutral">Archive</MiniButton>
-                </form>
-              </Card>
+              <DeptReviewRow
+                key={a.id}
+                applicationId={a.id}
+                businessName={businessName(a)}
+                ownerName={ownerName(a)}
+                status={a.status}
+                initialReviewDecision={a.initial_review_decision}
+                initialReviewNotes={a.initial_review_notes}
+                reviews={reviews}
+                flagged={flagged}
+                buildingPermitFeeEnabled={lgu.buildingPermitFeeEnabled}
+                buildingPermitFeeLabel={lgu.buildingPermitFeeLabel}
+              />
             );
           })}
         </div>
@@ -770,6 +717,101 @@ async function InitialReviewCard({
       </a>
 
       <InitialReviewDecisionForm applicationId={applicationId} disableApprove={!profile?.lbtCategory} />
+    </Card>
+  );
+}
+
+/**
+ * One card in BPLO's "In department review" tab -- extracted out of an
+ * inline `.map()` (same shape as PaymentQueueRow, AwaitingPaymentSection)
+ * so it can `await` its own documents per application, matching what a
+ * department's own dashboard already shows for the identical application.
+ *
+ * Real gap reported live (2026-08-22): a walk-in filing that attached
+ * scanned/photographed requirements (section 7a23) put those documents on
+ * `getApplicationDocuments`'s result -- which the department's own review
+ * card already reads from -- but this card never fetched or rendered them
+ * at all. Rule #9 says BPLO can see and act across every department's
+ * queue; not being able to see the one thing a department is actually
+ * reviewing was a real, confirmed gap, not a cosmetic one.
+ */
+async function DeptReviewRow({
+  applicationId, businessName, ownerName, status, initialReviewDecision, initialReviewNotes, reviews, flagged,
+  buildingPermitFeeEnabled, buildingPermitFeeLabel,
+}: {
+  applicationId: string; businessName: string; ownerName: string; status: string;
+  initialReviewDecision: string | null; initialReviewNotes: string | null;
+  reviews: { id: string; department: string; decision: string; acted_on_behalf: boolean; notes: string | null }[];
+  flagged: { id: string; department: string; decision: string; acted_on_behalf: boolean; notes: string | null }[];
+  buildingPermitFeeEnabled: boolean; buildingPermitFeeLabel: string;
+}) {
+  const documents = await getApplicationDocuments(applicationId);
+  const signedUrls = await Promise.all(documents.map((d) => (d.file_url ? getSignedDocumentUrl(d.file_url) : Promise.resolve(null))));
+
+  return (
+    <Card className="p-5">
+      <p className="mb-3 font-display text-[15px] font-bold text-ink">
+        {businessName} <span className="font-sans text-[12.5px] font-normal text-ink-soft">· Owner: {ownerName}</span>
+      </p>
+      <WorkflowStepper status={status} />
+
+      {initialReviewDecision === "approved_with_condition" && initialReviewNotes && (
+        <div className="mb-3 rounded-2xl bg-cond-bg px-4 py-3 text-[12.5px] font-bold text-cond-ink">
+          BPLO&rsquo;s condition: {initialReviewNotes}
+        </div>
+      )}
+
+      <div className="mb-3 flex flex-col gap-1.5">
+        {reviews.length === 0 ? (
+          <span className="text-[12.5px] text-ink-faint">Waiting for department assignment.</span>
+        ) : (
+          reviews.map((r) => (
+            <div key={r.department} className="flex flex-wrap items-center gap-2">
+              <TonePill
+                dot
+                tone={r.decision === "approved" || r.decision === "approved_with_condition" ? "good" : r.decision === "rejected" ? "bad" : r.decision === "request_more_info" ? "info" : "neutral"}
+                label={`${r.department} · ${r.decision.replace(/_/g, " ")}${r.acted_on_behalf ? " (BPLO)" : ""}`}
+              />
+              {r.notes && <span className="text-[12px] text-ink-soft">{r.notes}</span>}
+            </div>
+          ))
+        )}
+      </div>
+
+      <DocumentList documents={documents} signedUrls={signedUrls} />
+
+      {reviews.filter((r) => r.decision === "pending").map((r) => (
+        <div key={r.id} className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-bold text-ink-soft">Act for {r.department}:</span>
+          <DepartmentReviewActions
+            action={submitDepartmentDecisionAsBplo}
+            departmentReviewId={r.id}
+            department={r.department}
+            buildingPermitFeeEnabled={buildingPermitFeeEnabled}
+            buildingPermitFeeLabel={buildingPermitFeeLabel}
+            compact
+          />
+        </div>
+      ))}
+
+      {flagged.length > 0 && (
+        <form action={resubmitToDepartments} className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warn-bg px-4 py-3">
+          <input type="hidden" name="applicationId" value={applicationId} />
+          {flagged.map((r) => (
+            <input key={r.department} type="hidden" name="departments" value={r.department} />
+          ))}
+          <p className="text-[12.5px] font-bold text-warn-ink">
+            Applicant resubmitted — notify {flagged.map((r) => r.department).join(", ")}
+          </p>
+          <button type="submit" className="rounded-full bg-warn px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#b87f15]">
+            Notify
+          </button>
+        </form>
+      )}
+      <form action={archiveApplication} className="mt-3">
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <MiniButton type="submit" tone="neutral">Archive</MiniButton>
+      </form>
     </Card>
   );
 }
