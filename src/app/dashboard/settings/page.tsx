@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
-import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName, updateZipCode } from "./actions";
+import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setDeliveryFeeRate, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName, updateZipCode } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -81,6 +81,15 @@ export default async function SettingsPage() {
   const barangayClearanceByAppliesTo = new Map((barangayClearanceRulesRaw ?? []).map((r) => [r.applies_to, r]));
   const uniformBarangayClearance = barangayClearanceByAppliesTo.get("all") ?? null;
   const barangayClearanceOverrideCount = [...barangayClearanceByAppliesTo.keys()].filter((k) => k !== "all").length;
+
+  const { data: deliveryFeeRulesRaw } = await supabase
+    .from("fee_rules")
+    .select("applies_to, flat_amount")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("fee_category", "delivery_fee")
+    .eq("is_active", true);
+  const deliveryFeeByAppliesTo = new Map((deliveryFeeRulesRaw ?? []).map((r) => [r.applies_to, r]));
+  const uniformDeliveryFee = deliveryFeeByAppliesTo.get("all") ?? null;
 
   /**
    * Status pills next to each section's title (2026-08-20, from the
@@ -617,6 +626,61 @@ export default async function SettingsPage() {
           courierName={lgu.courierName}
           courierPhone={lgu.courierPhone}
         />
+
+        {lgu.deliveryServiceEnabled && (
+          <Card className="mt-3 flex flex-col gap-4 p-5">
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Delivery fee — uniform rate (applies to every barangay unless overridden below)</p>
+              <p className="mb-2 text-[11.5px] text-ink-soft">Shown to the applicant before they choose delivery, so they know the cost upfront.</p>
+              <form action={setDeliveryFeeRate} className="flex flex-wrap items-end gap-2.5">
+                <input type="hidden" name="barangay" value="" />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Amount (₱)</label>
+                  <input
+                    name="amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    defaultValue={uniformDeliveryFee?.flat_amount ?? ""}
+                    placeholder="Not set yet"
+                    className="h-9 w-32 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+                  />
+                </div>
+                <MiniButton type="submit" tone="neutral">Save</MiniButton>
+              </form>
+            </div>
+
+            {barangays.length === 0 ? (
+              <p className="border-t border-border pt-4 text-[12px] text-ink-soft">Add your barangays above to set different delivery fees per barangay.</p>
+            ) : (
+              <div className="border-t border-border pt-4">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-faint">Per-barangay overrides (optional)</p>
+                <div className="flex flex-col divide-y divide-border">
+                  {barangays.map((b) => {
+                    const override = deliveryFeeByAppliesTo.get(b.value);
+                    return (
+                      <form key={b.id} action={setDeliveryFeeRate} className="flex flex-wrap items-end gap-2.5 py-2">
+                        <input type="hidden" name="barangay" value={b.value} />
+                        <span className="min-w-32 text-[12.5px] font-bold text-ink">{b.value}</span>
+                        <input
+                          name="amount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={override?.flat_amount ?? ""}
+                          placeholder="Uses uniform rate"
+                          aria-label={`Delivery fee override for ${b.value}`}
+                          className="h-8 w-32 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
+                        />
+                        <MiniButton type="submit" tone="neutral">Save</MiniButton>
+                      </form>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
       </CollapsibleSection>
       </SettingsGroup>
 

@@ -1,5 +1,6 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { getLguDisplay } from "@/lib/lgu";
+import { getDeliveryFeeForBarangay } from "@/lib/delivery-fee";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyCourierSms } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/audit-log";
@@ -77,11 +78,14 @@ export async function POST(request: Request) {
   }
 
   const address = [business?.unit_street, business?.barangay, business?.city_town, business?.province, business?.zip_code].filter(Boolean).join(", ");
+  const fee = await getDeliveryFeeForBarangay(supabase, application.lgu_id, business?.barangay ?? null);
   await notifyCourierSms(
     applicationId,
     application.lgu_id,
     lgu.courierPhone,
-    `Delivery requested: ${business?.business_name ?? "Business"} (${application.reference_number}), owner ${business?.owner?.full_name ?? "Unknown"} (${business?.owner?.phone ?? "no phone on file"}). Pick up the signed permit at the BPLO office for delivery to: ${address || "address not on file"}.`
+    `Delivery requested: ${business?.business_name ?? "Business"} (${application.reference_number}), owner ${business?.owner?.full_name ?? "Unknown"} (${business?.owner?.phone ?? "no phone on file"}). Pick up the signed permit at the BPLO office for delivery to: ${address || "address not on file"}.${
+      fee != null ? ` Delivery fee to collect: ₱${fee.toLocaleString()}.` : ""
+    }`
   );
 
   await logAuditEvent(supabase, {

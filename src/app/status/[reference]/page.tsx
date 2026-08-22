@@ -1,6 +1,7 @@
 import { getApplicantOwnerId } from "@/lib/applicant-session";
 import { maskPhone } from "@/lib/mask";
 import { getLguDisplay } from "@/lib/lgu";
+import { getDeliveryFeeForBarangay } from "@/lib/delivery-fee";
 import { anyChannelNeedsProofUpload, getEnabledPaymentChannels } from "@/lib/payment-methods";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
@@ -168,13 +169,20 @@ async function DeliveryRequestSection({ applicationId, lguId }: { applicationId:
   const lgu = await getLguDisplay(supabase, lguId);
   if (!lgu.deliveryServiceEnabled) return null;
 
-  const { data: app } = await supabase.from("applications").select("delivery_requested_at").eq("id", applicationId).maybeSingle();
+  const { data: app } = await supabase
+    .from("applications")
+    .select("delivery_requested_at, business:businesses(barangay)")
+    .eq("id", applicationId)
+    .maybeSingle();
+  const barangay = (app?.business as unknown as { barangay: string | null } | null)?.barangay ?? null;
+  const fee = await getDeliveryFeeForBarangay(supabase, lguId, barangay);
 
   return (
     <Card>
       <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Your permit is ready for release</p>
       <p style={{ fontSize: 12, color: "#6b7280" }}>
-        Visit the BPLO office to pick it up, or have it delivered instead -- {lgu.courierName} will collect it on your behalf.
+        Visit the BPLO office to pick it up, or have it delivered instead -- {lgu.courierName} will collect it on your behalf
+        {fee != null ? ` for a ₱${fee.toLocaleString()} delivery fee` : ""}.
       </p>
       {app?.delivery_requested_at ? (
         <p style={{ fontSize: 12, color: "#27500A", marginTop: 6 }}>Delivery requested — the courier has been notified and will pick it up on your behalf.</p>

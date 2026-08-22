@@ -907,3 +907,77 @@ export async function setBarangayClearanceRate(formData: FormData) {
 
   revalidatePath("/dashboard/settings");
 }
+
+/**
+ * Delivery fee, per barangay (2026-08-22, project owner's own request) --
+ * shown to the applicant on their status page before they choose delivery,
+ * so they know what it costs. Same shape as setBarangayClearanceRate
+ * directly above (uniform "all" row + per-barangay overrides in
+ * fee_rules), minus Acct Code -- this isn't an official assessed fee with
+ * its own municipal revenue-code line, see migration 0065's own comment.
+ */
+export async function setDeliveryFeeRate(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const barangay = String(formData.get("barangay") ?? "").trim();
+  const appliesTo = barangay || "all";
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("fee_rules")
+    .select("id")
+    .eq("lgu_id", staff.lgu_id)
+    .eq("fee_category", "delivery_fee")
+    .eq("applies_to", appliesTo)
+    .maybeSingle();
+
+  if (amountRaw === "") {
+    if (existing && barangay) {
+      await supabase.from("fee_rules").delete().eq("id", existing.id);
+      await logAuditEvent(supabase, {
+        lguId: staff.lgu_id,
+        actorRole: staff.role,
+        actorLabel: actorLabelFor(staff),
+        action: "delivery_fee_rate_updated",
+        summary: `Removed the delivery fee override for "${barangay}" -- back to the uniform rate`,
+      });
+    }
+    revalidatePath("/dashboard/settings");
+    return;
+  }
+
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("Invalid amount");
+
+  if (existing) {
+    const { error } = await supabase.from("fee_rules").update({ flat_amount: amount }).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("fee_rules").insert({
+      lgu_id: staff.lgu_id,
+      name: barangay ? `Delivery Fee -- ${barangay}` : "Delivery Fee",
+      fee_category: "delivery_fee",
+      computation_type: "flat",
+      applies_to: appliesTo,
+      flat_amount: amount,
+      delivery_mode: "reference_only",
+      is_active: true,
+    });
+    if (error) throw error;
+  }
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "delivery_fee_rate_updated",
+    summary: barangay
+      ? `Delivery fee for "${barangay}" set to ₱${amount.toLocaleString()}`
+      : `Uniform delivery fee set to ₱${amount.toLocaleString()}`,
+    details: { barangay: barangay || null, amount },
+  });
+
+  revalidatePath("/dashboard/settings");
+}

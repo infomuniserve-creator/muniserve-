@@ -49,6 +49,7 @@ export type AuditAction =
   | "zip_code_updated"
   | "delivery_service_updated"
   | "delivery_requested"
+  | "delivery_fee_rate_updated"
   | "payment_info_requested"
   | "info_request_resolved"
   | "barangays_updated"
