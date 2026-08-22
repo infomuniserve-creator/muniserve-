@@ -10,6 +10,7 @@ import { TERMINAL_STATUSES } from "@/lib/business-status";
 import type { FieldKey } from "@/lib/application-form-logic";
 import { getLguDisplay } from "@/lib/lgu";
 import { generatePermitAssets } from "@/lib/permit-pdf";
+import { verifyUploadedObject } from "@/lib/document-upload";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -158,6 +159,8 @@ export async function startWalkInApplication(formData: FormData) {
     .single();
   if (appError || !application) throw appError ?? new Error("Application create failed");
 
+  await attachWalkInDocuments(application.id, String(formData.get("walkinDocuments") ?? ""));
+
   await openDepartmentReviewRound(supabase, application.id, staff.lgu_id);
 
   await logAuditEvent(supabase, {
@@ -172,6 +175,48 @@ export async function startWalkInApplication(formData: FormData) {
 
   revalidatePath("/dashboard/businesses");
   revalidatePath("/dashboard/bplo");
+}
+
+/**
+ * Turns whatever WalkInDocumentUpload staged in Storage (walkin-document-
+ * upload.tsx's own hidden `walkinDocuments` JSON input) into real
+ * `documents` rows against the just-created application -- so the
+ * departments about to be fanned out to by openDepartmentReviewRound (the
+ * very next line in startWalkInApplication) have something to actually
+ * review, not just BPLO's own vouching note. Uses the service client, not
+ * the caller's own RLS-scoped session -- `documents` has never had a
+ * staff-facing INSERT policy at all (migration 0002's own comment: "writes
+ * happen via service role"), matching how every other document write in
+ * this app already works.
+ *
+ * Best-effort per file, not all-or-nothing: a walk-in filing that's
+ * otherwise entirely valid must never fail over one bad/expired staged
+ * upload -- skips (rather than throws on) anything that doesn't verify,
+ * same reasoning `finalizeAssessment`/every notification call in this
+ * codebase already applies to a non-essential side effect.
+ */
+async function attachWalkInDocuments(applicationId: string, walkinDocumentsJson: string) {
+  if (!walkinDocumentsJson) return;
+  let staged: { path: string; documentType: string }[];
+  try {
+    staged = JSON.parse(walkinDocumentsJson);
+    if (!Array.isArray(staged)) return;
+  } catch {
+    return;
+  }
+  if (staged.length === 0) return;
+
+  const service = createServiceClient();
+  for (const doc of staged) {
+    const path = typeof doc?.path === "string" ? doc.path : "";
+    const documentType = typeof doc?.documentType === "string" ? doc.documentType.trim() : "";
+    if (!path.startsWith("walkin/") || !documentType) continue;
+
+    const verified = await verifyUploadedObject(service, path);
+    if ("error" in verified) continue;
+
+    await service.from("documents").insert({ application_id: applicationId, document_type: documentType, file_url: path });
+  }
 }
 
 /**

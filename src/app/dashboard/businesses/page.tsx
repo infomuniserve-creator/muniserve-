@@ -13,6 +13,7 @@ import {
 } from "../ui";
 import { BusinessesSubNav } from "./sub-nav";
 import { claimLegacyBusiness, regeneratePermitPdf, setLbtCategory, startWalkInApplication, unclaimBusiness, updateOwnerPhone } from "./actions";
+import { WalkInDocumentUpload } from "./walkin-document-upload";
 
 const STATUS_FILTERS: { value: "all" | BusinessStatus; label: string }[] = [
   { value: "all", label: "All" },
@@ -494,6 +495,7 @@ function RegistryRow({
                 <input name="phone" type="tel" placeholder="09XX XXX XXXX" className="h-9 w-40 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint" />
               </div>
             )}
+            <WalkInDocumentUpload />
             <PrimaryButton type="submit" disabled={!profile.lbtCategory} title={!profile.lbtCategory ? "Set the LBT category above first" : undefined}>
               {buttonLabel}
             </PrimaryButton>
