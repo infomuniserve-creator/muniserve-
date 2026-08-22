@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useLinkStatus } from "next/link";
 import { useFormStatus } from "react-dom";
 
@@ -121,6 +122,47 @@ export function GhostButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>
       {isPending && <SpinnerIcon className="size-3" />}
       {children}
     </button>
+  );
+}
+
+/**
+ * A Save button that stays visibly confirmed for a few seconds after a
+ * real save completes (2026-08-22) -- reported directly: saving a
+ * per-barangay rate (Delivery Fee, and the identical Barangay Clearance
+ * list right above it) genuinely worked every time, but the plain
+ * spinner-then-clear feedback MiniButton already gives every Save button
+ * is easy to miss entirely when clicking through dozens of individual
+ * rows in a row, since a flat-rate UPDATE round-trips fast enough that
+ * the spinner can flash and clear before it registers.
+ *
+ * Tracks the pending -> not-pending transition (not just "is it pending
+ * right now") via a ref holding the PREVIOUS pending value, checked
+ * before overwriting it each render -- `pending` only means "submitting
+ * right now," it says nothing on its own about whether a submission
+ * *just* finished, which is the actual signal this needs.
+ */
+export function SaveButtonWithConfirmation({ label = "Save" }: { label?: string }) {
+  const { pending } = useFormStatus();
+  const wasPending = useRef(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    const wasPendingBefore = wasPending.current;
+    wasPending.current = pending;
+    if (wasPendingBefore && !pending) {
+      setJustSaved(true);
+      const timer = setTimeout(() => setJustSaved(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [pending]);
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <MiniButton type="submit" tone="neutral">{label}</MiniButton>
+      <span className={`text-[11.5px] font-bold text-good-ink transition-opacity ${justSaved ? "opacity-100" : "opacity-0"}`} aria-live="polite">
+        {justSaved ? "Saved ✓" : ""}
+      </span>
+    </span>
   );
 }
 

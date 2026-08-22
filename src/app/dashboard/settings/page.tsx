@@ -4,7 +4,7 @@ import { buildApplyEmbedSnippet } from "@/lib/embed";
 import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
-import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
+import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SaveButtonWithConfirmation, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
 import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setDeliveryFeeRate, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName, updateZipCode } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
@@ -349,7 +349,7 @@ export default async function SettingsPage() {
                   className="h-9 w-28 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
                 />
               </div>
-              <MiniButton type="submit" tone="neutral">Save</MiniButton>
+              <SaveButtonWithConfirmation />
             </form>
           </div>
 
@@ -384,7 +384,7 @@ export default async function SettingsPage() {
                         aria-label={`Account code for ${b.value}`}
                         className="h-8 w-24 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
                       />
-                      <MiniButton type="submit" tone="neutral">Save</MiniButton>
+                      <SaveButtonWithConfirmation />
                     </form>
                   );
                 })}
@@ -646,7 +646,7 @@ export default async function SettingsPage() {
                     className="h-9 w-32 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
                   />
                 </div>
-                <MiniButton type="submit" tone="neutral">Save</MiniButton>
+                <SaveButtonWithConfirmation />
               </form>
             </div>
 
@@ -672,7 +672,7 @@ export default async function SettingsPage() {
                           aria-label={`Delivery fee override for ${b.value}`}
                           className="h-8 w-32 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-ink placeholder:text-ink-faint"
                         />
-                        <MiniButton type="submit" tone="neutral">Save</MiniButton>
+                        <SaveButtonWithConfirmation />
                       </form>
                     );
                   })}

@@ -3,9 +3,9 @@ import type { BusinessProfile } from "@/lib/business-profile";
 import { DOCUMENT_PURPOSE_LABELS } from "@/lib/document-purpose";
 import { ThemeToggle } from "./theme-toggle";
 import { ProfileMenu } from "./profile-menu";
-import { GhostButton, MiniButton, NavLinkPendingHint, OutlineButton, PrimaryButton } from "./pending-ui";
+import { GhostButton, MiniButton, NavLinkPendingHint, OutlineButton, PrimaryButton, SaveButtonWithConfirmation } from "./pending-ui";
 export type { BusinessProfile };
-export { GhostButton, MiniButton, OutlineButton, PrimaryButton };
+export { GhostButton, MiniButton, OutlineButton, PrimaryButton, SaveButtonWithConfirmation };
 
 /**
  * Shared visual language for every staff dashboard (BPLO, department,
