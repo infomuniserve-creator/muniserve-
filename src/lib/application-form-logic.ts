@@ -78,10 +78,16 @@ const DEFAULT_HIDDEN = new Set<FieldKey>([
  * they're shown fields -- the source form itself marks both
  * `required: false` (an odd choice for barangay specifically, called out
  * in reference/official-application-form/README.md, but faithfully kept).
+ * `swornStatementDoc` is the reverse deviation (2026-08-22, project
+ * owner's own direct request) -- the source field is itself marked
+ * `active: false, required: true`, but BPLO's own real-world call is that
+ * a renewal applicant shouldn't be blocked over this one. Stays visible
+ * (see the RULES below -- shown for Renewal once grossSales is filled),
+ * just no longer required.
  */
 export const REQUIRED_FIELDS = new Set<FieldKey>([
   "businessTaxPayment", "registrationAuthority", "registrationNo", "tin", "taxType", "businessName", "natureOfBusiness", "organizationType",
-  "capitalInvestment", "grossSales", "swornStatementDoc",
+  "capitalInvestment", "grossSales",
   "unitStreet", "cityTown", "province", "zipCode",
   "firstName", "lastName", "email", "phone",
   "businessActivity", "operationAddressSame", "operationAddress", "businessAreaSqm", "totalFloorAreaSqm",

@@ -1742,6 +1742,16 @@ Documents attached this way show up exactly where a normal department reviewer a
 
 ---
 
+## 7a24. "Sworn Statement of Gross Sales" made optional for renewals (2026-08-22)
+
+The project owner spotted this document field live on the real applicant form and asked whether it existed and asked for it to be non-mandatory -- it already existed (`swornStatementDoc`, shown for Renewal once Gross Sales is filled, per `application-form-logic.ts`'s `RULES`), it just needed to stop being required. Checked the real source (`reference/official-application-form/fields.json`) before changing anything, per this project's own standing rule -- the source field is actually marked `active: false, required: true`, so this is a real, deliberate reversal of the source's own `required` flag, not a rubber-stamp of it. Same class of deviation this codebase already has one precedent for in the opposite direction (`declarationAccepted`: source says `required: false`, this build requires it anyway) -- a project-owner business-rule call overriding the raw GHL export, not something to silently follow either way without checking first.
+
+**Fixed with a single Set removal**: `swornStatementDoc` dropped from `application-form-logic.ts`'s `REQUIRED_FIELDS`. Nothing else needed touching -- `isFieldCurrentlyRequired()` (`REQUIRED_FIELDS.has(field) && isFieldVisible(field, values)`) is the one shared function both the client's asterisk/label rendering (`ApplyPageClient.tsx`) and the server's `missing_required_fields` validation (`submit-application/route.ts`) already read from, confirmed by grep before relying on it -- no second, independently-hardcoded check existed anywhere for this specific field. The field's own visibility rule (shown for Renewal once Gross Sales is filled) is untouched -- still there to upload, just no longer blocking submission if left blank.
+
+**Verified directly against the real, unmodified functions**, not just read the diff: a temporary fixture route (deleted immediately after) called `isFieldVisible`/`isFieldCurrentlyRequired` with a Renewal + Gross Sales payload and confirmed `swornStatementDoc` is no longer in `REQUIRED_FIELDS`, still resolves `visible: true`, and now resolves `currentlyRequired: false` -- the exact combination the applicant form and the server's own validation both need to agree on. `npx tsc --noEmit`, `eslint`, and a full `next build` (`.next` cleared first) all ran clean -- 36 routes, fixture deleted, none left behind.
+
+---
+
 ## 9. Suggested build order
 
 Don't build all of this in one pass. Sequence:
