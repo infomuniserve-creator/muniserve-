@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Re-verification for the "different browser/device" case -- the
@@ -17,6 +17,16 @@ export function VerifyPhoneCard({ applicationId, maskedPhone }: { applicationId:
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Matches the identical fix on the main /apply OTP screen -- Resend was
+  // always clickable, with the only feedback for using it too soon being
+  // a real round trip ending in a "please wait" error. 30s matches
+  // sendOtpCode's own real per-phone cooldown (otp.ts).
+  const [resendCooldown, setResendCooldown] = useState(0);
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
 
   async function sendCode() {
     setLoading(true);
@@ -37,6 +47,7 @@ export function VerifyPhoneCard({ applicationId, maskedPhone }: { applicationId:
         return;
       }
       setSent(true);
+      setResendCooldown(30);
     } finally {
       setLoading(false);
     }
@@ -89,8 +100,12 @@ export function VerifyPhoneCard({ applicationId, maskedPhone }: { applicationId:
         <button onClick={verify} disabled={loading || code.trim().length !== 6} style={btnStyle}>
           {loading ? "Verifying…" : "Verify"}
         </button>
-        <button onClick={sendCode} disabled={loading} style={ghostBtnStyle}>
-          Resend
+        <button
+          onClick={sendCode}
+          disabled={loading || resendCooldown > 0}
+          style={resendCooldown > 0 ? { ...ghostBtnStyle, opacity: 0.5, cursor: "not-allowed" } : ghostBtnStyle}
+        >
+          {resendCooldown > 0 ? `Resend (${resendCooldown}s)` : "Resend"}
         </button>
       </div>
       {error && <p style={{ fontSize: 11, color: "#791F1F", marginTop: 6 }}>{error}</p>}

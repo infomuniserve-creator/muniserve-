@@ -358,6 +358,18 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   const [phone, setPhone] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  // Resend cooldown (2026-08-22, reported live): "Resend code" was always
+  // clickable, so the only feedback for clicking it too soon was a real
+  // round trip ending in a "please wait" error -- confusing, and lets
+  // someone hammer it. Matches sendOtpCode's own real 30-second per-phone
+  // cooldown (otp.ts) rather than inventing a second, different number
+  // that would just disagree with what the server actually enforces.
+  const [resendCooldown, setResendCooldown] = useState(0);
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -591,6 +603,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
         return;
       }
       setOtpSent(true);
+      setResendCooldown(30);
       setScreen("otp");
     } finally {
       setLoading(false);
@@ -615,6 +628,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       }
       setRenewalOtpSent(true);
       setOtpSent(true);
+      setResendCooldown(30);
       setScreen("otp");
     } finally {
       setLoading(false);
@@ -1107,7 +1121,13 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
           </Field>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={verifyOtp} disabled={loading || otpInput.trim().length !== 6} style={{ ...actBtnStyle, ...((loading || otpInput.trim().length !== 6) ? disabledBtnStyle : {}) }}>Verify</button>
-            <button onClick={renewalOtpSent && claimedMatch ? sendRenewalOtp : sendOtp} disabled={loading} style={{ ...actBtnStyle, ...(loading ? disabledBtnStyle : {}) }}>Resend code</button>
+            <button
+              onClick={renewalOtpSent && claimedMatch ? sendRenewalOtp : sendOtp}
+              disabled={loading || resendCooldown > 0}
+              style={{ ...actBtnStyle, ...((loading || resendCooldown > 0) ? disabledBtnStyle : {}) }}
+            >
+              {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+            </button>
           </div>
           {otpSent && <p style={{ fontSize: 13, color: "#6b7280", marginTop: 10 }}>Code sent via SMS.</p>}
         </>

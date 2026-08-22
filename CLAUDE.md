@@ -1768,6 +1768,18 @@ The project owner asked directly: no mention of "MuniServe" anywhere an applican
 
 ---
 
+## 7a26. Resend-code button had no cooldown at all (2026-08-22)
+
+The project owner reported it directly: on the applicant form's OTP screen, "Resend code" was always clickable, with nothing stopping repeated clicks. Traced it before building anything -- the server-side guarantee was already real (`otp.ts`'s `sendOtpCode`, a 30-second-per-phone cooldown that rejects a too-soon resend with `{error: "too_soon"}`), but nothing on the client reflected that: the button's own `disabled` only ever tracked the in-flight network request (`loading`), re-enabling the instant that finished regardless of the real cooldown window underneath. Clicking it too soon did already show an error ("Please wait a bit before requesting another code.") -- but only after a wasted round trip, not proactively.
+
+**Fixed** (`ApplyPageClient.tsx`): a new `resendCooldown` counter, ticked down every second via a plain `setTimeout`-in-`useEffect` loop, set to 30 (matching `sendOtpCode`'s own real window, not a separately-invented number) the moment either send path (`sendOtp` or `sendRenewalOtp`) succeeds. The button is disabled and shows a live countdown ("Resend code (25s)") for that window, then re-enables to plain "Resend code" -- covers both real entry points into this one shared OTP screen (a fresh phone number, and the Permit Number renewal lookup's own resend).
+
+**Found and fixed the identical gap in the one other place this project has a Resend button**: `status/[reference]/verify-phone-form.tsx`'s `VerifyPhoneCard` (the "can't verify this application here" phone re-verification card, section 7oo) had the exact same shape -- same fix applied, including a disabled-looking visual state (`opacity`/`cursor`) that component's plain inline-style buttons didn't have for any disabled state before this.
+
+**Verified against the real, unmodified component, not just logic**: since triggering a real send would mean a real, billed Semaphore SMS attempt (a mistake already made once earlier this session, corrected here on purpose), a temporary route (deleted immediately after) stood in for `send-otp/route.ts` returning a bare `{ok:true}` with no real SMS involved -- the client's fetch URL was temporarily pointed at it, then reverted immediately after verification. Drove the real phone-entry screen with a real click through to "Send code": confirmed the button read "Resend code (25s)" moments after sending, confirmed via the real DOM `disabled` property that it stayed genuinely disabled while ticking down (19s a few seconds later), and confirmed it re-enabled to plain "Resend code" with `disabled: false` once the full window elapsed. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 36 routes, the fetch-URL revert and fixture route deletion both confirmed via `git status`, none left behind.
+
+---
+
 ## 9. Suggested build order
 
 Don't build all of this in one pass. Sequence:
