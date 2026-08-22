@@ -84,6 +84,13 @@ const DEFAULT_HIDDEN = new Set<FieldKey>([
  * a renewal applicant shouldn't be blocked over this one. Stays visible
  * (see the RULES below -- shown for Renewal once grossSales is filled),
  * just no longer required.
+ * `barangayClearanceDoc` is the same shape of deviation, opposite
+ * direction (2026-08-22, same day, project owner's own direct request):
+ * the source labels it "Upload ... (if any)" and marks `required: false`,
+ * but BPLO's own real-world call is that answering "Yes" to "Do you have
+ * a Barangay Clearance?" should actually require the upload -- it's only
+ * ever shown in that exact case (see the RULES below), so this only ever
+ * blocks someone who said they have one and then didn't attach it.
  */
 export const REQUIRED_FIELDS = new Set<FieldKey>([
   "businessTaxPayment", "registrationAuthority", "registrationNo", "tin", "taxType", "businessName", "natureOfBusiness", "organizationType",
@@ -93,7 +100,7 @@ export const REQUIRED_FIELDS = new Set<FieldKey>([
   "businessActivity", "operationAddressSame", "operationAddress", "businessAreaSqm", "totalFloorAreaSqm",
   "premisesOwnership", "monthlyRent", "lessorName", "lessorContactNo", "lessorAddress",
   "hasEmployees", "maleEmployeeCount", "femaleEmployeeCount", "employeesResidingInLguCount",
-  "cedulaDoc", "hasBarangayClearance", "hasTaxIncentives", "taxIncentivesDoc",
+  "cedulaDoc", "hasBarangayClearance", "barangayClearanceDoc", "hasTaxIncentives", "taxIncentivesDoc",
   "billiardTableCount", "lodgerCount", "landAreaHectares", "guardPostCount", "warehouseFloorAreaSqm",
   "seatingCapacity", "isAircon", "isBranchOffice", "animalCount",
   "govIdDoc", "dtiSecCdaDoc", "vicinityMapDoc",
