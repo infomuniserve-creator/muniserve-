@@ -1780,6 +1780,20 @@ The project owner reported it directly: on the applicant form's OTP screen, "Res
 
 ---
 
+## 7a27. Staff/department notification emails get the same branded template as applicant emails, plus business + owner name (2026-08-22)
+
+The project owner asked directly: staff/department email notifications were "super basic" next to the applicant-facing ones (section 7a15's branded template -- LGU seal, gradient header, personalized greeting, one CTA button), likely to be ignored -- wanted the same treatment, plus every notification naming the business and owner, not just a reference number.
+
+**Catalogued every real staff/department notification call site** (`notifyStaffByRole`/`notifyStaffEmail`, excluding the two one-time account-provisioning emails -- staff invite, new-client welcome -- which aren't about a specific application and have no business/owner to name, out of scope on purpose): a department round opening, the zero-active-departments and all-departments-cleared paths notifying BPLO, a department rejecting/requesting info (`notifyDepartmentIssue`), a resubmission re-notifying a department, an info-request resolution notifying BPLO or Treasury, assessment-finalized notifying Treasury, payment-recorded notifying BPLO, permit-signed notifying BPLO, a new application notifying BPLO, an additional document upload notifying whoever can currently act, and the 24-hour department reminder cron -- 13 call sites across 8 files. Most already had the business name; almost none had the owner's.
+
+**`notifyStaffByRole`** (`notifications.ts`) is the one shared function nearly all of these already funnel through -- fixed at the source rather than touching every call site's own template logic. Its `emailHtml` parameter was already just inner body content in every real call, never a full page, so no call site's own signature needed to change: internally, it now fetches the LGU once, selects each recipient's own `full_name` (not selected before), and wraps that same body content in the exact branded shell `renderApplicantEmailHtml` (section 7a15) already provides for applicants -- personalized per recipient ("Hi Juan,") rather than one identical email blasted to everyone, with a "Open dashboard" CTA linking to `/login`. `notifyDepartmentIssue` (`review-workflow.ts`) and the department-reminder cron (`department-reminders/route.ts`) are the two call sites that never went through `notifyStaffByRole` at all (hand-rolled loops) -- given the identical treatment directly, including the same per-recipient personalization.
+
+**Every call site's own message updated to name the business and owner**, not just a reference/permit number -- required adding `owner:owners(full_name)` to a query that didn't already select it in most cases (several previously had access to the business name but not the owner at all; a few had neither, only the bare reference number). SMS text is deliberately left as business-name-plus-reference only, not also the owner's name -- matches this project's own standing preference for short SMS (section 7a15's own "the SMS was doing too much" fix), with the fuller business+owner detail reserved for the email where there's room to format it clearly.
+
+**Verified against the real, unmodified `notifyStaffByRole`, not a re-implementation**: a temporary fixture (deleted immediately after) built a fully synthetic application/business/owner at San Miguel's real LGU id, a synthetic BPLO staff account with a `.invalid`-TLD email (guaranteed non-deliverable, no real inbox reached), and called the real function directly -- confirmed it logged a real `"sent"` email attempt (not `"failed"`), and separately rendered the identical shape it builds internally to confirm the actual HTML contains the personalized greeting, the business name, the owner name, the correct office label, and the CTA button. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 36 routes, fixture deleted, confirmed zero leftover synthetic data.
+
+---
+
 ## 9. Suggested build order
 
 Don't build all of this in one pass. Sequence:

@@ -49,10 +49,10 @@ export async function POST(request: Request) {
 
   const { data: application, error: fetchError } = await supabase
     .from("applications")
-    .select("id, lgu_id, status, reference_number, business:businesses(business_name, owner_id, owner:owners(phone))")
+    .select("id, lgu_id, status, reference_number, business:businesses(business_name, owner_id, owner:owners(phone, full_name))")
     .eq("id", applicationId)
     .maybeSingle();
-  const business = application?.business as unknown as { business_name: string; owner_id: string | null; owner: { phone: string | null } | null } | null;
+  const business = application?.business as unknown as { business_name: string; owner_id: string | null; owner: { phone: string | null; full_name: string | null } | null } | null;
   if (fetchError || !application || business?.owner_id !== ownerId) {
     return NextResponse.json({ error: "not_found_or_not_yours" }, { status: 403 });
   }
@@ -109,12 +109,14 @@ export async function POST(request: Request) {
 async function notifyCurrentOwner(
   supabase: ReturnType<typeof createServiceClient>,
   application: { id: string; lgu_id: string; status: string; reference_number: string },
-  business: { business_name: string } | null,
+  business: { business_name: string; owner?: { full_name: string | null } | null } | null,
   documentType: string
 ) {
+  const businessName = business?.business_name ?? "(business record missing)";
+  const ownerName = business?.owner?.full_name ?? "Unknown owner";
   const subject = `Document uploaded: ${application.reference_number}`;
-  const emailHtml = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) -- applicant uploaded a new document (${documentType}).</p>`;
-  const smsMessage = `${business?.business_name ?? "Applicant"} (${application.reference_number}) uploaded a new document (${documentType}).`;
+  const emailHtml = `<p><strong>${businessName}</strong> (Owner: ${ownerName}) -- applicant uploaded a new document (${documentType}).</p><p>Application: ${application.reference_number}</p>`;
+  const smsMessage = `${businessName} (${application.reference_number}) uploaded a new document (${documentType}).`;
 
   if (application.status === "pending_dept_review") {
     const { data: latestRound } = await supabase

@@ -222,8 +222,8 @@ export async function signPermit(formData: FormData) {
       "bplo",
       applicationId,
       `Ready for release: ${application.reference_number}`,
-      `<p><strong>${application.reference_number}</strong> has been signed -- ready for release to the applicant.</p>`,
-      `${application.reference_number} signed -- ready for release.`
+      `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (Owner: ${business?.owner?.full_name ?? "Unknown owner"}) has been signed -- ready for release to the applicant.</p><p>Application: ${application.reference_number}</p>`,
+      `${business?.business_name ?? "Application"} (${application.reference_number}) signed -- ready for release.`
     );
   }
 

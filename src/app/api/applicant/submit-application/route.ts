@@ -395,7 +395,7 @@ export async function POST(request: Request) {
     "bplo",
     application.id,
     `New application: ${application.reference_number}`,
-    `<p>New ${body.applicationType} application -- <strong>${body.businessName}</strong> (${application.reference_number}). Needs initial review.</p>`,
+    `<p>New ${body.applicationType} application -- <strong>${body.businessName}</strong> (Owner: ${applicantName}). Needs initial review.</p><p>Application: ${application.reference_number}</p>`,
     `New application ${application.reference_number} (${body.businessName}) needs initial review.`
   );
 

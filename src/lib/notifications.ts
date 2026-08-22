@@ -1,6 +1,8 @@
 import { sendSms } from "@/lib/semaphore";
 import { sendEmail, type EmailAttachment } from "@/lib/resend";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getLguDisplay, type LguDisplay } from "@/lib/lgu";
+import { firstNameOf, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 
 /**
  * Central place every status-change notification goes through, so
@@ -123,6 +125,14 @@ export async function notifyStaffSms(applicationId: string | null, lguId: string
   }
 }
 
+/** The office name to show in a staff email's header/greeting -- same convention every applicant email already uses per-office (lgu.bploOfficeName, a hardcoded Treasurer's-Office label), just applied to the staff audience too. */
+function staffOfficeLabel(lgu: LguDisplay, role: "bplo" | "treasury" | "mayor" | "department", department?: string): string {
+  if (role === "department") return department ?? "Department";
+  if (role === "treasury") return "Office of the Municipal Treasurer";
+  if (role === "mayor") return "Office of the Mayor";
+  return lgu.bploOfficeName;
+}
+
 /**
  * Notifies every active, non-proxy staff member of a given role (or, for
  * role = "department", a specific department) at an LGU -- both channels
@@ -134,6 +144,17 @@ export async function notifyStaffSms(applicationId: string | null, lguId: string
  * assessment finalized, payment recorded, printed, signed, a document
  * uploaded) needs the identical shape, just a different role/department
  * and message.
+ *
+ * `emailHtml` (2026-08-22) is now the notification's own INNER body
+ * content (a caller's plain <p> paragraphs), not a full standalone page --
+ * every staff email now renders through the exact same branded shell
+ * (renderApplicantEmailHtml) the applicant-facing emails already use,
+ * reported directly as looking "super basic" next to those. Personalized
+ * per recipient with their own first name (staff_users.full_name, now
+ * selected here) rather than one generic email blasted to everyone, the
+ * same way an applicant email greets them by name -- this is also why the
+ * per-recipient loop below can no longer just reuse one pre-built HTML
+ * string, it builds one per recipient.
  *
  * Uses the service-role client deliberately, same reasoning as
  * notifyDepartmentIssue -- this runs as a side effect of one staff
@@ -154,7 +175,7 @@ export async function notifyStaffByRole(
   const supabase = createServiceClient();
   let query = supabase
     .from("staff_users")
-    .select("email, phone")
+    .select("email, phone, full_name")
     .eq("lgu_id", lguId)
     .eq("role", role)
     .eq("is_active", true)
@@ -165,8 +186,24 @@ export async function notifyStaffByRole(
   if (role === "department") query = query.eq("department", department!);
 
   const { data: staffList } = await query;
-  for (const s of staffList ?? []) {
-    if (s.email) await notifyStaffEmail(applicationId, s.email, subject, emailHtml);
+  if (!staffList || staffList.length === 0) return;
+
+  const needsEmail = staffList.some((s) => s.email);
+  const lgu = needsEmail ? await getLguDisplay(supabase, lguId) : null;
+  const officeLabel = lgu ? staffOfficeLabel(lgu, role, department) : "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+
+  for (const s of staffList) {
+    if (s.email && lgu) {
+      const html = renderApplicantEmailHtml({
+        lgu,
+        officeLabel,
+        greetingName: firstNameOf(s.full_name),
+        bodyHtml: emailHtml,
+        cta: { label: "Open dashboard", href: `${appUrl}/login` },
+      });
+      await notifyStaffEmail(applicationId, s.email, subject, html);
+    }
     if (s.phone) await notifyStaffSms(applicationId, lguId, s.phone, smsMessage);
   }
 }

@@ -128,10 +128,12 @@ export async function reopenDepartmentRound(supabase: SupabaseClient, applicatio
 
   const { data: app } = await supabase
     .from("applications")
-    .select("reference_number, business:businesses(business_name)")
+    .select("reference_number, business:businesses(business_name, owner:owners(full_name))")
     .eq("id", applicationId)
     .single();
-  const biz = app?.business as unknown as { business_name: string } | null;
+  const biz = app?.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+  const businessName = biz?.business_name ?? "(business record missing)";
+  const ownerName = biz?.owner?.full_name ?? "Unknown owner";
   const refNumber = app?.reference_number ?? applicationId;
   for (const department of departments) {
     await notifyStaffByRole(
@@ -139,8 +141,8 @@ export async function reopenDepartmentRound(supabase: SupabaseClient, applicatio
       "department",
       applicationId,
       `Resubmitted for review: ${refNumber}`,
-      `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${refNumber}) was resubmitted -- needs ${department}'s re-review.</p>`,
-      `${biz?.business_name ?? "Application"} (${refNumber}) was resubmitted -- needs your department's re-review.`,
+      `<p><strong>${businessName}</strong> (Owner: ${ownerName}) was resubmitted -- needs ${department}'s re-review.</p><p>Application: ${refNumber}</p>`,
+      `${businessName} (${refNumber}) was resubmitted -- needs your department's re-review.`,
       department
     );
   }
@@ -196,8 +198,15 @@ export async function resolveOpenInfoRequests(supabase: SupabaseClient, applicat
     .is("resolved_at", null);
   if (resolveError) throw resolveError;
 
-  const { data: app } = await supabase.from("applications").select("reference_number").eq("id", applicationId).single();
+  const { data: app } = await supabase
+    .from("applications")
+    .select("reference_number, business:businesses(business_name, owner:owners(full_name))")
+    .eq("id", applicationId)
+    .single();
   const ref = app?.reference_number ?? applicationId;
+  const biz = app?.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+  const businessName = biz?.business_name ?? "(business record missing)";
+  const ownerName = biz?.owner?.full_name ?? "Unknown owner";
 
   const departments = [...new Set(requests.filter((r) => r.requested_by_role === "department" && r.department).map((r) => r.department as string))];
   if (departments.length > 0) {
@@ -211,8 +220,8 @@ export async function resolveOpenInfoRequests(supabase: SupabaseClient, applicat
       "bplo",
       applicationId,
       `Ready for re-review: ${ref}`,
-      `<p><strong>${ref}</strong> -- applicant uploaded the requested document(s). Ready for another initial review pass.</p>`,
-      `${ref} -- applicant uploaded the requested document(s), ready for another look.`
+      `<p><strong>${businessName}</strong> (Owner: ${ownerName}) -- applicant uploaded the requested document(s). Ready for another initial review pass.</p><p>Application: ${ref}</p>`,
+      `${businessName} (${ref}) -- applicant uploaded the requested document(s), ready for another look.`
     );
   }
 
@@ -222,8 +231,8 @@ export async function resolveOpenInfoRequests(supabase: SupabaseClient, applicat
       "treasury",
       applicationId,
       `Update from applicant: ${ref}`,
-      `<p><strong>${ref}</strong> -- applicant uploaded the requested document(s).</p>`,
-      `${ref} -- applicant uploaded the requested document(s).`
+      `<p><strong>${businessName}</strong> (Owner: ${ownerName}) -- applicant uploaded the requested document(s).</p><p>Application: ${ref}</p>`,
+      `${businessName} (${ref}) -- applicant uploaded the requested document(s).`
     );
   }
 

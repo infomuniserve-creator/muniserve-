@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyStaffEmail } from "@/lib/notifications";
+import { getLguDisplay } from "@/lib/lgu";
+import { firstNameOf, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 import { NextResponse } from "next/server";
 
 /**
@@ -62,14 +64,14 @@ export async function GET(request: Request) {
 
     const { data: application } = await supabase
       .from("applications")
-      .select("reference_number, lgu_id, business:businesses(business_name)")
+      .select("reference_number, lgu_id, business:businesses(business_name, owner:owners(full_name))")
       .eq("id", round.application_id)
       .single();
     if (!application) continue;
 
     const { data: deptStaff } = await supabase
       .from("staff_users")
-      .select("email")
+      .select("email, full_name")
       .eq("lgu_id", application.lgu_id)
       .eq("role", "department")
       .eq("department", review.department)
@@ -83,12 +85,26 @@ export async function GET(request: Request) {
       // wasn't one of the three sites originally fixed.
       .eq("is_admin_proxy", false);
 
-    const business = application.business as unknown as { business_name: string } | null;
-    const subject = `Reminder: ${review.department} review pending for ${application.reference_number}`;
-    const html = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) has been awaiting ${review.department}'s review for over 24 hours. Please review at your earliest convenience.</p>`;
+    if (deptStaff && deptStaff.length > 0) {
+      const business = application.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+      const businessName = business?.business_name ?? "(business record missing)";
+      const ownerName = business?.owner?.full_name ?? "Unknown owner";
+      const subject = `Reminder: ${review.department} review pending for ${application.reference_number}`;
+      const bodyHtml = `<p><strong>${businessName}</strong> (Owner: ${ownerName}) has been awaiting ${review.department}'s review for over 24 hours. Please review at your earliest convenience.</p><p>Application: ${application.reference_number}</p>`;
+      const lgu = await getLguDisplay(supabase, application.lgu_id);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-    for (const s of deptStaff ?? []) {
-      if (s.email) await notifyStaffEmail(round.application_id, s.email, subject, html);
+      for (const s of deptStaff) {
+        if (!s.email) continue;
+        const html = renderApplicantEmailHtml({
+          lgu,
+          officeLabel: review.department,
+          greetingName: firstNameOf(s.full_name),
+          bodyHtml,
+          cta: { label: "Open dashboard", href: `${appUrl}/login` },
+        });
+        await notifyStaffEmail(round.application_id, s.email, subject, html);
+      }
     }
 
     // Marked whether or not anyone actually got emailed (e.g. no active

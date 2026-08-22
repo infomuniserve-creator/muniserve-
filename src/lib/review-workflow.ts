@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { notifyStaffByRole, notifyStaffEmail } from "@/lib/notifications";
 import { actorLabelFor, logAuditEvent } from "@/lib/audit-log";
 import { createInfoRequest } from "@/lib/info-requests";
+import { getLguDisplay } from "@/lib/lgu";
+import { firstNameOf, noteBoxHtml, renderApplicantEmailHtml } from "@/lib/applicant-email-template";
 import type { CurrentStaff } from "@/lib/staff";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -54,10 +56,12 @@ export async function openDepartmentReviewRound(
 
     const { data: app } = await supabase
       .from("applications")
-      .select("reference_number, business:businesses(business_name)")
+      .select("reference_number, business:businesses(business_name, owner:owners(full_name))")
       .eq("id", applicationId)
       .single();
-    const businessName = (app?.business as unknown as { business_name: string } | null)?.business_name ?? "(business record missing)";
+    const biz = app?.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+    const businessName = biz?.business_name ?? "(business record missing)";
+    const ownerName = biz?.owner?.full_name ?? "Unknown owner";
     const refNumber = app?.reference_number ?? applicationId;
 
     for (const d of departments) {
@@ -66,7 +70,7 @@ export async function openDepartmentReviewRound(
         "department",
         applicationId,
         `New review needed: ${refNumber}`,
-        `<p><strong>${businessName}</strong> (${refNumber}) needs ${d.name}'s review.</p>`,
+        `<p><strong>${businessName}</strong> (Owner: ${ownerName}) needs ${d.name}'s review.</p><p>Application: ${refNumber}</p>`,
         `${businessName} (${refNumber}) needs your department's review.`,
         d.name
       );
@@ -89,17 +93,19 @@ export async function openDepartmentReviewRound(
     .update({ status: "pending_bplo_assessment" })
     .eq("id", applicationId)
     .eq("status", "pending_dept_review")
-    .select("reference_number, business:businesses(business_name)")
+    .select("reference_number, business:businesses(business_name, owner:owners(full_name))")
     .single();
   if (updatedApp) {
-    const biz = updatedApp.business as unknown as { business_name: string } | null;
+    const biz = updatedApp.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+    const businessName = biz?.business_name ?? "(business record missing)";
+    const ownerName = biz?.owner?.full_name ?? "Unknown owner";
     await notifyStaffByRole(
       lguId,
       "bplo",
       applicationId,
       `Ready for assessment: ${updatedApp.reference_number}`,
-      `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${updatedApp.reference_number}) -- no active departments to review, ready for fee assessment.</p>`,
-      `${biz?.business_name ?? "Application"} (${updatedApp.reference_number}) -- no active departments to review, ready for assessment.`
+      `<p><strong>${businessName}</strong> (Owner: ${ownerName}) -- no active departments to review, ready for fee assessment.</p><p>Application: ${updatedApp.reference_number}</p>`,
+      `${businessName} (${updatedApp.reference_number}) -- no active departments to review, ready for assessment.`
     );
   }
 }
@@ -408,7 +414,7 @@ export async function submitDepartmentDecision(params: {
       .update({ status: "pending_bplo_assessment" })
       .eq("id", round.application_id)
       .eq("status", "pending_dept_review")
-      .select("reference_number, business:businesses(business_name)")
+      .select("reference_number, business:businesses(business_name, owner:owners(full_name))")
       .single();
 
     // BPLO needs to hear about this the moment it happens, same as a
@@ -416,14 +422,16 @@ export async function submitDepartmentDecision(params: {
     // assessment used to sit silently until someone happened to check
     // the dashboard (CLAUDE.md 7w).
     if (updatedApp) {
-      const biz = updatedApp.business as unknown as { business_name: string } | null;
+      const biz = updatedApp.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+      const businessName = biz?.business_name ?? "(business record missing)";
+      const ownerName = biz?.owner?.full_name ?? "Unknown owner";
       await notifyStaffByRole(
         staff.lgu_id,
         "bplo",
         round.application_id,
         `Ready for assessment: ${updatedApp.reference_number}`,
-        `<p><strong>${biz?.business_name ?? "(business record missing)"}</strong> (${updatedApp.reference_number}) cleared all departments -- ready for fee assessment.</p>`,
-        `${biz?.business_name ?? "Application"} (${updatedApp.reference_number}) cleared all departments -- ready for assessment.`
+        `<p><strong>${businessName}</strong> (Owner: ${ownerName}) cleared all departments -- ready for fee assessment.</p><p>Application: ${updatedApp.reference_number}</p>`,
+        `${businessName} (${updatedApp.reference_number}) cleared all departments -- ready for assessment.`
       );
     }
   }
@@ -450,16 +458,18 @@ async function notifyDepartmentIssue(
 ) {
   const { data: application } = await service
     .from("applications")
-    .select("reference_number, business:businesses(business_name)")
+    .select("reference_number, business:businesses(business_name, owner:owners(full_name))")
     .eq("id", applicationId)
     .single();
   if (!application) return;
 
-  const business = application.business as unknown as { business_name: string } | null;
+  const business = application.business as unknown as { business_name: string; owner: { full_name: string | null } | null } | null;
+  const businessName = business?.business_name ?? "(business record missing)";
+  const ownerName = business?.owner?.full_name ?? "Unknown owner";
 
   const { data: bploStaff } = await service
     .from("staff_users")
-    .select("email")
+    .select("email, full_name")
     .eq("lgu_id", lguId)
     .eq("role", "bplo")
     .eq("is_active", true)
@@ -467,13 +477,24 @@ async function notifyDepartmentIssue(
     // follow-up) -- its email is a synthetic, unreachable placeholder, so
     // this would otherwise just be a guaranteed-failing send attempt.
     .eq("is_admin_proxy", false);
+  if (!bploStaff || bploStaff.length === 0) return;
 
+  const lgu = await getLguDisplay(service, lguId);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const subject = `Application ${application.reference_number}: ${department} ${decision === "rejected" ? "rejected" : "requested more info"}`;
-  const html = `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (${application.reference_number}) -- ${department} ${
+  const bodyHtml = `<p><strong>${businessName}</strong> (Owner: ${ownerName}) -- ${department} ${
     decision === "rejected" ? "rejected" : "requested more information"
-  } during department review.</p>${notes ? `<p>Notes: ${notes}</p>` : ""}`;
-  for (const s of bploStaff ?? []) {
-    if (s.email) await notifyStaffEmail(applicationId, s.email, subject, html);
+  } during department review.</p><p>Application: ${application.reference_number}</p>${notes ? noteBoxHtml(notes) : ""}`;
+  for (const s of bploStaff) {
+    if (!s.email) continue;
+    const html = renderApplicantEmailHtml({
+      lgu,
+      officeLabel: lgu.bploOfficeName,
+      greetingName: firstNameOf(s.full_name),
+      bodyHtml,
+      cta: { label: "Open dashboard", href: `${appUrl}/login` },
+    });
+    await notifyStaffEmail(applicationId, s.email, subject, html);
   }
 }
 

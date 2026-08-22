@@ -66,7 +66,7 @@ export async function recordPayment(formData: FormData) {
     .update({ status: "pending_printing" })
     .eq("id", applicationId)
     .eq("status", "pending_payment")
-    .select("reference_number, business:businesses(owner:owners(phone, email, full_name))")
+    .select("reference_number, business:businesses(business_name, owner:owners(phone, email, full_name))")
     .single();
   if (statusError || !updated) throw statusError ?? new Error("This application isn't awaiting payment.");
 
@@ -106,7 +106,7 @@ export async function recordPayment(formData: FormData) {
     .eq("requested_by_role", "treasury")
     .is("resolved_at", null);
 
-  const business = updated.business as unknown as { owner: { phone: string | null; email: string | null; full_name: string | null } | null } | null;
+  const business = updated.business as unknown as { business_name: string; owner: { phone: string | null; email: string | null; full_name: string | null } | null } | null;
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
@@ -133,8 +133,8 @@ export async function recordPayment(formData: FormData) {
     "bplo",
     applicationId,
     `Ready to print: ${updated.reference_number}`,
-    `<p><strong>${updated.reference_number}</strong> -- payment received, ready to print.</p>`,
-    `${updated.reference_number} payment received -- ready to print.`
+    `<p><strong>${business?.business_name ?? "(business record missing)"}</strong> (Owner: ${business?.owner?.full_name ?? "Unknown owner"}) -- payment received, ready to print.</p><p>Application: ${updated.reference_number}</p>`,
+    `${business?.business_name ?? "Application"} (${updated.reference_number}) payment received -- ready to print.`
   );
 
   await logAuditEvent(supabase, {

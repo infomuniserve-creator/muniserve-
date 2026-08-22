@@ -637,8 +637,8 @@ export async function finalizeAssessment(formData: FormData) {
     "treasury",
     applicationId,
     `Payment due: ${application.reference_number}`,
-    `<p><strong>${application.reference_number}</strong> has been assessed -- total due ₱${totalDue.toLocaleString()}. Awaiting payment.</p>`,
-    `${application.reference_number} assessed -- total due PHP ${totalDue.toLocaleString()}, awaiting payment.`
+    `<p><strong>${business.business_name}</strong> (Owner: ${business.owner?.full_name ?? "Unknown owner"}) has been assessed -- total due ₱${totalDue.toLocaleString()}. Awaiting payment.</p><p>Application: ${application.reference_number}</p>`,
+    `${business.business_name} (${application.reference_number}) assessed -- total due PHP ${totalDue.toLocaleString()}, awaiting payment.`
   );
 
   const manualCount = lineRows.filter((l) => l.is_manual).length;
