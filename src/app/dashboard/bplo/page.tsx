@@ -37,7 +37,7 @@ export default async function BploDashboardPage() {
   const { data: apps } = await supabase
     .from("applications")
     .select(
-      `id, application_type, status, submitted_at, archived_from_status, initial_review_decision, initial_review_notes, form_inputs, released_at, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
+      `id, application_type, status, submitted_at, archived_from_status, initial_review_decision, initial_review_notes, form_inputs, released_at, delivery_requested_at, business:businesses(${BUSINESS_PROFILE_COLUMNS}, address, owner:owners(full_name))`
     )
     .eq("lgu_id", staff.lgu_id)
     .order("submitted_at", { ascending: true });
@@ -345,6 +345,7 @@ export default async function BploDashboardPage() {
                 <p className="text-[13.5px] font-bold text-ink">{businessName(a)}</p>
                 <p className="text-[12px] text-ink-soft">Owner: {ownerName(a)}</p>
               </div>
+              {a.delivery_requested_at && <TonePill dot tone="info" label="Delivery requested" />}
               <form action={markReleased}>
                 <input type="hidden" name="applicationId" value={a.id} />
                 <MiniButton type="submit">Mark as released</MiniButton>

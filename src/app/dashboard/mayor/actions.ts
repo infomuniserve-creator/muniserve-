@@ -230,12 +230,16 @@ export async function signPermit(formData: FormData) {
   // The applicant hears about this the moment it's signed, not only once
   // it's physically handed over (markReleased's own SMS) -- "ready for
   // pickup" is real, actionable information the moment it's true.
+  // Delivery Service (2026-08-22): only mentioned when the LGU has
+  // actually turned it on -- nothing to offer otherwise, and mentioning
+  // it unconditionally would point at an option that doesn't exist.
+  const deliveryNote = lgu.deliveryServiceEnabled ? " Prefer delivery instead? Check your status page." : "";
   if (business?.owner?.phone) {
     await notifyApplicantSms(
       applicationId,
       staff.lgu_id,
       business.owner.phone,
-      `Your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.`
+      `Your business permit (${application.reference_number}) has been signed and is ready for pickup at the BPLO office.${deliveryNote}`
     );
   }
   if (business?.owner?.email) {
@@ -243,7 +247,9 @@ export async function signPermit(formData: FormData) {
       lgu,
       officeLabel: lgu.bploOfficeName,
       greetingName: firstNameOf(business.owner.full_name),
-      bodyHtml: `<p style="margin:0;">Your business permit (<strong>${application.reference_number}</strong>) has been signed and is ready for pickup. Please visit the BPLO office to claim it.</p>`,
+      bodyHtml: `<p style="margin:0;">Your business permit (<strong>${application.reference_number}</strong>) has been signed and is ready for pickup. Please visit the BPLO office to claim it${
+        lgu.deliveryServiceEnabled ? ", or request delivery instead from your status page" : ""
+      }.</p>`,
       cta: { label: "View your application status", href: `${appUrl}/status/${application.reference_number}` },
     });
     await notifyApplicantEmail(applicationId, business.owner.email, `Your permit is ready for pickup — ${application.reference_number}`, html);

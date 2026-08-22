@@ -12,6 +12,7 @@ import { PrintTemplateUpload } from "./print-template-upload";
 import { BusinessImportCard } from "./business-import";
 import { PermitNumberFormatCard } from "./permit-number-format";
 import { PaymentMethodsCard } from "./payment-methods";
+import { DeliveryServiceCard } from "./delivery-service";
 import { LogoUpload } from "./logo-upload";
 import { SmsUsageCard } from "./sms-usage-card";
 import { getCurrentMonthSmsCount, SMS_FREE_MONTHLY_LIMIT } from "@/lib/sms-usage";
@@ -603,6 +604,19 @@ export default async function SettingsPage() {
             A custom Sender Name has to be purchased and approved directly with Semaphore (the SMS provider used here) first — enter the exact approved name here once that&rsquo;s done.
           </p>
         </Card>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Delivery Service"
+        sub="Let an applicant ask to have their permit delivered instead of picking it up in person, once it's ready for release."
+        status={lgu.deliveryServiceEnabled ? { label: `On — ${lgu.courierName}`, tone: "good" } : { label: "Off", tone: "neutral" }}
+      >
+        <DeliveryServiceCard
+          key={[lgu.deliveryServiceEnabled, lgu.courierName, lgu.courierPhone].join("|")}
+          deliveryServiceEnabled={lgu.deliveryServiceEnabled}
+          courierName={lgu.courierName}
+          courierPhone={lgu.courierPhone}
+        />
       </CollapsibleSection>
       </SettingsGroup>
 

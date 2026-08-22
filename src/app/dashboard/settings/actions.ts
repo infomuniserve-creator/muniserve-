@@ -293,6 +293,45 @@ export async function updatePaymentMethods(formData: FormData) {
 }
 
 /**
+ * Delivery Service (2026-08-22, project owner's own idea) -- off by
+ * default; turning it on requires a real courier contact (same
+ * "no generic fallback for a real-world specific fact" reasoning as
+ * mayorName/treasurerName), enforced here, not just client-side. Once
+ * on, an applicant whose permit reaches pending_release sees a "Request
+ * delivery" option on their own status page (request-delivery/route.ts)
+ * instead of only "pick it up in person."
+ */
+export async function updateDeliveryService(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const deliveryServiceEnabled = formData.get("deliveryServiceEnabled") === "on";
+  const courierName = String(formData.get("courierName") ?? "").trim() || null;
+  const courierPhone = String(formData.get("courierPhone") ?? "").trim() || null;
+
+  if (deliveryServiceEnabled && (!courierName || !courierPhone)) {
+    throw new Error("Enter the courier's name and mobile number before turning Delivery Service on.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lgus")
+    .update({ delivery_service_enabled: deliveryServiceEnabled, courier_name: courierName, courier_phone: courierPhone })
+    .eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "delivery_service_updated",
+    summary: deliveryServiceEnabled ? `Delivery Service turned on -- courier: ${courierName}` : "Delivery Service turned off",
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
  * Sets the Mayor's name shown on the pre-signature print certificate
  * (CLAUDE.md 7x, print-certificate.ts) -- migration 0033's lgus.mayor_name.
  * No generic fallback exists for a person's actual name (unlike

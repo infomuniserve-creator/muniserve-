@@ -62,10 +62,13 @@ export type LguDisplay = {
   onlinePortalUrl: string | null; // e.g. a Landbank LinkBiz URL
   logoUrl: string | null; // migration 0059 -- a public URL in the lgu-logos bucket, shown in the header of every applicant-facing email (applicant-email-template.ts). No generic fallback -- same reasoning as mayorName/treasurerName, there's no sensible default seal for a real LGU that hasn't uploaded one yet.
   zipCode: string | null; // migration 0063 -- Province/Town already existed here (name/province, above); Zip Code didn't exist anywhere. Prefills the applicant form's own Zip Code field so it doesn't have to be retyped on every application, since it's always the same for a business filing with this one LGU. No generic fallback -- same reasoning as mayorName/treasurerName.
+  deliveryServiceEnabled: boolean; // migration 0064 -- off by default; when on, an applicant whose permit is ready for release can request delivery from their status page instead of picking it up in person.
+  courierName: string | null; // no generic fallback -- required (along with courierPhone) before deliveryServiceEnabled can actually be turned on, enforced in settings/actions.ts's updateDeliveryService
+  courierPhone: string | null; // where the "someone needs to be delivered a permit" SMS actually goes
 };
 
 const LGU_SELECT_COLUMNS =
-  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates, accepts_cash_counter, accepts_gcash, gcash_number, gcash_name, accepts_bank_transfer, bank_name, bank_account_number, bank_account_name, accepts_online_portal, online_portal_url, logo_url, zip_code";
+  "id, name, province, subdomain, display_name, bplo_office_name, mayor_name, print_template_path, print_template_field_mapping, building_permit_fee_enabled, building_permit_fee_label, is_paused, automated_assessment_enabled, treasurer_name, sender_name, short_code, reference_year_digits, reference_counter_digits, lbt_biannual_reminder_dates, lbt_quarterly_reminder_dates, accepts_cash_counter, accepts_gcash, gcash_number, gcash_name, accepts_bank_transfer, bank_name, bank_account_number, bank_account_name, accepts_online_portal, online_portal_url, logo_url, zip_code, delivery_service_enabled, courier_name, courier_phone";
 
 /** Falls back to a Municipality-shaped default if display_name/bplo_office_name (migration 0017) were never filled in for this LGU -- onboarding a new LGU shouldn't silently break letterheads just because someone forgot this one field. */
 function withFallback(row: {
@@ -79,6 +82,7 @@ function withFallback(row: {
   accepts_online_portal: boolean; online_portal_url: string | null;
   logo_url: string | null;
   zip_code: string | null;
+  delivery_service_enabled: boolean; courier_name: string | null; courier_phone: string | null;
 }, cedulaIncludedOnline: boolean): LguDisplay {
   return {
     id: row.id,
@@ -114,6 +118,9 @@ function withFallback(row: {
     onlinePortalUrl: row.online_portal_url,
     logoUrl: row.logo_url,
     zipCode: row.zip_code,
+    deliveryServiceEnabled: row.delivery_service_enabled,
+    courierName: row.courier_name,
+    courierPhone: row.courier_phone,
   };
 }
 

@@ -47,6 +47,8 @@ export type AuditAction =
   | "treasurer_name_updated"
   | "sender_name_updated"
   | "zip_code_updated"
+  | "delivery_service_updated"
+  | "delivery_requested"
   | "payment_info_requested"
   | "info_request_resolved"
   | "barangays_updated"

@@ -125,6 +125,19 @@ export async function notifyStaffSms(applicationId: string | null, lguId: string
   }
 }
 
+/**
+ * The Delivery Service's own courier notification (2026-08-22) -- a
+ * courier isn't LGU staff or the applicant, but the actual send/log
+ * mechanics are identical to notifyStaffSms (same resolveSmsIdentity
+ * branding, same best-effort/never-throws shape), so this is a separately
+ * named wrapper around the same primitives rather than a real third
+ * implementation -- kept distinct from notifyStaffSms purely so a call
+ * site notifying a courier doesn't read as if it were notifying staff.
+ */
+export async function notifyCourierSms(applicationId: string | null, lguId: string, phone: string, message: string): Promise<void> {
+  await notifyStaffSms(applicationId, lguId, phone, message);
+}
+
 /** The office name to show in a staff email's header/greeting -- same convention every applicant email already uses per-office (lgu.bploOfficeName, a hardcoded Treasurer's-Office label), just applied to the staff audience too. */
 function staffOfficeLabel(lgu: LguDisplay, role: "bplo" | "treasury" | "mayor" | "department", department?: string): string {
   if (role === "department") return department ?? "Department";

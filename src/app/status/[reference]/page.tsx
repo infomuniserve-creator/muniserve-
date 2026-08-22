@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
 import { AdditionalDocumentUpload } from "./upload-form";
 import { VerifyPhoneCard } from "./verify-phone-form";
+import { DeliveryRequestButton } from "./delivery-request-button";
 import { SignOutButton } from "./sign-out-button";
 
 /**
@@ -147,8 +148,40 @@ export default async function StatusPage({ params }: { params: Promise<{ referen
       {application.status === "pending_payment" && (
         <PendingPaymentSection applicationId={application.id} lguId={application.lgu_id} />
       )}
+      {application.status === "pending_release" && (
+        <DeliveryRequestSection applicationId={application.id} lguId={application.lgu_id} />
+      )}
       {application.status === "released" && <ReleasedNote applicationId={application.id} />}
     </Shell>
+  );
+}
+
+/**
+ * Delivery Service (2026-08-22, project owner's own idea): shown only
+ * while the LGU actually has this turned on (lgu.deliveryServiceEnabled)
+ * -- no courier contact configured means there's nothing real to offer.
+ * Ignoring this is the expected default (pick it up in person), so this
+ * renders as a plain, low-pressure option, not a required decision.
+ */
+async function DeliveryRequestSection({ applicationId, lguId }: { applicationId: string; lguId: string }) {
+  const supabase = createServiceClient();
+  const lgu = await getLguDisplay(supabase, lguId);
+  if (!lgu.deliveryServiceEnabled) return null;
+
+  const { data: app } = await supabase.from("applications").select("delivery_requested_at").eq("id", applicationId).maybeSingle();
+
+  return (
+    <Card>
+      <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Your permit is ready for release</p>
+      <p style={{ fontSize: 12, color: "#6b7280" }}>
+        Visit the BPLO office to pick it up, or have it delivered instead -- {lgu.courierName} will collect it on your behalf.
+      </p>
+      {app?.delivery_requested_at ? (
+        <p style={{ fontSize: 12, color: "#27500A", marginTop: 6 }}>Delivery requested — the courier has been notified and will pick it up on your behalf.</p>
+      ) : (
+        <DeliveryRequestButton applicationId={applicationId} />
+      )}
+    </Card>
   );
 }
 
