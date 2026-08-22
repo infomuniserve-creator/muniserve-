@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EmbedCodeBox } from "@/components/embed-code-box";
 import { redirect } from "next/navigation";
 import { BuildingIcon, Card, CollapsibleSection, FileIcon, MiniButton, PinIcon, PrimaryButton, SettingsGroup, SettingsIcon, BellIcon, UserIcon, TonePill } from "../ui";
-import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName } from "./actions";
+import { addBarangays, addRegulatoryFee, removeBarangay, setAutomatedAssessmentEnabled, setBarangayClearanceRate, setCedulaIncludedOnline, setRegulatoryFeeAcctCode, setRegulatoryFeeActive, updateBuildingPermitFeeSettings, updateInstallmentReminderDates, updateMayorName, updateSenderName, updateTreasurerName, updateZipCode } from "./actions";
 import { FeeRuleImportCard } from "./fee-rule-import";
 import { StaffManagementSection } from "./staff-management";
 import { PrintTemplateUpload } from "./print-template-upload";
@@ -607,6 +607,41 @@ export default async function SettingsPage() {
       </SettingsGroup>
 
       <SettingsGroup icon={<FileIcon className="size-3.5" />} title="Public Application Form" description="The link and embed code applicants actually use.">
+      <CollapsibleSection
+        title="Address Defaults"
+        sub="Province and City/Town are always the same for a business filing with you, so the application form now prefills both — applicants can still change them if a specific case genuinely differs. Zip Code does the same once you set it below."
+        status={lgu.zipCode ? { label: "Zip Code set", tone: "good" } : { label: "Zip Code not set", tone: "warn" }}
+      >
+        <Card className="p-5">
+          <div className="mb-4 flex flex-wrap gap-6">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Province</p>
+              <p className="text-[13.5px] font-bold text-ink">{lgu.province ?? "Not set"}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">City / Town</p>
+              <p className="text-[13.5px] font-bold text-ink">{lgu.name}</p>
+            </div>
+          </div>
+          <p className="mb-3 text-[11px] text-ink-faint">
+            Province and City/Town come from your LGU&rsquo;s own account details — contact support if either needs correcting.
+          </p>
+          <form action={updateZipCode} className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-bold text-ink-soft">Zip code</span>
+              <input
+                name="zipCode"
+                type="text"
+                defaultValue={lgu.zipCode ?? ""}
+                placeholder="e.g. 3011"
+                className="h-9 w-40 rounded-xl border border-border-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint"
+              />
+            </label>
+            <PrimaryButton type="submit">Save</PrimaryButton>
+          </form>
+        </Card>
+      </CollapsibleSection>
+
       {lgu.subdomain ? (
         <CollapsibleSection title="Your public application form" sub="Share this link with applicants, or embed it on your own website so they never see the muniserve.ph URL.">
           <Card className="flex flex-col gap-4 p-5">

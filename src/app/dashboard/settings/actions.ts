@@ -400,6 +400,36 @@ export async function updatePermitNumberFormat(formData: FormData) {
 }
 
 /**
+ * Prefills the applicant form's Main Office Address section (2026-08-22,
+ * project owner's own request): Province and City/Town already existed
+ * per-LGU (lgus.name/province, already shown on every letterhead), only
+ * Zip Code genuinely didn't exist anywhere -- this is the one new field.
+ * Same "no generic fallback" shape as updateMayorName above -- reuses
+ * migration 0027's existing settings policy, no new migration for the
+ * control itself (only for the new zip_code column, migration 0063).
+ */
+export async function updateZipCode(formData: FormData) {
+  const staff = await requireUnpausedStaff();
+  if (!staff || staff.role !== "bplo") throw new Error("Not authorized");
+
+  const zipCode = String(formData.get("zipCode") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lgus").update({ zip_code: zipCode }).eq("id", staff.lgu_id);
+  if (error) throw error;
+
+  await logAuditEvent(supabase, {
+    lguId: staff.lgu_id,
+    actorRole: staff.role,
+    actorLabel: actorLabelFor(staff),
+    action: "zip_code_updated",
+    summary: zipCode ? `Zip Code set to "${zipCode}" for the applicant form's address default` : "Zip Code cleared",
+  });
+
+  revalidatePath("/dashboard/settings");
+}
+
+/**
  * Sets this LGU's own approved Semaphore Sender Name -- migration 0040's
  * lgus.sender_name. Null until purchased/registered directly with
  * Semaphore (this form doesn't buy or register one, only records the

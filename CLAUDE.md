@@ -1794,6 +1794,20 @@ The project owner asked directly: staff/department email notifications were "sup
 
 ---
 
+## 7a28. Applicant form: Province, City/Town, Zip Code prefilled per LGU (2026-08-22)
+
+The project owner asked directly: Province/Zip Code/Town are always the same for a business filing with a given LGU, so why make every applicant retype them -- proposed adding Settings fields for BPLO to set all three. Checked before building: Province and City/Town already existed per-LGU (`lgus.province`/`lgus.name`, the exact values already shown on every letterhead and page subtitle) -- only Zip Code genuinely didn't exist anywhere. Confirmed with the project owner directly whether the three fields should become locked/read-only once prefilled, or stay editable with just a default value; they chose staying editable, so a rare business whose actual detail genuinely differs from the LGU's own default isn't blocked from correcting it.
+
+**Migration `0063_lgu_zip_code.sql`** (live in production): `lgus.zip_code`, nullable, no generic fallback -- same convention as `mayor_name`/`treasurer_name`/`sender_name` (a client who hasn't set this yet just leaves the applicant-form field blank, not a guessed placeholder). `LguDisplay` (`lgu.ts`) gains `zipCode`. No new RLS policy needed -- migration 0027's existing general "BPLO can update their own LGU's settings" policy already covers it.
+
+**New Settings section, "Address Defaults"** (`Public Application Form` group, first item -- these fields shape what the form itself prefills, same audience as the embed link/public form link already in that group): shows Province and City/Town read-only (pulled from the LGU's own account details, with a note to contact support if either is wrong -- not made editable here, since `lgus.name` specifically is load-bearing well beyond this one form: `getPilotLguDisplay()` looks it up by the literal string `"San Miguel"` for the pilot-LGU fallback, so letting BPLO freely rename their own LGU via a plain Settings field would risk breaking that fallback for a reason with nothing to do with this feature) plus a new editable Zip Code field (`updateZipCode`, mirrors `updateMayorName`'s exact shape).
+
+**`ApplyPageClient.tsx`**: new `initialFormState(lgu)` replaces the plain `EMPTY_FORM` constant wherever the form state is first created or reset (initial `useState`, and `startOver()`) -- prefills `cityTown`/`province`/`zipCode` from the LGU's own data, leaving every other field (including `unitStreet`, which has no LGU-level equivalent) untouched. Still plain, editable `ADDRESS_FIELDS` text inputs, per the project owner's own choice -- a default, not a lock. The renewal path (`applyProfile()`, pre-filling from an existing business's own saved profile) falls back to the same LGU defaults only when that business's own saved value is empty (`profile.cityTown || lgu.name`, not an unconditional override) -- an already-correct existing record keeps its own value untouched.
+
+**Verified against the real, unmodified `initialFormState()`, not a re-implementation**: since it's exported from a `"use client"` file, it can't be called from a server route (confirmed by hitting exactly that Next.js restriction on the first attempt) -- temporarily exported it and drove a temporary client-component fixture page (deleted immediately after, `export` reverted) instead, confirming the real function returns `cityTown: "San Miguel"`, `province: "Bulacan"`, `zipCode: "3011"` from a synthetic LGU, while `unitStreet` stays genuinely blank. `npx tsc --noEmit`, `eslint`, and a full `next build` all ran clean -- 36 routes, `export` reverted, fixture page deleted, none left behind.
+
+---
+
 ## 9. Suggested build order
 
 Don't build all of this in one pass. Sequence:

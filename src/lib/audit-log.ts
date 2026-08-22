@@ -46,6 +46,7 @@ export type AuditAction =
   | "cedula_delivery_mode_updated"
   | "treasurer_name_updated"
   | "sender_name_updated"
+  | "zip_code_updated"
   | "payment_info_requested"
   | "info_request_resolved"
   | "barangays_updated"

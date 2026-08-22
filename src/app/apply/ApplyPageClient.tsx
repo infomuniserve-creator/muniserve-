@@ -176,6 +176,19 @@ const EMPTY_FORM: FormState = {
   seatingCapacity: "", isAircon: "", isBranchOffice: "", animalCount: "",
 };
 
+/**
+ * Province/City-Town/Zip Code are always the same for a business filing
+ * with this one LGU (2026-08-22, project owner's own request) -- prefills
+ * all three from the LGU's own data (lgu.province/lgu.name/lgu.zipCode)
+ * instead of leaving them blank for the applicant to type every time.
+ * Still plain, editable text fields (ADDRESS_FIELDS, unchanged) -- a
+ * default, not a lock, so the rare business whose actual address detail
+ * genuinely differs can still correct it.
+ */
+function initialFormState(lgu: LguDisplay): FormState {
+  return { ...EMPTY_FORM, province: lgu.province ?? "", cityTown: lgu.name, zipCode: lgu.zipCode ?? "" };
+}
+
 type DocumentFieldKey =
   | "cedulaDoc" | "govIdDoc" | "dtiSecCdaDoc" | "leaseContractDoc" | "vicinityMapDoc"
   | "barangayClearanceDoc" | "taxIncentivesDoc" | "swornStatementDoc" | "signatureDoc";
@@ -379,7 +392,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
   const [myBusinesses, setMyBusinesses] = useState<BusinessProfile[] | null>(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
 
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(() => initialFormState(lgu));
   const [documents, setDocuments] = useState<Partial<Record<DocumentFieldKey, string>>>({});
   const [uploadingDoc, setUploadingDoc] = useState<DocumentFieldKey | null>(null);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
@@ -496,7 +509,7 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
     setBusinessCount(0);
     setMyBusinesses(null);
     setSelectedBusinessId(null);
-    setForm(EMPTY_FORM);
+    setForm(initialFormState(lgu));
     setDocuments({});
     setDeclarationAccepted(false);
     setSubmittedReference(null);
@@ -518,10 +531,16 @@ export function ApplyPageClient({ lgu, formOptions }: { lgu: LguDisplay; formOpt
       tradeName: profile.tradeName ?? "",
       grossSales: profile.grossSales != null ? String(profile.grossSales) : "",
       unitStreet: profile.unitStreet ?? "",
-      cityTown: profile.cityTown ?? "",
+      // Falls back to the LGU's own default (not just "") when this
+      // existing business record doesn't already have its own value --
+      // same reasoning as initialFormState for a brand-new application,
+      // just applied per-field here since a renewal's other address
+      // fields (unitStreet, barangay) have no LGU-level equivalent to
+      // fall back to.
+      cityTown: profile.cityTown || lgu.name,
       barangay: profile.barangay ?? "",
-      province: profile.province ?? "",
-      zipCode: profile.zipCode ?? "",
+      province: profile.province || (lgu.province ?? ""),
+      zipCode: profile.zipCode || (lgu.zipCode ?? ""),
       businessActivity: profile.businessActivity ?? [],
       deliveryVehicleCount: profile.deliveryVehicleCount ?? "",
       operationAddressSame: profile.operationAddressSame ?? "",
